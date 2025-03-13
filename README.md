@@ -1,5 +1,5 @@
-# Py-Imou-Open-Api
+##  打包
+python setup.py sdist bdist_wheel
 
-imou open platform api SDK for python
-
-
+## 上传
+twine upload dist/*      

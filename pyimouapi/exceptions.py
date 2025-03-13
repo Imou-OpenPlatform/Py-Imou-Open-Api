@@ -23,7 +23,7 @@ class ImouException(Exception):
 
 
 class ConnectFailedException(ImouException):
-    """connectFailedException. """
+    """connectFailedException."""
 
     def get_title(self) -> str:
         """Return the title of the exception which will be then translated."""
@@ -31,7 +31,7 @@ class ConnectFailedException(ImouException):
 
 
 class RequestFailedException(ImouException):
-    """requestFailedException """
+    """requestFailedException"""
 
     def get_title(self) -> str:
         """Return the title of the exception which will be then translated."""
@@ -39,7 +39,7 @@ class RequestFailedException(ImouException):
 
 
 class InvalidAppIdOrSecretException(ImouException):
-    """invalidAppIdOrSecretException """
+    """invalidAppIdOrSecretException"""
 
     def get_title(self) -> str:
         """Return the title of the exception which will be then translated."""

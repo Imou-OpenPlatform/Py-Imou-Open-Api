@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='pyimouapi',
-    version='1.0.2',
+    version='1.0.4.1',
     packages=find_packages(),
     description='A package for imou open api',
     # long_description=open('README.md').read(),
@@ -13,10 +13,6 @@ setup(
     author='Imou-OpenPlatform',
     author_email='cloud_openteam_service@imou.com',
     license='MIT',
-    install_requires=[
-        'aiohttp==3.11.0',
-        'async-timeout==5.0.1'
-    ],
     classifiers=[
         'Intended Audience :: Developers',
         'Operating System :: OS Independent',
