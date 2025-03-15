@@ -25,6 +25,9 @@ ERROR_CODE_TOKEN_OVERDUE = "TK1002"
 ERROR_CODE_INVALID_SIGN = "SN1001"
 ERROR_CODE_INVALID_APP = "SN1004"
 ERROR_CODE_DEVICE_OFFLINE = "DV1007"
+ERROR_CODE_NO_STORAGE_MEDIUM = "DV1049"
+ERROR_CODE_LIVE_NOT_EXIST = "LV1002"
+ERROR_CODE_LIVE_ALREADY_EXIST = "LV1001"
 
 # params key
 PARAM_APP_ID = "appId"
@@ -83,9 +86,22 @@ PARAM_HLS = "hls"
 PARAM_URL = "url"
 PARAM_KEY = "key"
 PARAM_DEFAULT = "default"
-PARAM_UNIT = "unit"
 PARAM_REF = "ref"
 PARAM_CONTENT = "content"
+PARAM_ON = "on"
+PARAM_BUTTON_TYPE_REF = "button_type_ref"
+PARAM_SENSOR_TYPE_REF = "sensor_type_ref"
+PARAM_SWITCH_TYPE_REF = "switch_type_ref"
+PARAM_SELECT_TYPE_REF = "select_type_ref"
+PARAM_ONLINE = "onLine"
+PARAM_HD = "HD"
+
+PARAM_MOTION_DETECT = "motion_detect"
+PARAM_STORAGE_USED = "storage_used"
+PARAM_RESTART_DEVICE = "restart_device"
+PARAM_NIGHT_VISION_MODE = "night_vision_mode"
+PARAM_PTZ = "ptz"
+
 
 # Required capacity for various switch types
 SWITCH_TYPE_ABILITY = {
@@ -111,7 +127,7 @@ SELECT_TYPE_ABILITY = {
 #  Required capacity for various sensor types
 SENSOR_TYPE_ABILITY = {
     "storage_used": ["LocalStorage", "LocalStorageEnable"],
-    "electric": ["Electric"],
+    "battery": ["Electric"],
 }
 
 # Levels of capacity
@@ -130,13 +146,9 @@ ABILITY_LEVEL_TYPE = {
     "LocalStorage": 1,
     "LocalStorageEnable": 1,
     "Reboot": 1,
-    "Electric": 1,
+    "Electric": 3,
 }
 
-PARAM_MOTION_DETECT = "motion_detect"
-PARAM_STORAGE_USED = "storage_used"
-PARAM_RESTART_DEVICE = "restart_device"
-PARAM_NIGHT_VISION_MODE = "night_vision_mode"
 
 # The parameter values for switch
 SWITCH_TYPE_ENABLE = {
@@ -158,7 +170,7 @@ BUTTON_TYPE_PARAM_VALUE = {
 THINGS_MODEL_PRODUCT_TYPE_REF = {
     "z76s20l415gnhhl1": {
         "button_type_ref": {
-            "reboot": {"ref": "2300", "type": "service"},
+            "restart_device": {"ref": "2300", "type": "service"},
             "mute": {"ref": "21600", "type": "service"},
         },
         "switch_type_ref": {
@@ -173,19 +185,19 @@ THINGS_MODEL_PRODUCT_TYPE_REF = {
                 "ref": "15200",
                 "default": 0,
                 "type": "property",
-                "options": [0, 1, 2],
+                "options": ["0", "1", "2"],
             },
             "device_volume": {
                 "ref": "15400",
                 "default": 0,
                 "type": "property",
-                "options": [-1, 0, 1, 2],
+                "options": ["-1", "0", "1", "2"],
             },
         },
     },
     "BDHCWWPX": {
         "button_type_ref": {
-            "reboot": {"ref": "2300", "type": "service"},
+            "restart_device": {"ref": "2300", "type": "service"},
             "mute": {"ref": "21600", "type": "service"},
         },
         "switch_type_ref": {
@@ -200,33 +212,31 @@ THINGS_MODEL_PRODUCT_TYPE_REF = {
                 "ref": "15200",
                 "default": 0,
                 "type": "property",
-                "options": [0, 1, 2],
+                "options": ["0", "1", "2"],
             },
             "device_volume": {
                 "ref": "15400",
                 "default": 0,
                 "type": "property",
-                "options": [-1, 0, 1, 2],
+                "options": ["-1", "0", "1", "2"],
             },
         },
     },
     "qfwybtpd03zxiyxi": {
         "sensor_type_ref": {
-            "power": {
+            "battery": {
                 "ref": "11600",
                 "type": "property",
-                "default": 15,
-                "unit": "%",
+                "default": "15",
             }
         },
     },
     "FNXACFDW": {
         "sensor_type_ref": {
-            "power": {
+            "battery": {
                 "ref": "11600",
                 "type": "property",
-                "default": 15,
-                "unit": "%",
+                "default": "15",
             }
         },
     },
@@ -239,17 +249,16 @@ THINGS_MODEL_PRODUCT_TYPE_REF = {
                 "ref": "15400",
                 "default": 0,
                 "type": "property",
-                "options": [-1, 0, 1, 2],
+                "options": ["-1", "0", "1", "2"],
             },
         },
     },
     "emi4a5sapwg0pnj0": {
         "sensor_type_ref": {
-            "power": {
+            "battery": {
                 "ref": "11600",
                 "type": "property",
-                "default": 15,
-                "unit": "%",
+                "default": "15",
             }
         },
         "button_type_ref": {
@@ -258,11 +267,10 @@ THINGS_MODEL_PRODUCT_TYPE_REF = {
     },
     "BZFACWD1": {
         "sensor_type_ref": {
-            "power": {
+            "battery": {
                 "ref": "11600",
                 "type": "property",
-                "default": 15,
-                "unit": "%",
+                "default": "15",
             }
         },
         "button_type_ref": {
@@ -271,11 +279,26 @@ THINGS_MODEL_PRODUCT_TYPE_REF = {
     },
     "W53ATH8Y": {
         "sensor_type_ref": {
-            "power": {
+            "battery": {
                 "ref": "11600",
                 "type": "property",
-                "default": 15,
-                "unit": "%",
+                "default": "15",
+            }
+        },
+        "switch_type_ref": {
+            "door_contact_status": {
+                "ref": "16300",
+                "type": "property",
+                "default": False,
+            }
+        },
+    },
+    "qlkc2jscyskjl2l0": {
+        "sensor_type_ref": {
+            "battery": {
+                "ref": "11600",
+                "type": "property",
+                "default": "15",
             }
         },
         "switch_type_ref": {
@@ -288,43 +311,38 @@ THINGS_MODEL_PRODUCT_TYPE_REF = {
     },
     "XQA32TH3": {
         "sensor_type_ref": {
-            "power": {
+            "battery": {
                 "ref": "11600",
                 "type": "property",
-                "default": 15,
-                "unit": "%",
+                "default": "15",
             }
         },
     },
     "ilgltwx0a0x7rykg": {
         "sensor_type_ref": {
-            "power": {
+            "battery": {
                 "ref": "11600",
                 "type": "property",
-                "default": 15,
-                "unit": "%",
+                "default": "15",
             }
         },
     },
     "jp6he4js8mu0u37d": {
         "sensor_type_ref": {
-            "power": {
+            "battery": {
                 "ref": "11600",
                 "type": "property",
-                "default": 15,
-                "unit": "%",
+                "default": "15",
             },
             "temperature_current": {
                 "ref": "11700",
                 "type": "property",
-                "default": 10,
-                "unit": "°C",
+                "default": "10",
             },
             "humidity_current": {
                 "ref": "16100",
                 "type": "property",
-                "default": 10,
-                "unit": "%RH",
+                "default": "10",
             },
         },
     },
@@ -335,21 +353,19 @@ THINGS_MODEL_PRODUCT_TYPE_REF = {
     },
     "zfdw8yfg3d94bbos": {
         "sensor_type_ref": {
-            "power": {
+            "battery": {
                 "ref": "11600",
                 "type": "property",
-                "default": 15,
-                "unit": "%",
+                "default": "15",
             }
         },
     },
     "1TUJJFGY": {
         "sensor_type_ref": {
-            "power": {
+            "battery": {
                 "ref": "11600",
                 "type": "property",
-                "default": 15,
-                "unit": "%",
+                "default": "15",
             }
         },
     },

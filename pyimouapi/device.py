@@ -142,6 +142,15 @@ class ImouDevice:
     def channel_number(self) -> int:
         return self._channel_number
 
+    @property
+    def parent_product_id(self) -> str:
+        return self._parent_product_id
+
+    @property
+    def parent_device_id(self) -> str:
+        return self._parent_device_id
+
+
     def set_product_id(self, product_id: str) -> None:
         self._product_id = product_id
 
@@ -224,8 +233,8 @@ class ImouDeviceManager:
             devices.append(self.async_get_devices(page + 1, page_size))
         return devices
 
-    async def async_control_device_ptz(
-        self, device_id: str, channel_id: str, operation: int, duration: int = 500
+    async def _async_control_device_ptz(
+        self, device_id: str, channel_id: str, operation: int, duration: int
     ) -> None:
         """control ptz"""
         params = {

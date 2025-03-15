@@ -51,7 +51,8 @@ class ImouOpenApiClient:
         """get accessToken"""
         response = await self.async_request_api(API_ENDPOINT_ACCESS_TOKEN, {})
         self._access_token = response[PARAM_ACCESS_TOKEN]
-        self._api_url = response[PARAM_CURRENT_DOMAIN].split("://")[1]
+        if PARAM_CURRENT_DOMAIN in response:
+            self._api_url = response[PARAM_CURRENT_DOMAIN].split("://")[1]
 
     async def async_request_api(
         self, endpoint: str, params: dict[any, any] = None
