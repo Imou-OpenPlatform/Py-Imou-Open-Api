@@ -216,7 +216,7 @@ class ImouDeviceManager:
                 channel_list = device[PARAM_CHANNEL_LIST]
                 channels = []
                 for channel in channel_list:
-                    channel_id = channel[PARAM_CHANNEL_ID]
+                    channel_id = str(channel[PARAM_CHANNEL_ID]) if isinstance(channel[PARAM_CHANNEL_ID],int) else channel[PARAM_CHANNEL_ID]
                     channel_name = channel[PARAM_CHANNEL_NAME]
                     channel_status = channel[PARAM_CHANNEL_STATUS]
                     channel_ability = (
@@ -233,7 +233,7 @@ class ImouDeviceManager:
             devices.append(self.async_get_devices(page + 1, page_size))
         return devices
 
-    async def _async_control_device_ptz(
+    async def async_control_device_ptz(
         self, device_id: str, channel_id: str, operation: int, duration: int
     ) -> None:
         """control ptz"""

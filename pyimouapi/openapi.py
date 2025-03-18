@@ -90,7 +90,7 @@ class ImouOpenApiClient:
                         "POST", url, json=body, headers=headers
                     )
                     response_body = json.loads(await response.text())
-                    _LOGGER.info(
+                    _LOGGER.debug(
                         f"url: {url} request body: {body} response: {response_body}"
                     )
         except Exception as exception:
