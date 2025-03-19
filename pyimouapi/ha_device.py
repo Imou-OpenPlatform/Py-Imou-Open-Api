@@ -173,11 +173,11 @@ class ImouHaDevice(object):
 
 class ImouHaDeviceManager(object):
     def __init__(self, device_manager: ImouDeviceManager):
-        self._device_manager = device_manager
+        self._delegate = device_manager
 
     @property
-    def device_manager(self):
-        return self._device_manager
+    def delegate(self):
+        return self._delegate
 
     async def async_update_device_status(self, device: ImouHaDevice):
         """Update device status, with the updater calling every time the coordinator is updated"""
@@ -244,7 +244,7 @@ class ImouHaDeviceManager(object):
                     f"{device_id}_{device.parent_device_id}_{device.parent_product_id}"
                 )
 
-            data = await self.device_manager.async_get_device_online_status(device_id)
+            data = await self.delegate.async_get_device_online_status(device_id)
             if device.channel_id is None and device.product_id is not None:
                 device.sensors[PARAM_STATUS] = self.get_device_status(
                     data[PARAM_ONLINE]
@@ -262,7 +262,7 @@ class ImouHaDeviceManager(object):
 
     async def _async_update_device_storage(self, device: ImouHaDevice):
         try:
-            data = await self.device_manager.async_get_device_storage(device.device_id)
+            data = await self.delegate.async_get_device_storage(device.device_id)
             if data[PARAM_TOTAL_BYTES] != 0:
                 percentage_used = int(
                     data[PARAM_USED_BYTES] * 100 / data[PARAM_TOTAL_BYTES]
@@ -302,7 +302,7 @@ class ImouHaDeviceManager(object):
     async def _async_get_device_exist_stream(
         self, device: ImouHaDevice, resolution: str, protocol: str
     ):
-        data = await self.device_manager.async_get_stream_url(
+        data = await self.delegate.async_get_stream_url(
             device.device_id, device.channel_id
         )
         return await self.async_get_stream_url(data, resolution, protocol)
@@ -310,13 +310,13 @@ class ImouHaDeviceManager(object):
     async def _async_create_device_stream(
         self, device: ImouHaDevice, resolution: str, protocol: str
     ):
-        data = await self.device_manager.async_create_stream_url(
+        data = await self.delegate.async_create_stream_url(
             device.device_id, device.channel_id
         )
         return await self.async_get_stream_url(data, resolution, protocol)
 
     async def async_get_device_image(self, device: ImouHaDevice, wait_seconds: int):
-        data = await self.device_manager.async_get_device_snap(
+        data = await self.delegate.async_get_device_snap(
             device.device_id, device.channel_id
         )
         if PARAM_URL in data:
@@ -338,7 +338,7 @@ class ImouHaDeviceManager(object):
         GET A LIST OF ALL DEVICES。
         """
         devices = []
-        for device in await self.device_manager.async_get_devices():
+        for device in await self.delegate.async_get_devices():
             imou_ha_device = ImouHaDevice(
                 device.device_id,
                 device.device_name,
@@ -382,14 +382,14 @@ class ImouHaDeviceManager(object):
         if device.things_model:
             await self._async_press_button_by_ref(device, button_type)
         elif PARAM_PTZ in button_type:
-            await self.device_manager.async_control_device_ptz(
+            await self.delegate.async_control_device_ptz(
                 device.device_id,
                 device.channel_id,
                 BUTTON_TYPE_PARAM_VALUE[button_type],
                 duration,
             )
         elif PARAM_RESTART_DEVICE == button_type:
-            await self.device_manager.async_restart_device(device.device_id)
+            await self.delegate.async_restart_device(device.device_id)
 
     async def async_switch_operation(
         self, device: ImouHaDevice, switch_type: str, enable: bool
@@ -397,7 +397,7 @@ class ImouHaDeviceManager(object):
         if device.things_model:
             await self._async_switch_operation_by_ref(device, switch_type, enable)
         elif PARAM_MOTION_DETECT == switch_type:
-            await self.device_manager.async_modify_device_alarm_status(
+            await self.delegate.async_modify_device_alarm_status(
                 device.device_id, device.channel_id, enable
             )
         else:
@@ -432,7 +432,7 @@ class ImouHaDeviceManager(object):
         if device.things_model:
             await self._async_select_option_by_ref(device, select_type, option)
         if PARAM_NIGHT_VISION_MODE == select_type:
-            await self.device_manager.async_set_device_night_vision_mode(
+            await self.delegate.async_set_device_night_vision_mode(
                 device.device_id, device.channel_id, option
             )
 
@@ -443,7 +443,7 @@ class ImouHaDeviceManager(object):
         # 1. To prevent the updater from failing to load due to exceptions;
         # 2. To set default values
         try:
-            data = await self.device_manager.async_get_device_status(
+            data = await self.delegate.async_get_device_status(
                 device.device_id, device.channel_id, ability_type
             )
             return data[PARAM_STATUS] == PARAM_ON
@@ -454,7 +454,7 @@ class ImouHaDeviceManager(object):
     async def _async_set_device_switch_status_by_ability(
         self, device: ImouHaDevice, ability_type: str, enable: bool
     ) -> None:
-        await self.device_manager.async_set_device_status(
+        await self.delegate.async_set_device_status(
             device.device_id, device.channel_id, ability_type, enable
         )
 
@@ -472,7 +472,7 @@ class ImouHaDeviceManager(object):
                 }
 
     async def _async_update_device_night_vision_mode(self, device: ImouHaDevice):
-        data = await self.device_manager.async_get_device_night_vision_mode(
+        data = await self.delegate.async_get_device_night_vision_mode(
             device.device_id, device.channel_id
         )
         if PARAM_MODE not in data or PARAM_MODES not in data:
@@ -744,7 +744,7 @@ class ImouHaDeviceManager(object):
                     + "_"
                     + device.parent_product_id
                 )
-            data = await self.device_manager.async_get_iot_device_properties(
+            data = await self.delegate.async_get_iot_device_properties(
                 device_id, device.product_id, [switch[PARAM_REF]]
             )
             device.switches[switch_type] = (
@@ -772,7 +772,7 @@ class ImouHaDeviceManager(object):
                     + "_"
                     + device.parent_product_id
                 )
-            data = await self.device_manager.async_get_iot_device_properties(
+            data = await self.delegate.async_get_iot_device_properties(
                 device_id, device.product_id, [select[PARAM_REF]]
             )
             device.selects[select_type] = {
@@ -806,7 +806,7 @@ class ImouHaDeviceManager(object):
                     + "_"
                     + device.parent_product_id
                 )
-            data = await self.device_manager.async_get_iot_device_properties(
+            data = await self.delegate.async_get_iot_device_properties(
                 device_id, device.product_id, [sensor[PARAM_REF]]
             )
             device.sensors[sensor_type] = (
@@ -831,7 +831,7 @@ class ImouHaDeviceManager(object):
                 + "_"
                 + device.parent_product_id
             )
-        await self.device_manager.async_iot_device_control(
+        await self.delegate.async_iot_device_control(
             device_id, device.product_id, button[PARAM_REF], {}
         )
 
@@ -851,7 +851,7 @@ class ImouHaDeviceManager(object):
                 + "_"
                 + device.parent_product_id
             )
-        await self.device_manager.async_set_iot_device_properties(
+        await self.delegate.async_set_iot_device_properties(
             device_id, device.product_id, {select[PARAM_REF]: int(option)}
         )
 
@@ -870,7 +870,7 @@ class ImouHaDeviceManager(object):
                 + "_"
                 + device.parent_product_id
             )
-        await self.device_manager.async_set_iot_device_properties(
+        await self.delegate.async_set_iot_device_properties(
             device_id, device.product_id, {switch[PARAM_REF]: 1 if enable else 0}
         )
         await asyncio.sleep(3)
@@ -939,7 +939,7 @@ class ImouHaDeviceManager(object):
                     + "_"
                     + device.parent_product_id
                 )
-            data = await self.device_manager.async_get_iot_device_properties(
+            data = await self.delegate.async_get_iot_device_properties(
                 device_id, device.product_id, [binary_sensor[PARAM_REF]]
             )
             device.binary_sensors[binary_sensor] = (
