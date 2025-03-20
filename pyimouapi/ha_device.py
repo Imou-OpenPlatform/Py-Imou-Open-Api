@@ -167,7 +167,8 @@ class ImouHaDevice(object):
     def __str__(self):
         return (
             f"device_id: {self._device_id}, device_name: {self._device_name}, manufacturer: {self._manufacturer}, "
-            f"model: {self._model}, swversion: {self._swversion},selects:{self._selects},sensors:{self._sensors},switches:{self._switches},thingsMode:{self._things_model}"
+            f"model: {self._model}, swversion: {self._swversion},selects:{self._selects},sensors:{self._sensors},switches:{self._switches},binary_sensors:{self.binary_sensors}"
+            f"thingsMode:{self._things_model}"
         )
 
     def set_channel_id(self, channel_id):
@@ -361,9 +362,9 @@ class ImouHaDeviceManager(object):
                 for channel in device.channels:
                     imou_ha_device = await self.async_build_device(device)
                     self.configure_device_by_ability(
-                        device.device_ability,
-                        channel.channel_ability,
+                        channel.channel_ability.split(","),
                         device.is_ipc,
+                        device.device_ability.split(","),
                         imou_ha_device,
                         channel.channel_id,
                     )
@@ -428,18 +429,18 @@ class ImouHaDeviceManager(object):
             # Request all failed, consider this operation a failure
             if all(isinstance(result_item, Exception) for result_item in result):
                 raise result[0]
-        await asyncio.sleep(3)
-        device.switches[switch_type] = any(
-            await asyncio.gather(
-                *[
-                    self._async_get_device_switch_status_by_ability(
-                        device, ability_type
-                    )
-                    for ability_type in SWITCH_TYPE_ENABLE[switch_type]
-                ],
-                return_exceptions=True,
+            await asyncio.sleep(3)
+            device.switches[switch_type] = any(
+                await asyncio.gather(
+                    *[
+                        self._async_get_device_switch_status_by_ability(
+                            device, ability_type
+                        )
+                        for ability_type in SWITCH_TYPE_ENABLE[switch_type]
+                    ],
+                    return_exceptions=True,
+                )
             )
-        )
 
     async def async_select_option(
         self, device: ImouHaDevice, select_type: str, option: str
@@ -500,25 +501,10 @@ class ImouHaDeviceManager(object):
             device.selects[PARAM_NIGHT_VISION_MODE][PARAM_OPTIONS] = data[PARAM_MODES]
 
     @staticmethod
-    def get_device_status(origin_value: str):
-        match origin_value:
-            case "1":
-                return DeviceStatus.ONLINE.value
-            case "0":
-                return DeviceStatus.OFFLINE.value
-            case "4":
-                return DeviceStatus.SLEEP.value
-            case "3":
-                return DeviceStatus.UPGRADING.value
-            case _:
-                _LOGGER.warning(f"Unknown device status: {origin_value}")
-                return DeviceStatus.OFFLINE.value
-
-    @staticmethod
     def configure_device_by_ability(
-        device_abilities: str,
-        channel_abilities: str,
+        channel_abilities: [str],
         is_ipc: bool,
+        device_abilities: [str],
         imou_ha_device: ImouHaDevice,
         channel_id: str,
     ):
@@ -540,10 +526,25 @@ class ImouHaDeviceManager(object):
         )
 
     @staticmethod
+    def get_device_status(origin_value: str):
+        match origin_value:
+            case "1":
+                return DeviceStatus.ONLINE.value
+            case "0":
+                return DeviceStatus.OFFLINE.value
+            case "4":
+                return DeviceStatus.SLEEP.value
+            case "3":
+                return DeviceStatus.UPGRADING.value
+            case _:
+                _LOGGER.warning(f"Unknown device status: {origin_value}")
+                return DeviceStatus.OFFLINE.value
+
+    @staticmethod
     def configure_sensor_by_ability(
-        channel_abilities: str,
+        channel_abilities: [str],
         is_ipc: bool,
-        device_abilities: str,
+        device_abilities: [str],
         imou_ha_device: ImouHaDevice,
         channel_id: str,
     ):
@@ -591,9 +592,9 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_select_by_ability(
-        channel_abilities: str,
+        channel_abilities: [str],
         is_ipc: bool,
-        device_abilities: str,
+        device_abilities: [str],
         imou_ha_device: ImouHaDevice,
         channel_id: str,
     ):
@@ -644,9 +645,9 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_button_by_ability(
-        channel_abilities: str,
+        channel_abilities: [str],
         is_ipc: bool,
-        device_abilities: str,
+        device_abilities: [str],
         imou_ha_device: ImouHaDevice,
         channel_id: str,
     ):
@@ -688,9 +689,9 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_switch_by_ability(
-        channel_abilities: str,
+        channel_abilities: [str],
         is_ipc: bool,
-        device_abilities: str,
+        device_abilities: [str],
         imou_ha_device: ImouHaDevice,
         channel_id: str,
     ):
@@ -933,9 +934,9 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_binary_sensor_by_ability(
-        channel_abilities: str,
+        channel_abilities: [str],
         is_ipc: bool,
-        device_abilities: str,
+        device_abilities: [str],
         imou_ha_device: ImouHaDevice,
         channel_id: str,
     ):
@@ -1008,7 +1009,7 @@ class ImouHaDeviceManager(object):
                 data[PARAM_PROPERTIES][binary_sensor[PARAM_REF]]
                 if binary_sensor[PARAM_REF] in data[PARAM_PROPERTIES]
                 else binary_sensor[PARAM_DEFAULT]
-            ) == 1
+            ) == 0
         except Exception as e:
             _LOGGER.warning(f"_async_update_device_sensor_status_by_ref fail:{e}")
             device.binary_sensors[binary_sensor_type] = binary_sensor[PARAM_DEFAULT]
