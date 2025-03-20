@@ -47,6 +47,7 @@ from .const import (
     PARAM_CONTENT,
     API_ENDPOINT_IOT_DEVICE_CONTROL,
     PARAM_MULTI_FLAG,
+    API_ENDPOINT_GET_DEVICE_POWER_INFO,
 )
 from .openapi import ImouOpenApiClient
 
@@ -425,4 +426,12 @@ class ImouDeviceManager:
         }
         return await self._imou_api_client.async_request_api(
             API_ENDPOINT_IOT_DEVICE_CONTROL, params
+        )
+
+    async def async_get_device_power_info(self, device_id):
+        params = {
+            PARAM_DEVICE_ID: device_id,
+        }
+        return await self._imou_api_client.async_request_api(
+            API_ENDPOINT_GET_DEVICE_POWER_INFO, params
         )

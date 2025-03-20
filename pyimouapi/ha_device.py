@@ -48,6 +48,10 @@ from .const import (
     PARAM_TEMPERATURE_CURRENT,
     PARAM_HUMIDITY_CURRENT,
     PARAM_BATTERY,
+    PARAM_ELECTRICITYS,
+    PARAM_LITELEC,
+    PARAM_ELECTRIC,
+    PARAM_ALKELEC,
 )
 from .device import ImouDeviceManager, ImouDevice
 from .exceptions import RequestFailedException
@@ -245,6 +249,8 @@ class ImouHaDeviceManager(object):
                 )
             elif sensor_type == PARAM_STORAGE_USED:
                 await self._async_update_device_storage(device)
+            elif sensor_type == PARAM_BATTERY:
+                await self._async_update_device_battery(device)
 
     async def _async_update_device_status(self, device: ImouHaDevice):
         try:
@@ -1014,6 +1020,23 @@ class ImouHaDeviceManager(object):
         except Exception as e:
             _LOGGER.warning(f"_async_update_device_sensor_status_by_ref fail:{e}")
             device.binary_sensors[binary_sensor_type] = binary_sensor[PARAM_DEFAULT]
+
+    async def _async_update_device_battery(self, device):
+        try:
+            data = await self.delegate.async_get_device_power_info(device.device_id)
+            if len(data[PARAM_ELECTRICITYS]) > 0:
+                electricity = data[PARAM_ELECTRICITYS][0]
+                if PARAM_LITELEC in electricity:
+                    device.sensors[PARAM_BATTERY] = str(electricity[PARAM_LITELEC])
+                elif PARAM_ALKELEC in electricity:
+                    device.sensors[PARAM_BATTERY] = str(electricity[PARAM_ALKELEC])
+                elif PARAM_ELECTRIC in electricity:
+                    device.sensors[PARAM_BATTERY] = str(electricity[PARAM_ELECTRIC])
+            else:
+                device.sensors[PARAM_BATTERY] = "0"
+        except RequestFailedException as exception:
+            _LOGGER.error(f"_async_update_device_battery error:  {exception}")
+            device.sensors[PARAM_BATTERY] = "0"
 
 
 class DeviceStatus(Enum):

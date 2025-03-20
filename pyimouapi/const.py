@@ -18,6 +18,7 @@ API_ENDPOINT_GET_IOT_DEVICE_PROPERTIES = "/openapi/getIotDeviceProperties"
 API_ENDPOINT_SET_IOT_DEVICE_PROPERTIES = "/openapi/setIotDeviceProperties"
 API_ENDPOINT_DEVICE_SD_CARD_STATUS = "/openapi/deviceSdcardStatus"
 API_ENDPOINT_IOT_DEVICE_CONTROL = "/openapi/iotDeviceControl"
+API_ENDPOINT_GET_DEVICE_POWER_INFO = "/openapi/getDevicePowerInfo"
 
 # error_codes
 ERROR_CODE_SUCCESS = "0"
@@ -106,6 +107,10 @@ PARAM_PTZ = "ptz"
 PARAM_TEMPERATURE_CURRENT = "temperature_current"
 PARAM_HUMIDITY_CURRENT = "humidity_current"
 PARAM_BATTERY = "battery"
+PARAM_ELECTRICITYS = "electricitys"
+PARAM_ELECTRIC = "electric"
+PARAM_LITELEC = "litElec"
+PARAM_ALKELEC = "alkElec"
 
 
 # Required capacity for various switch types
