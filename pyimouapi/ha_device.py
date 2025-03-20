@@ -195,6 +195,11 @@ class ImouHaDeviceManager(object):
 
     async def async_update_device_status(self, device: ImouHaDevice):
         """Update device status, with the updater calling every time the coordinator is updated"""
+        # The device status is updated first, and if it's not online, the other entity status isn't updated
+        await self._async_update_device_status(device)
+        if device.sensors[PARAM_STATUS] == DeviceStatus.OFFLINE.value:
+            _LOGGER.info(f"device {device.device_name} is offline,stop updating")
+            return
         await asyncio.gather(
             self._async_update_device_switch_status(device),
             self._async_update_device_select_status(device),
@@ -239,10 +244,8 @@ class ImouHaDeviceManager(object):
     async def _async_update_device_sensor_status(self, device: ImouHaDevice):
         """UPDATE SENSOR STATUS"""
         for sensor_type in device.sensors.keys():
-            # 优先处理设备状态
-            # Prioritize device status
             if sensor_type == PARAM_STATUS:
-                await self._async_update_device_status(device)
+                continue
             elif device.things_model:
                 await self._async_update_device_sensor_status_by_ref(
                     device, sensor_type
@@ -436,18 +439,6 @@ class ImouHaDeviceManager(object):
             # Request all failed, consider this operation a failure
             if all(isinstance(result_item, Exception) for result_item in result):
                 raise result[0]
-            await asyncio.sleep(3)
-            device.switches[switch_type] = any(
-                await asyncio.gather(
-                    *[
-                        self._async_get_device_switch_status_by_ability(
-                            device, ability_type
-                        )
-                        for ability_type in SWITCH_TYPE_ENABLE[switch_type]
-                    ],
-                    return_exceptions=True,
-                )
-            )
 
     async def async_select_option(
         self, device: ImouHaDevice, select_type: str, option: str

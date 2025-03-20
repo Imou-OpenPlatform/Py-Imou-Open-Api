@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="pyimouapi",
-    version="1.0.4.24",
+    version="1.0.4.27",
     packages=find_packages(),
     description="A package for imou open api",
     # long_description=open('README.md').read(),
