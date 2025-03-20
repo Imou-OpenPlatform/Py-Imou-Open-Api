@@ -328,6 +328,7 @@ class ImouHaDeviceManager(object):
             device.device_id, device.channel_id
         )
         if PARAM_URL in data:
+            _LOGGER.debug(f"wait {wait_seconds} seconds to download a picture")
             await asyncio.sleep(wait_seconds)
         try:
             async with aiohttp.ClientSession() as session:
@@ -502,9 +503,9 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_device_by_ability(
-        channel_abilities: [str],
+        channel_abilities: list[str],
         is_ipc: bool,
-        device_abilities: [str],
+        device_abilities: list[str],
         imou_ha_device: ImouHaDevice,
         channel_id: str,
     ):
@@ -542,9 +543,9 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_sensor_by_ability(
-        channel_abilities: [str],
+        channel_abilities: list[str],
         is_ipc: bool,
-        device_abilities: [str],
+        device_abilities: list[str],
         imou_ha_device: ImouHaDevice,
         channel_id: str,
     ):
@@ -592,9 +593,9 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_select_by_ability(
-        channel_abilities: [str],
+        channel_abilities: list[str],
         is_ipc: bool,
-        device_abilities: [str],
+        device_abilities: list[str],
         imou_ha_device: ImouHaDevice,
         channel_id: str,
     ):
@@ -645,9 +646,9 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_button_by_ability(
-        channel_abilities: [str],
+        channel_abilities: list[str],
         is_ipc: bool,
-        device_abilities: [str],
+        device_abilities: list[str],
         imou_ha_device: ImouHaDevice,
         channel_id: str,
     ):
@@ -689,9 +690,9 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_switch_by_ability(
-        channel_abilities: [str],
+        channel_abilities: list[str],
         is_ipc: bool,
-        device_abilities: [str],
+        device_abilities: list[str],
         imou_ha_device: ImouHaDevice,
         channel_id: str,
     ):
@@ -934,9 +935,9 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_binary_sensor_by_ability(
-        channel_abilities: [str],
+        channel_abilities: list[str],
         is_ipc: bool,
-        device_abilities: [str],
+        device_abilities: list[str],
         imou_ha_device: ImouHaDevice,
         channel_id: str,
     ):
@@ -1005,11 +1006,11 @@ class ImouHaDeviceManager(object):
             data = await self.delegate.async_get_iot_device_properties(
                 device_id, device.product_id, [binary_sensor[PARAM_REF]]
             )
-            device.binary_sensors[binary_sensor] = (
+            device.binary_sensors[binary_sensor_type] = (
                 data[PARAM_PROPERTIES][binary_sensor[PARAM_REF]]
                 if binary_sensor[PARAM_REF] in data[PARAM_PROPERTIES]
                 else binary_sensor[PARAM_DEFAULT]
-            ) == 0
+            ) == 1
         except Exception as e:
             _LOGGER.warning(f"_async_update_device_sensor_status_by_ref fail:{e}")
             device.binary_sensors[binary_sensor_type] = binary_sensor[PARAM_DEFAULT]

@@ -186,7 +186,7 @@ class ImouDeviceManager:
 
     async def async_get_devices(
         self, page: int = 1, page_size: int = 10
-    ) -> [ImouDevice]:
+    ) -> list[ImouDevice]:
         """GET DEVICE LIST"""
         params = {
             PARAM_PAGE: page,
@@ -243,7 +243,7 @@ class ImouDeviceManager:
             devices.append(imou_device)
         # If the return quantity is equal to the requested quantity, continue to request the next page
         if data[PARAM_COUNT] == page_size:
-            devices.append(self.async_get_devices(page + 1, page_size))
+            devices.extend(await self.async_get_devices(page + 1, page_size))
         return devices
 
     async def async_control_device_ptz(
