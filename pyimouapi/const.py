@@ -96,12 +96,16 @@ PARAM_SELECT_TYPE_REF = "select_type_ref"
 PARAM_BINARY_SENSOR_TYPE_REF = "binary_sensor_type_ref"
 PARAM_ONLINE = "onLine"
 PARAM_HD = "HD"
+PARAM_MULTI_FLAG = "multiFlag"
 
 PARAM_MOTION_DETECT = "motion_detect"
 PARAM_STORAGE_USED = "storage_used"
 PARAM_RESTART_DEVICE = "restart_device"
 PARAM_NIGHT_VISION_MODE = "night_vision_mode"
 PARAM_PTZ = "ptz"
+PARAM_TEMPERATURE_CURRENT = "temperature_current"
+PARAM_HUMIDITY_CURRENT = "humidity_current"
+PARAM_BATTERY = "battery"
 
 
 # Required capacity for various switch types

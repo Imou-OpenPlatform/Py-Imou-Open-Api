@@ -46,6 +46,7 @@ from .const import (
     PARAM_REF,
     PARAM_CONTENT,
     API_ENDPOINT_IOT_DEVICE_CONTROL,
+    PARAM_MULTI_FLAG,
 )
 from .openapi import ImouOpenApiClient
 
@@ -101,6 +102,8 @@ class ImouDevice:
         self._product_id = None
         self._parent_product_id = None
         self._parent_device_id = None
+        self._is_multi = False
+        self._is_ipc = False
 
     @property
     def device_id(self) -> str:
@@ -139,10 +142,6 @@ class ImouDevice:
         return self._product_id
 
     @property
-    def channel_number(self) -> int:
-        return self._channel_number
-
-    @property
     def parent_product_id(self) -> str:
         return self._parent_product_id
 
@@ -150,6 +149,11 @@ class ImouDevice:
     def parent_device_id(self) -> str:
         return self._parent_device_id
 
+    @property
+    def is_ipc(self) -> bool:
+        return (
+            self._channel_number is not None and self._channel_number == 0
+        ) or self._is_multi
 
     def set_product_id(self, product_id: str) -> None:
         self._product_id = product_id
@@ -171,6 +175,9 @@ class ImouDevice:
 
     def set_parent_device_id(self, parent_device_id: str):
         self._parent_device_id = parent_device_id
+
+    def set_is_multi(self, is_multi: bool):
+        self._is_multi = is_multi
 
 
 class ImouDeviceManager:
@@ -212,11 +219,17 @@ class ImouDeviceManager:
                 imou_device.set_parent_device_id(device[PARAM_PARENT_DEVICE_ID])
             if PARAM_CHANNEL_NUM in device:
                 imou_device.set_channel_number(device[PARAM_CHANNEL_NUM])
+            if PARAM_MULTI_FLAG in device:
+                imou_device.set_is_multi(device[PARAM_MULTI_FLAG])
             if PARAM_CHANNEL_LIST in device:
                 channel_list = device[PARAM_CHANNEL_LIST]
                 channels = []
                 for channel in channel_list:
-                    channel_id = str(channel[PARAM_CHANNEL_ID]) if isinstance(channel[PARAM_CHANNEL_ID],int) else channel[PARAM_CHANNEL_ID]
+                    channel_id = (
+                        str(channel[PARAM_CHANNEL_ID])
+                        if isinstance(channel[PARAM_CHANNEL_ID], int)
+                        else channel[PARAM_CHANNEL_ID]
+                    )
                     channel_name = channel[PARAM_CHANNEL_NAME]
                     channel_status = channel[PARAM_CHANNEL_STATUS]
                     channel_ability = (

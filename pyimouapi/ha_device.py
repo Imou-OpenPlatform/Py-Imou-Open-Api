@@ -31,7 +31,6 @@ from .const import (
     PARAM_DEFAULT,
     PARAM_PROPERTIES,
     PARAM_REF,
-    ERROR_CODE_NO_STORAGE_MEDIUM,
     PARAM_ON,
     PARAM_SELECT_TYPE_REF,
     PARAM_SWITCH_TYPE_REF,
@@ -46,11 +45,21 @@ from .const import (
     SENSOR_TYPE_ABILITY,
     PARAM_BINARY_SENSOR_TYPE_REF,
     BINARY_SENSOR_TYPE_ABILITY,
+    PARAM_TEMPERATURE_CURRENT,
+    PARAM_HUMIDITY_CURRENT,
+    PARAM_BATTERY,
 )
-from .device import ImouDeviceManager
+from .device import ImouDeviceManager, ImouDevice
 from .exceptions import RequestFailedException
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
+
+NUMBER_TYPE = [
+    PARAM_STORAGE_USED,
+    PARAM_TEMPERATURE_CURRENT,
+    PARAM_HUMIDITY_CURRENT,
+    PARAM_BATTERY,
+]
 
 
 class ImouHaDevice(object):
@@ -269,12 +278,10 @@ class ImouHaDeviceManager(object):
                 )
                 device.sensors[PARAM_STORAGE_USED] = str(percentage_used)
             else:
-                device.sensors[PARAM_STORAGE_USED] = "No Storage Medium"
+                device.sensors[PARAM_STORAGE_USED] = "0"
         except RequestFailedException as exception:
-            if ERROR_CODE_NO_STORAGE_MEDIUM in exception.message:
-                device.sensors[PARAM_STORAGE_USED] = "No Storage Medium"
-            else:
-                device.sensors[PARAM_STORAGE_USED] = "Abnormal"
+            _LOGGER.error(f"_async_update_device_storage error:  {exception}")
+            device.sensors[PARAM_STORAGE_USED] = "0"
 
     async def async_get_device_stream(
         self, device: ImouHaDevice, live_resolution: str, live_protocol: str
@@ -339,35 +346,26 @@ class ImouHaDeviceManager(object):
         """
         devices = []
         for device in await self.delegate.async_get_devices():
-            imou_ha_device = ImouHaDevice(
-                device.device_id,
-                device.device_name,
-                device.brand,
-                device.device_model,
-                device.device_version,
-            )
-            if device.product_id is not None:
-                imou_ha_device.set_product_id(device.product_id)
-            if device.parent_product_id is not None:
-                imou_ha_device.set_parent_product_id(device.parent_product_id)
-            if device.parent_device_id is not None:
-                imou_ha_device.set_parent_device_id(device.parent_device_id)
             # Only video devices and specific things model devices are supported，
             # Prioritize whether it is a things model device
             if (
                 device.product_id is not None
                 and device.product_id in THINGS_MODEL_PRODUCT_TYPE_REF
             ):
+                _LOGGER.debug(f"device is things model {device.device_id}")
+                imou_ha_device = await self.async_build_device(device)
                 self.configure_device_by_ref(device.product_id, imou_ha_device)
                 imou_ha_device.set_things_model(True)
                 devices.append(imou_ha_device)
-            elif device.channel_number > 0 and len(device.channels) > 0:
+            elif len(device.channels) > 0:
                 for channel in device.channels:
+                    imou_ha_device = await self.async_build_device(device)
                     self.configure_device_by_ability(
                         device.device_ability,
                         channel.channel_ability,
-                        device.channel_number,
+                        device.is_ipc,
                         imou_ha_device,
+                        channel.channel_id,
                     )
                     imou_ha_device.set_channel_id(channel.channel_id)
                     imou_ha_device.set_channel_name(channel.channel_name)
@@ -375,6 +373,23 @@ class ImouHaDeviceManager(object):
         for device in devices:
             _LOGGER.debug(f"device is  {device.__str__()}")
         return devices
+
+    @staticmethod
+    async def async_build_device(device: ImouDevice) -> ImouHaDevice:
+        imou_ha_device = ImouHaDevice(
+            device.device_id,
+            device.device_name,
+            device.brand,
+            device.device_model,
+            device.device_version,
+        )
+        if device.product_id is not None:
+            imou_ha_device.set_product_id(device.product_id)
+        if device.parent_product_id is not None:
+            imou_ha_device.set_parent_product_id(device.parent_product_id)
+        if device.parent_device_id is not None:
+            imou_ha_device.set_parent_device_id(device.parent_device_id)
+        return imou_ha_device
 
     async def async_press_button(
         self, device: ImouHaDevice, button_type: str, duration: int
@@ -503,32 +518,34 @@ class ImouHaDeviceManager(object):
     def configure_device_by_ability(
         device_abilities: str,
         channel_abilities: str,
-        channel_num: int,
+        is_ipc: bool,
         imou_ha_device: ImouHaDevice,
+        channel_id: str,
     ):
         # Determine which platform  entity should be added, based on the ability
         ImouHaDeviceManager.configure_switch_by_ability(
-            channel_abilities, channel_num, device_abilities, imou_ha_device
+            channel_abilities, is_ipc, device_abilities, imou_ha_device, channel_id
         )
         ImouHaDeviceManager.configure_button_by_ability(
-            channel_abilities, channel_num, device_abilities, imou_ha_device
+            channel_abilities, is_ipc, device_abilities, imou_ha_device, channel_id
         )
         ImouHaDeviceManager.configure_select_by_ability(
-            channel_abilities, channel_num, device_abilities, imou_ha_device
+            channel_abilities, is_ipc, device_abilities, imou_ha_device, channel_id
         )
         ImouHaDeviceManager.configure_sensor_by_ability(
-            channel_abilities, channel_num, device_abilities, imou_ha_device
+            channel_abilities, is_ipc, device_abilities, imou_ha_device, channel_id
         )
         ImouHaDeviceManager.configure_binary_sensor_by_ability(
-            channel_abilities, channel_num, device_abilities, imou_ha_device
+            channel_abilities, is_ipc, device_abilities, imou_ha_device, channel_id
         )
 
     @staticmethod
     def configure_sensor_by_ability(
         channel_abilities: str,
-        channel_num: int,
+        is_ipc: bool,
         device_abilities: str,
         imou_ha_device: ImouHaDevice,
+        channel_id: str,
     ):
         for sensor_type, ability_list in SENSOR_TYPE_ABILITY.items():
             for ability in ability_list:
@@ -542,30 +559,43 @@ class ImouHaDeviceManager(object):
                         # and displayed only if it is a single-channel device
                         if (
                             ability in device_abilities
-                            and channel_num == 1
+                            and is_ipc
+                            and channel_id == "0"
                             and sensor_type not in imou_ha_device.sensors
                         ):
-                            imou_ha_device.sensors[sensor_type] = "unknown"
+                            imou_ha_device.sensors[sensor_type] = (
+                                "unknown" if sensor_type not in NUMBER_TYPE else "0"
+                            )
                     case 2:
                         if (
-                            channel_num == 1
+                            is_ipc
+                            and channel_id == "0"
                             and ability in device_abilities
-                            or ability in channel_abilities
+                            or (not is_ipc and ability in channel_abilities)
                         ) and sensor_type not in imou_ha_device.sensors:
-                            imou_ha_device.sensors[sensor_type] = "unknown"
+                            imou_ha_device.sensors[sensor_type] = (
+                                "unknown" if sensor_type not in NUMBER_TYPE else "0"
+                            )
                     case 3:
                         if (
-                            ability in channel_abilities
-                            and sensor_type not in imou_ha_device.sensors
-                        ):
-                            imou_ha_device.sensors[sensor_type] = "unknown"
+                            (
+                                is_ipc
+                                and channel_id == "0"
+                                and ability in device_abilities
+                            )
+                            or ability in channel_abilities
+                        ) and sensor_type not in imou_ha_device.sensors:
+                            imou_ha_device.sensors[sensor_type] = (
+                                "unknown" if sensor_type not in NUMBER_TYPE else "0"
+                            )
 
     @staticmethod
     def configure_select_by_ability(
         channel_abilities: str,
-        channel_num: int,
+        is_ipc: bool,
         device_abilities: str,
         imou_ha_device: ImouHaDevice,
+        channel_id: str,
     ):
         for select_type, ability_list in SELECT_TYPE_ABILITY.items():
             for ability in ability_list:
@@ -579,7 +609,8 @@ class ImouHaDeviceManager(object):
                         # and displayed only if it is a single-channel device
                         if (
                             ability in device_abilities
-                            and channel_num == 1
+                            and is_ipc
+                            and channel_id == "0"
                             and select_type not in imou_ha_device.selects
                         ):
                             imou_ha_device.selects[select_type] = {
@@ -588,9 +619,10 @@ class ImouHaDeviceManager(object):
                             }
                     case 2:
                         if (
-                            channel_num == 1
+                            is_ipc
+                            and channel_id == "0"
                             and ability in device_abilities
-                            or ability in channel_abilities
+                            or (not is_ipc and ability in channel_abilities)
                         ) and select_type not in imou_ha_device.selects:
                             imou_ha_device.selects[select_type] = {
                                 PARAM_CURRENT_OPTION: "",
@@ -598,9 +630,13 @@ class ImouHaDeviceManager(object):
                             }
                     case 3:
                         if (
-                            ability in channel_abilities
-                            and select_type not in imou_ha_device.selects
-                        ):
+                            (
+                                is_ipc
+                                and channel_id == "0"
+                                and ability in device_abilities
+                            )
+                            or ability in channel_abilities
+                        ) and select_type not in imou_ha_device.selects:
                             imou_ha_device.selects[select_type] = {
                                 PARAM_CURRENT_OPTION: "",
                                 PARAM_OPTIONS: [],
@@ -609,9 +645,10 @@ class ImouHaDeviceManager(object):
     @staticmethod
     def configure_button_by_ability(
         channel_abilities: str,
-        channel_num: int,
+        is_ipc: bool,
         device_abilities: str,
         imou_ha_device: ImouHaDevice,
+        channel_id: str,
     ):
         for button_type, ability_list in BUTTON_TYPE_ABILITY.items():
             for ability in ability_list:
@@ -625,30 +662,37 @@ class ImouHaDeviceManager(object):
                         # and displayed only if it is a single-channel device
                         if (
                             ability in device_abilities
-                            and channel_num == 1
+                            and is_ipc
+                            and channel_id == "0"
                             and button_type not in imou_ha_device.buttons
                         ):
                             imou_ha_device.buttons.append(button_type)
                     case 2:
                         if (
-                            channel_num == 1
+                            is_ipc
+                            and channel_id == "0"
                             and ability in device_abilities
-                            or ability in channel_abilities
+                            or (not is_ipc and ability in channel_abilities)
                         ) and button_type not in imou_ha_device.buttons:
                             imou_ha_device.buttons.append(button_type)
                     case 3:
                         if (
-                            ability in channel_abilities
-                            and button_type not in imou_ha_device.buttons
-                        ):
+                            (
+                                is_ipc
+                                and channel_id == "0"
+                                and ability in device_abilities
+                            )
+                            or ability in channel_abilities
+                        ) and button_type not in imou_ha_device.buttons:
                             imou_ha_device.buttons.append(button_type)
 
     @staticmethod
     def configure_switch_by_ability(
         channel_abilities: str,
-        channel_num: int,
+        is_ipc: bool,
         device_abilities: str,
         imou_ha_device: ImouHaDevice,
+        channel_id: str,
     ):
         for switch_type, ability_list in SWITCH_TYPE_ABILITY.items():
             for ability in ability_list:
@@ -662,22 +706,28 @@ class ImouHaDeviceManager(object):
                         # and displayed only if it is a single-channel device
                         if (
                             ability in device_abilities
-                            and channel_num == 1
+                            and is_ipc
+                            and channel_id == "0"
                             and switch_type not in imou_ha_device.switches
                         ):
                             imou_ha_device.switches[switch_type] = False
                     case 2:
                         if (
-                            channel_num == 1
+                            is_ipc
+                            and channel_id == "0"
                             and ability in device_abilities
-                            or ability in channel_abilities
+                            or (not is_ipc and ability in channel_abilities)
                         ) and switch_type not in imou_ha_device.switches:
                             imou_ha_device.switches[switch_type] = False
                     case 3:
                         if (
-                            ability in channel_abilities
-                            and switch_type not in imou_ha_device.switches
-                        ):
+                            (
+                                is_ipc
+                                and channel_id == "0"
+                                and ability in device_abilities
+                            )
+                            or ability in channel_abilities
+                        ) and switch_type not in imou_ha_device.switches:
                             imou_ha_device.switches[switch_type] = False
 
     @staticmethod
@@ -776,9 +826,11 @@ class ImouHaDeviceManager(object):
                 device_id, device.product_id, [select[PARAM_REF]]
             )
             device.selects[select_type] = {
-                PARAM_CURRENT_OPTION: data[PARAM_PROPERTIES][select[PARAM_REF]]
-                if select[PARAM_REF] in data[PARAM_PROPERTIES]
-                else select[PARAM_DEFAULT],
+                PARAM_CURRENT_OPTION: str(data[PARAM_PROPERTIES].get(select[PARAM_REF]))
+                if isinstance(data[PARAM_PROPERTIES].get(select[PARAM_REF]), int)
+                else data[PARAM_PROPERTIES].get(
+                    select[PARAM_REF], select[PARAM_DEFAULT]
+                ),
                 PARAM_OPTIONS: select[PARAM_OPTIONS],
             }
         except Exception as e:
@@ -810,10 +862,13 @@ class ImouHaDeviceManager(object):
                 device_id, device.product_id, [sensor[PARAM_REF]]
             )
             device.sensors[sensor_type] = (
-                data[PARAM_PROPERTIES][sensor[PARAM_REF]]
-                if sensor[PARAM_REF] in data[PARAM_PROPERTIES]
-                else sensor[PARAM_DEFAULT]
+                str(data[PARAM_PROPERTIES].get(sensor[PARAM_REF]))
+                if isinstance(data[PARAM_PROPERTIES].get(sensor[PARAM_REF]), int)
+                else data[PARAM_PROPERTIES].get(
+                    sensor[PARAM_REF], sensor[PARAM_DEFAULT]
+                )
             )
+
         except Exception as e:
             _LOGGER.warning(f"_async_update_device_sensor_status_by_ref fail:{e}")
             device.sensors[sensor_type] = sensor[PARAM_DEFAULT]
@@ -879,9 +934,10 @@ class ImouHaDeviceManager(object):
     @staticmethod
     def configure_binary_sensor_by_ability(
         channel_abilities: str,
-        channel_num: int,
+        is_ipc: bool,
         device_abilities: str,
         imou_ha_device: ImouHaDevice,
+        channel_id: str,
     ):
         for binary_sensor_type, ability_list in BINARY_SENSOR_TYPE_ABILITY.items():
             for ability in ability_list:
@@ -895,22 +951,28 @@ class ImouHaDeviceManager(object):
                         # and displayed only if it is a single-channel device
                         if (
                             ability in device_abilities
-                            and channel_num == 1
+                            and is_ipc
+                            and channel_id == "0"
                             and binary_sensor_type not in imou_ha_device.binary_sensors
                         ):
                             imou_ha_device.binary_sensors[binary_sensor_type] = False
                     case 2:
                         if (
-                            channel_num == 1
+                            is_ipc
+                            and channel_id == "0"
                             and ability in device_abilities
-                            or ability in channel_abilities
+                            or (not is_ipc and ability in channel_abilities)
                         ) and binary_sensor_type not in imou_ha_device.binary_sensors:
                             imou_ha_device.binary_sensors[binary_sensor_type] = False
                     case 3:
                         if (
-                            ability in channel_abilities
-                            and binary_sensor_type not in imou_ha_device.binary_sensors
-                        ):
+                            (
+                                is_ipc
+                                and channel_id == "0"
+                                and ability in device_abilities
+                            )
+                            or ability in channel_abilities
+                        ) and binary_sensor_type not in imou_ha_device.binary_sensors:
                             imou_ha_device.binary_sensors[binary_sensor_type] = False
 
     async def _async_update_device_binary_sensor_status(self, device: ImouHaDevice):
@@ -946,7 +1008,7 @@ class ImouHaDeviceManager(object):
                 data[PARAM_PROPERTIES][binary_sensor[PARAM_REF]]
                 if binary_sensor[PARAM_REF] in data[PARAM_PROPERTIES]
                 else binary_sensor[PARAM_DEFAULT]
-            )==1
+            ) == 1
         except Exception as e:
             _LOGGER.warning(f"_async_update_device_sensor_status_by_ref fail:{e}")
             device.binary_sensors[binary_sensor_type] = binary_sensor[PARAM_DEFAULT]
