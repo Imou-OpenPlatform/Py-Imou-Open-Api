@@ -153,7 +153,7 @@ class ImouDevice:
     @property
     def is_ipc(self) -> bool:
         return (
-            self._channel_number is not None and self._channel_number == 0
+            self._channel_number is not None and self._channel_number == 1
         ) or self._is_multi
 
     def set_product_id(self, product_id: str) -> None:

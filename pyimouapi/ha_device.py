@@ -171,7 +171,8 @@ class ImouHaDevice(object):
     def __str__(self):
         return (
             f"device_id: {self._device_id}, device_name: {self._device_name}, manufacturer: {self._manufacturer}, "
-            f"model: {self._model}, swversion: {self._swversion},selects:{self._selects},sensors:{self._sensors},switches:{self._switches},binary_sensors:{self.binary_sensors}"
+            f"model: {self._model}, swversion: {self._swversion},selects:{self._selects},sensors:{self._sensors},"
+            f"switches:{self._switches},binary_sensors:{self.binary_sensors},buttons:{self._buttons}"
             f"thingsMode:{self._things_model}"
         )
 
