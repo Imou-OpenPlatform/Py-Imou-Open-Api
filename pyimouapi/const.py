@@ -556,6 +556,25 @@ THINGS_MODEL_PRODUCT_TYPE_REF = {
             },
         },
     },
+    "BNBAXRTQ": {
+        "sensor_type_ref": {
+            "battery": {
+                "ref": "11600",
+                "type": "property",
+                "default": "15",
+            },
+            "temperature_current": {
+                "ref": "16000",
+                "type": "property",
+                "default": "10",
+            },
+            "humidity_current": {
+                "ref": "16100",
+                "type": "property",
+                "default": "10",
+            },
+        },
+    },
     "2BTLSNHP": {
         "button_type_ref": {
             "mute": {"ref": "2200", "type": "service"},

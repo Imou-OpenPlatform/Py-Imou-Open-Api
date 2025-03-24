@@ -52,6 +52,7 @@ from .const import (
     PARAM_LITELEC,
     PARAM_ELECTRIC,
     PARAM_ALKELEC,
+    ERROR_CODE_NO_STORAGE_MEDIUM,
 )
 from .device import ImouDeviceManager, ImouDevice
 from .exceptions import RequestFailedException
@@ -289,10 +290,13 @@ class ImouHaDeviceManager(object):
                 )
                 device.sensors[PARAM_STORAGE_USED] = str(percentage_used)
             else:
-                device.sensors[PARAM_STORAGE_USED] = "0"
+                device.sensors[PARAM_STORAGE_USED] = "-2"
         except RequestFailedException as exception:
             _LOGGER.error(f"_async_update_device_storage error:  {exception}")
-            device.sensors[PARAM_STORAGE_USED] = "0"
+            if ERROR_CODE_NO_STORAGE_MEDIUM in exception.message:
+                device.sensors[PARAM_STORAGE_USED] = "-1"
+            else:
+                device.sensors[PARAM_STORAGE_USED] = "-2"
 
     async def async_get_device_stream(
         self, device: ImouHaDevice, live_resolution: str, live_protocol: str
