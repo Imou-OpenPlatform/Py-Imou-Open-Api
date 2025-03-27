@@ -359,9 +359,6 @@ THINGS_MODEL_PRODUCT_TYPE_REF = {
                 "default": "15",
             }
         },
-        "button_type_ref": {
-            "mute": {"ref": "2200", "type": "service"},
-        },
     },
     "BZFACWD1": {
         "sensor_type_ref": {
@@ -370,10 +367,7 @@ THINGS_MODEL_PRODUCT_TYPE_REF = {
                 "type": "property",
                 "default": "15",
             }
-        },
-        "button_type_ref": {
-            "mute": {"ref": "2200", "type": "service"},
-        },
+        }
     },
     "Q5egDcb6": {
         "sensor_type_ref": {
@@ -382,10 +376,7 @@ THINGS_MODEL_PRODUCT_TYPE_REF = {
                 "type": "property",
                 "default": "15",
             }
-        },
-        "button_type_ref": {
-            "mute": {"ref": "2200", "type": "service"},
-        },
+        }
     },
     "2BFWLKHL": {
         "sensor_type_ref": {
@@ -394,10 +385,7 @@ THINGS_MODEL_PRODUCT_TYPE_REF = {
                 "type": "property",
                 "default": "15",
             }
-        },
-        "button_type_ref": {
-            "mute": {"ref": "2200", "type": "service"},
-        },
+        }
     },
     "W53ATH8Y": {
         "sensor_type_ref": {
@@ -576,19 +564,13 @@ THINGS_MODEL_PRODUCT_TYPE_REF = {
         },
     },
     "2BTLSNHP": {
-        "button_type_ref": {
-            "mute": {"ref": "2200", "type": "service"},
-        },
+
     },
     "GF3QAMMD": {
-        "button_type_ref": {
-            "mute": {"ref": "21600", "type": "service"},
-        },
+
     },
     "35gL0U5A": {
-        "button_type_ref": {
-            "mute": {"ref": "2200", "type": "service"},
-        },
+
     },
     "zfdw8yfg3d94bbos": {
         "sensor_type_ref": {

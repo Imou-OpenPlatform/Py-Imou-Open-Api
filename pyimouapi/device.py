@@ -204,7 +204,7 @@ class ImouDeviceManager:
             device_name = device[PARAM_DEVICE_NAME]
             device_status = device[PARAM_DEVICE_STATUS]
             brand = device[PARAM_BRAND]
-            device_model = device[PARAM_DEVICE_MODEL]
+            device_model = device.get(PARAM_DEVICE_MODEL,"unknown")
             imou_device = ImouDevice(
                 device_id, device_name, device_status, brand, device_model
             )

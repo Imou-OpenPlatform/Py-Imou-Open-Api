@@ -410,8 +410,8 @@ class ImouHaDeviceManager(object):
     async def async_press_button(
         self, device: ImouHaDevice, button_type: str, duration: int
     ):
-        if device.things_model:
-            await self._async_press_button_by_ref(device, button_type)
+        if PARAM_RESTART_DEVICE == button_type:
+            await self.delegate.async_restart_device(device.device_id)
         elif PARAM_PTZ in button_type:
             await self.delegate.async_control_device_ptz(
                 device.device_id,
@@ -419,8 +419,9 @@ class ImouHaDeviceManager(object):
                 BUTTON_TYPE_PARAM_VALUE[button_type],
                 duration,
             )
-        elif PARAM_RESTART_DEVICE == button_type:
-            await self.delegate.async_restart_device(device.device_id)
+        elif device.things_model:
+            await self._async_press_button_by_ref(device, button_type)
+
 
     async def async_switch_operation(
         self, device: ImouHaDevice, switch_type: str, enable: bool
@@ -910,8 +911,9 @@ class ImouHaDeviceManager(object):
                 + "_"
                 + device.parent_product_id
             )
+        value = option if select[PARAM_REF] == "15400" and device.product_id in ["z76s20l415gnhhl1","o8828zgeg1g9cfuz","Q3YSZ54R","BDHCWWPX"]  else int(option)
         await self.delegate.async_set_iot_device_properties(
-            device_id, device.product_id, {select[PARAM_REF]: int(option)}
+            device_id, device.product_id, {select[PARAM_REF]: value}
         )
 
     async def _async_switch_operation_by_ref(
