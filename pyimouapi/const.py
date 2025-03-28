@@ -115,12 +115,12 @@ PARAM_ALKELEC = "alkElec"
 
 # Required capacity for various switch types
 SWITCH_TYPE_ABILITY = {
-    "motion_detect": ["MobileDetect", "MotionDetect"],
+    "motion_detect": ["MobileDetect", "MotionDetect","AlarmMD"],
     "close_camera": ["CloseCamera"],
     "white_light": ["WhiteLight", "ChnWhiteLight"],
     "ab_alarm_sound": ["AbAlarmSound"],
     "audio_encode_control": ["AudioEncodeControl", "AudioEncodeControlV2"],
-    "header_detect": ["HeaderDetect"],
+    "header_detect": ["HeaderDetect","AiHuman","SMDH"],
 }
 #  Required capacity for various button types
 BUTTON_TYPE_ABILITY = {
@@ -160,6 +160,10 @@ ABILITY_LEVEL_TYPE = {
     "Reboot": 1,
     "Electric": 3,
     "HeaderDetect": 2,
+    "AlarmMD":2,
+    "HumanDetect":2,
+    "AiHuman":2,
+    "SMDH":2,
 }
 
 
@@ -170,7 +174,7 @@ SWITCH_TYPE_ENABLE = {
     "white_light": ["whiteLight"],
     "audio_encode_control": ["audioEncodeControl"],
     "ab_alarm_sound": ["abAlarmSound"],
-    "header_detect": ["headerDetect"],
+    "header_detect": ["headerDetect","aiHuman","smdHuman"],
 }
 
 BUTTON_TYPE_PARAM_VALUE = {
