@@ -19,6 +19,8 @@ API_ENDPOINT_SET_IOT_DEVICE_PROPERTIES = "/openapi/setIotDeviceProperties"
 API_ENDPOINT_DEVICE_SD_CARD_STATUS = "/openapi/deviceSdcardStatus"
 API_ENDPOINT_IOT_DEVICE_CONTROL = "/openapi/iotDeviceControl"
 API_ENDPOINT_GET_DEVICE_POWER_INFO = "/openapi/getDevicePowerInfo"
+API_ENDPOINT_GET_PRODUCT_MODEL = "/openapi/getProductModel"
+API_ENDPOINT_GET_IOT_DEVICE_DETAIL_INFO = "/openapi/getIotDeviceDetailInfo"
 
 # error_codes
 ERROR_CODE_SUCCESS = "0"
@@ -98,7 +100,6 @@ PARAM_BINARY_SENSOR_TYPE_REF = "binary_sensor_type_ref"
 PARAM_ONLINE = "onLine"
 PARAM_HD = "HD"
 PARAM_MULTI_FLAG = "multiFlag"
-
 PARAM_MOTION_DETECT = "motion_detect"
 PARAM_STORAGE_USED = "storage_used"
 PARAM_RESTART_DEVICE = "restart_device"
@@ -111,16 +112,44 @@ PARAM_ELECTRICITYS = "electricitys"
 PARAM_ELECTRIC = "electric"
 PARAM_LITELEC = "litElec"
 PARAM_ALKELEC = "alkElec"
+PARAM_SERVICES = "services"
+PARAM_STATE = "state"
+PARAM_TYPE = "type"
+PARAM_EXCEPTS = "excepts"
+PARAM_ABILITY_REFS = "abilityRefs"
 
 
 # Required capacity for various switch types
 SWITCH_TYPE_ABILITY = {
-    "motion_detect": ["MobileDetect", "MotionDetect","AlarmMD"],
+    "motion_detect": ["MobileDetect", "MotionDetect", "AlarmMD"],
     "close_camera": ["CloseCamera"],
     "white_light": ["WhiteLight", "ChnWhiteLight"],
     "ab_alarm_sound": ["AbAlarmSound"],
     "audio_encode_control": ["AudioEncodeControl", "AudioEncodeControlV2"],
-    "header_detect": ["HeaderDetect","AiHuman","SMDH"],
+    "header_detect": ["HeaderDetect", "AiHuman", "SMDH"],
+}
+SWITCH_TYPE_REF = {
+    "motion_detect": [
+        {"ref": "14800", "default": False, "type": "properties"},
+        {"ref": "305000", "default": False, "type": "properties"},
+    ],
+    "close_camera": [{"ref": "13100", "default": False, "type": "properties"}],
+    "white_light": [{"ref": "19700", "default": False, "type": "properties"}],
+    "ab_alarm_sound": [
+        {"ref": "14200", "default": False, "type": "properties"},
+        {"ref": "115300", "default": False, "type": "properties"},
+    ],
+    "audio_encode_control": [
+        {"ref": "13900", "default": False, "type": "properties"},
+        {"ref": "104000", "default": False, "type": "properties"},
+        {"ref": "103800", "default": False, "type": "properties"},
+    ],
+    "header_detect": [
+        {"ref": "17100", "default": False, "type": "properties"},
+        {"ref": "17900", "default": False, "type": "properties"},
+        {"ref": "108900", "default": False, "type": "properties"},
+    ],
+    "light": [{"ref": "11400", "default": False, "type": "properties"}],
 }
 #  Required capacity for various button types
 BUTTON_TYPE_ABILITY = {
@@ -130,42 +159,152 @@ BUTTON_TYPE_ABILITY = {
     "ptz_left": ["PT", "PTZ"],
     "ptz_right": ["PT", "PTZ"],
 }
+BUTTON_TYPE_REF = {
+    "restart_device": [
+        {"ref": "2300", "type": "services"},
+        {"ref": "21200", "type": "services"},
+        {"ref": "90600", "type": "services"},
+    ],
+    "mute": [
+        {
+            "ref": "21600",
+            "type": "services",
+            "excepts": [
+                "emi4a5sapwg0pnj0",
+                "BZFACWD1",
+                "Q5egDcb6",
+                "2BFWLKHL",
+                "2BTLSNHP",
+                "GF3QAMMD",
+                "35gL0U5A",
+            ],
+        },
+        {
+            "ref": "2200",
+            "type": "services",
+            "excepts": [
+                "emi4a5sapwg0pnj0",
+                "BZFACWD1",
+                "Q5egDcb6",
+                "2BFWLKHL",
+                "2BTLSNHP",
+                "GF3QAMMD",
+                "35gL0U5A",
+            ],
+        },
+    ],
+    "ptz_up": [
+        {"ref": "22100", "type": "services"},
+        {"ref": "88700", "type": "services"},
+        {"ref": "88800", "type": "services"},
+        {"ref": "24300", "type": "services"},
+        {"ref": "24500", "type": "services"},
+        {"ref": "24400", "type": "services"},
+        {"ref": "24200", "type": "services"},
+    ],
+    "ptz_down": [
+        {"ref": "22100", "type": "services"},
+        {"ref": "88700", "type": "services"},
+        {"ref": "88800", "type": "services"},
+        {"ref": "24300", "type": "services"},
+        {"ref": "24500", "type": "services"},
+        {"ref": "24400", "type": "services"},
+        {"ref": "24200", "type": "services"},
+    ],
+    "ptz_left": [
+        {"ref": "22100", "type": "services"},
+        {"ref": "88700", "type": "services"},
+        {"ref": "88800", "type": "services"},
+        {"ref": "24300", "type": "services"},
+        {"ref": "24500", "type": "services"},
+        {"ref": "24400", "type": "services"},
+        {"ref": "24200", "type": "services"},
+    ],
+    "ptz_right": [
+        {"ref": "22100", "type": "services"},
+        {"ref": "88700", "type": "services"},
+        {"ref": "88800", "type": "services"},
+        {"ref": "24300", "type": "services"},
+        {"ref": "24500", "type": "services"},
+        {"ref": "24400", "type": "services"},
+        {"ref": "24200", "type": "services"},
+    ],
+}
 #  Required capacity for various select types
 SELECT_TYPE_ABILITY = {
     "night_vision_mode": ["NVM"],
+}
+SELECT_TYPE_REF = {
+    "night_vision_mode": [
+        {
+            "ref": "17400",
+            "default": "0",
+            "options": ["0", "1", "2", "3", "5"],
+            "type": "properties",
+        },
+        {
+            "ref": "139700",
+            "default": "0",
+            "options": ["0", "1", "2", "3", "4"],
+            "type": "properties",
+        },
+        {"ref": "112400", "default": "2", "options": ["2", "3"], "type": "properties"},
+    ],
+    "mode": [
+        {
+            "ref": "15200",
+            "default": "0",
+            "type": "properties",
+            "options": ["0", "1", "2"],
+        }
+    ],
+    "device_volume": [
+        {
+            "ref": "15400",
+            "default": "0",
+            "type": "properties",
+            "options": ["-1", "0", "1", "2"],
+        }
+    ],
 }
 #  Required capacity for various sensor types
 SENSOR_TYPE_ABILITY = {
     "storage_used": ["LocalStorage", "LocalStorageEnable"],
     "battery": ["Electric"],
 }
-
-BINARY_SENSOR_TYPE_ABILITY = {}
-
-# Levels of capacity
-ABILITY_LEVEL_TYPE = {
-    "MobileDetect": 2,
-    "MotionDetect": 2,
-    "PT": 2,
-    "PTZ": 2,
-    "CloseCamera": 2,
-    "WhiteLight": 1,
-    "ChnWhiteLight": 2,
-    "AbAlarmSound": 1,
-    "AudioEncodeControl": 2,
-    "AudioEncodeControlV2": 2,
-    "NVM": 2,
-    "LocalStorage": 1,
-    "LocalStorageEnable": 1,
-    "Reboot": 1,
-    "Electric": 3,
-    "HeaderDetect": 2,
-    "AlarmMD":2,
-    "HumanDetect":2,
-    "AiHuman":2,
-    "SMDH":2,
+SENSOR_TYPE_REF = {
+    "storage_used": [
+        {"ref": "14600", "default": "unknown", "type": "properties"},
+        {"ref": "13400", "default": "unknown", "type": "properties"},
+        {"ref": "86600", "default": "unknown", "type": "properties"},
+    ],
+    "battery": [{"ref": "11600", "default": "15", "type": "properties"}],
+    "temperature_current": [
+        {
+            "ref": "16000",
+            "type": "properties",
+            "default": "10",
+        }
+    ],
+    "humidity_current": [
+        {
+            "ref": "16100",
+            "type": "properties",
+            "default": "10",
+        }
+    ],
 }
 
+BINARY_SENSOR_TYPE_ABILITY = {}
+BINARY_SENSOR_TYPE_REF = {
+    "door_contact_status": [
+        {
+            "ref": "16300",
+            "type": "properties",
+            "default": False,
+        }
+    ]
+}
 
 # The parameter values for switch
 SWITCH_TYPE_ENABLE = {
@@ -174,7 +313,7 @@ SWITCH_TYPE_ENABLE = {
     "white_light": ["whiteLight"],
     "audio_encode_control": ["audioEncodeControl"],
     "ab_alarm_sound": ["abAlarmSound"],
-    "header_detect": ["headerDetect","aiHuman","smdHuman"],
+    "header_detect": ["headerDetect", "aiHuman", "smdHuman"],
 }
 
 BUTTON_TYPE_PARAM_VALUE = {
