@@ -333,7 +333,7 @@ SENSOR_TYPE_REF = {
     "storage_used": [
         {
             "ref": "14600",
-            "default": "unknown",
+            "default": "-2",
             "ref_type": "properties",
             "expression": "('-1' if data['14603']=='0' else '-2') if data['14603'] != '1' else int(data['14602'] / data['14601'] * 100)",
         }

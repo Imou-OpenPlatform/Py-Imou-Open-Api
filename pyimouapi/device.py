@@ -506,4 +506,4 @@ class ImouDeviceManager:
             for channel in imou_device.channels:
                 channel_id = channel.channel_id
                 if channel_id in channel_detail_map:
-                    channel.set_device_ability_refs(channel_detail_map[channel_id])
+                    channel.set_channel_ability_refs(channel_detail_map[channel_id])
