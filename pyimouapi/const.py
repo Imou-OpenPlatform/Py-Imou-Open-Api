@@ -335,7 +335,7 @@ SENSOR_TYPE_REF = {
             "ref": "14600",
             "default": "-2",
             "ref_type": "properties",
-            "expression": "('-1' if data['14603']=='0' else '-2') if data['14603'] != '1' else int(data['14602'] / data['14601'] * 100)",
+            "expression": "('-1' if data['14603']==0 else '-2') if data['14603'] != 1 else int(data['14602'] / data['14601'] * 100)",
         }
     ],
     "battery": [{"ref": "11600", "default": "15", "ref_type": "properties"}],
@@ -346,7 +346,7 @@ SENSOR_TYPE_REF = {
     "power": [
         {
             "ref": "29000",
-            "default": "0",
+            "default": 0,
             "ref_type": "services",
             "expression": "data['29023']",
         }
@@ -354,23 +354,23 @@ SENSOR_TYPE_REF = {
     "voltage": [
         {
             "ref": "29000",
-            "default": "0",
+            "default": 0,
             "ref_type": "services",
-            "expression": "data['29021']",
+            "expression": "round(data['29021']/1000,2)",
         }
     ],
     "current": [
         {
             "ref": "29000",
-            "default": "0",
+            "default": 0,
             "ref_type": "services",
-            "expression": "data['29022']",
+            "expression": "round(data['29022']/1000,2)",
         }
     ],
     "switch_cnt": [
         {
             "ref": "29000",
-            "default": "0",
+            "default": 0,
             "ref_type": "services",
             "expression": "data['29024']",
         }
@@ -378,17 +378,17 @@ SENSOR_TYPE_REF = {
     "use_electricity": [
         {
             "ref": "115400",
-            "default": "0",
+            "default": 0,
             "ref_type": "properties",
-            "expression": "data['115401']",
+            "expression": "round(data['115401']/1000,2)",
         }
     ],
     "use_time": [
         {
             "ref": "115400",
-            "default": "0",
+            "default": 0,
             "ref_type": "properties",
-            "expression": "data['115402']",
+            "expression": "round(data['115402']/60,0)",
         }
     ],
 }
@@ -400,17 +400,16 @@ TEXT_TYPE_REF = {
     "count_down_switch": [
         {
             "ref": "28800",
-            "default": "unknown",
+            "default": "0",
             "ref_type": "services",
-            "expression": "data['28823']",
+            "expression": "int(data['28823']/60)",
         }
     ],
     "overcharge_switch": [
         {
             "ref": "1008",
-            "default": "unknown",
+            "default": "100",
             "ref_type": "properties",
-            "value_type": "int",
         }
     ],
 }

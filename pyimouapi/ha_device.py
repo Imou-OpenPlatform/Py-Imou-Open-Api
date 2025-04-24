@@ -181,7 +181,7 @@ class ImouHaDevice(object):
         return (
             f"device_id: {self._device_id}, product_id:{self._product_id},parent_device_id:{self._parent_product_id},device_name: {self._device_name}, manufacturer: {self._manufacturer}, "
             f"model: {self._model}, swversion: {self._swversion},selects:{self._selects},sensors:{self._sensors},"
-            f"switches:{self._switches},binary_sensors:{self.binary_sensors},buttons:{self._buttons}"
+            f"switches:{self._switches},binary_sensors:{self.binary_sensors},buttons:{self._buttons},texts:{self.texts}"
         )
 
     def set_channel_id(self, channel_id):
@@ -224,7 +224,7 @@ class ImouHaDeviceManager(object):
                     device, switch_type, value[PARAM_REF]
                 )
             else:
-                device.switches[switch_type] = any(
+                device.switches[switch_type][PARAM_STATE] = any(
                     await asyncio.gather(
                         *[
                             self._async_get_device_switch_status_by_ability(
@@ -408,7 +408,7 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def get_expression_value(expression: str, data: dict):
-        s = SimpleEval(names={"data": data})
+        s = SimpleEval(names={"data": data}, functions={"round": round, "int": int})
         return s.eval(expression)
 
     @staticmethod
@@ -463,10 +463,10 @@ class ImouHaDeviceManager(object):
                         + "_"
                         + device.parent_product_id
                     )
-                if "int" == value_type:
+                if "int" == value_type and  text_value.isdigit():
                     value = int(text_value)
-                else:
-                    value = text_value
+                elif "str" == value_type and  not isinstance(value_type, str):
+                    value = str(text_value)
                 await self.delegate.async_set_iot_device_properties(
                     device_id, device.product_id, {ref_id: value}
                 )
@@ -753,7 +753,9 @@ class ImouHaDeviceManager(object):
         exists_entities: dict[str, any],
     ) -> bool:
         return (
-            ability_or_ref in channel_abilities_or_refs
+            channel_id is None
+            and ability_or_ref in device_abilities_or_refs
+            or ability_or_ref in channel_abilities_or_refs
             or (
                 is_ipc
                 and channel_id is not None
@@ -1000,19 +1002,19 @@ class ImouHaDeviceManager(object):
     ):
         if value.get(PARAM_REF_TYPE, PARAM_PROPERTIES) == PARAM_SERVICES:
             result = await self.delegate.async_iot_device_control(
-                device_id, device.channel_id, value[PARAM_REF], {}
+                device_id, device.product_id, value[PARAM_REF], {}
             )
             data = result[PARAM_CONTENT][PARAM_OUTPUT_DATA]
         else:
             result = await self.delegate.async_get_iot_device_properties(
                 device_id, device.product_id, [value[PARAM_REF]]
             )
-            data = result[PARAM_PROPERTIES]
+            data = result[PARAM_PROPERTIES][value[PARAM_REF]]
         state = None
-        if value.get(PARAM_EXPRESSION):
+        if value.get(PARAM_EXPRESSION) and isinstance(data, dict):
             state = self.get_expression_value(value[PARAM_EXPRESSION], data)
-        elif value[PARAM_REF] in data:
-            state = data[value[PARAM_REF]]
+        else:
+            state = data
         return state
 
     async def _async_press_button_by_ref(self, device: ImouHaDevice, ref: str):
@@ -1046,7 +1048,7 @@ class ImouHaDeviceManager(object):
             ref != "15400"
             or device.product_id
             not in ["z76s20l415gnhhl1", "o8828zgeg1g9cfuz", "Q3YSZ54R", "BDHCWWPX"]
-        ):
+        ) :
             value = int(option)
         else:
             value = option
@@ -1124,7 +1126,9 @@ class ImouHaDeviceManager(object):
                     data[PARAM_PROPERTIES][ref] == 1
                 )
         except Exception as e:
-            _LOGGER.warning(f"_async_update_device_sensor_status_by_ref fail:{e}")
+            _LOGGER.warning(
+                f"_async_update_device_binary_sensor_status_by_ref fail:{e}"
+            )
 
     async def _async_update_device_battery(self, device):
         try:
@@ -1132,11 +1136,17 @@ class ImouHaDeviceManager(object):
             if data.get(PARAM_ELECTRICITYS):
                 electricity = data[PARAM_ELECTRICITYS][0]
                 if PARAM_LITELEC in electricity:
-                    device.sensors[PARAM_BATTERY] = str(electricity[PARAM_LITELEC])
+                    device.sensors[PARAM_BATTERY][PARAM_STATE] = str(
+                        electricity[PARAM_LITELEC]
+                    )
                 elif PARAM_ALKELEC in electricity:
-                    device.sensors[PARAM_BATTERY] = str(electricity[PARAM_ALKELEC])
+                    device.sensors[PARAM_BATTERY][PARAM_STATE] = str(
+                        electricity[PARAM_ALKELEC]
+                    )
                 elif PARAM_ELECTRIC in electricity:
-                    device.sensors[PARAM_BATTERY] = str(electricity[PARAM_ELECTRIC])
+                    device.sensors[PARAM_BATTERY][PARAM_STATE] = str(
+                        electricity[PARAM_ELECTRIC]
+                    )
             else:
                 device.sensors[PARAM_BATTERY] = "0"
         except RequestFailedException as exception:
@@ -1166,6 +1176,7 @@ class ImouHaDeviceManager(object):
                     imou_ha_device.texts[text_type] = {
                         PARAM_REF: ref[PARAM_REF],
                         PARAM_STATE: ref[PARAM_DEFAULT],
+                        PARAM_REF_TYPE: ref.get(PARAM_REF_TYPE),
                         PARAM_VALUE_TYPE: ref.get(PARAM_VALUE_TYPE, "str"),
                     }
                     break
@@ -1221,7 +1232,7 @@ class ImouHaDeviceManager(object):
         await self._async_update_device_switch_status_by_ref(device,switch_type,device.switches[switch_type][PARAM_REF])
         param = {
             "28601":1,
-            "28602":int(text_value),
+            "28602":int(text_value)*60,
         }
         if device.switches[switch_type][PARAM_STATE]:
             # 如果是开的，则倒计时关闭
