@@ -402,7 +402,8 @@ TEXT_TYPE_REF = {
             "ref": "28800",
             "default": "0",
             "ref_type": "services",
-            "expression": "int(data['28823']/60)",
+            "expression": "str(data['28823']/60) if data['28821'] == 1 else '0'",
+            "value_type": "int",
         }
     ],
     "overcharge_switch": [
@@ -410,6 +411,7 @@ TEXT_TYPE_REF = {
             "ref": "1008",
             "default": "100",
             "ref_type": "properties",
+            "value_type": "int",
         }
     ],
 }

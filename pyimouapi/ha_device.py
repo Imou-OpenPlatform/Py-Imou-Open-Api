@@ -408,7 +408,9 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def get_expression_value(expression: str, data: dict):
-        s = SimpleEval(names={"data": data}, functions={"round": round, "int": int})
+        s = SimpleEval(
+            names={"data": data}, functions={"round": round, "int": int, "str": str}
+        )
         return s.eval(expression)
 
     @staticmethod
@@ -463,9 +465,9 @@ class ImouHaDeviceManager(object):
                         + "_"
                         + device.parent_product_id
                     )
-                if "int" == value_type and  text_value.isdigit():
+                if "int" == value_type and text_value.isdigit():
                     value = int(text_value)
-                elif "str" == value_type and  not isinstance(value_type, str):
+                elif "str" == value_type and not isinstance(value_type, str):
                     value = str(text_value)
                 await self.delegate.async_set_iot_device_properties(
                     device_id, device.product_id, {ref_id: value}
@@ -1048,7 +1050,7 @@ class ImouHaDeviceManager(object):
             ref != "15400"
             or device.product_id
             not in ["z76s20l415gnhhl1", "o8828zgeg1g9cfuz", "Q3YSZ54R", "BDHCWWPX"]
-        ) :
+        ):
             value = int(option)
         else:
             value = option
@@ -1178,6 +1180,7 @@ class ImouHaDeviceManager(object):
                         PARAM_STATE: ref[PARAM_DEFAULT],
                         PARAM_REF_TYPE: ref.get(PARAM_REF_TYPE),
                         PARAM_VALUE_TYPE: ref.get(PARAM_VALUE_TYPE, "str"),
+                        PARAM_EXPRESSION: ref.get(PARAM_EXPRESSION),
                     }
                     break
 
