@@ -440,7 +440,7 @@ class ImouDeviceManager:
 
     async def async_iot_device_control(
         self, device_id: str, product_id: str, ref: str, content: dict
-    ) -> dict[any, any]:
+    ) -> dict[str, any]:
         params = {
             PARAM_DEVICE_ID: device_id,
             PARAM_PRODUCT_ID: product_id,

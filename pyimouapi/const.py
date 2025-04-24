@@ -117,6 +117,10 @@ PARAM_STATE = "state"
 PARAM_TYPE = "type"
 PARAM_EXCEPTS = "excepts"
 PARAM_ABILITY_REFS = "abilityRefs"
+PARAM_REF_TYPE = "ref_type"
+PARAM_EXPRESSION = "expression"
+PARAM_OUTPUT_DATA = "outputData"
+PARAM_VALUE_TYPE = "value_type"
 
 
 # Required capacity for various switch types
@@ -130,26 +134,81 @@ SWITCH_TYPE_ABILITY = {
 }
 SWITCH_TYPE_REF = {
     "motion_detect": [
-        {"ref": "14800", "default": False, "type": "properties"},
-        {"ref": "305000", "default": False, "type": "properties"},
+        {
+            "ref": "14800",
+            "default": False,
+        },
+        {
+            "ref": "305000",
+            "default": False,
+        },
     ],
-    "close_camera": [{"ref": "13100", "default": False, "type": "properties"}],
-    "white_light": [{"ref": "19700", "default": False, "type": "properties"}],
+    "close_camera": [
+        {
+            "ref": "13100",
+            "default": False,
+        }
+    ],
+    "white_light": [
+        {
+            "ref": "19700",
+            "default": False,
+        }
+    ],
     "ab_alarm_sound": [
-        {"ref": "14200", "default": False, "type": "properties"},
-        {"ref": "115300", "default": False, "type": "properties"},
+        {
+            "ref": "14200",
+            "default": False,
+        },
+        {
+            "ref": "115300",
+            "default": False,
+        },
     ],
     "audio_encode_control": [
-        {"ref": "13900", "default": False, "type": "properties"},
-        {"ref": "104000", "default": False, "type": "properties"},
-        {"ref": "103800", "default": False, "type": "properties"},
+        {
+            "ref": "13900",
+            "default": False,
+        },
+        {
+            "ref": "104000",
+            "default": False,
+        },
+        {
+            "ref": "103800",
+            "default": False,
+        },
     ],
     "header_detect": [
-        {"ref": "17100", "default": False, "type": "properties"},
-        {"ref": "17900", "default": False, "type": "properties"},
-        {"ref": "108900", "default": False, "type": "properties"},
+        {
+            "ref": "17100",
+            "default": False,
+        },
+        {
+            "ref": "17900",
+            "default": False,
+        },
+        {
+            "ref": "108900",
+            "default": False,
+        },
     ],
-    "light": [{"ref": "11400", "default": False, "type": "properties"}],
+    "light": [
+        {
+            "ref": "11400",
+            "default": False,
+        },
+        {
+            "ref": "12700",
+            "default": False,
+        },
+    ],
+    "switch": [
+        {
+            "ref": "11900",
+            "default": False,
+        }
+    ],
 }
 #  Required capacity for various button types
 BUTTON_TYPE_ABILITY = {
@@ -161,14 +220,13 @@ BUTTON_TYPE_ABILITY = {
 }
 BUTTON_TYPE_REF = {
     "restart_device": [
-        {"ref": "2300", "type": "services"},
-        {"ref": "21200", "type": "services"},
-        {"ref": "90600", "type": "services"},
+        {"ref": "2300"},
+        {"ref": "21200"},
+        {"ref": "90600"},
     ],
     "mute": [
         {
             "ref": "21600",
-            "type": "services",
             "excepts": [
                 "emi4a5sapwg0pnj0",
                 "BZFACWD1",
@@ -181,7 +239,6 @@ BUTTON_TYPE_REF = {
         },
         {
             "ref": "2200",
-            "type": "services",
             "excepts": [
                 "emi4a5sapwg0pnj0",
                 "BZFACWD1",
@@ -194,40 +251,40 @@ BUTTON_TYPE_REF = {
         },
     ],
     "ptz_up": [
-        {"ref": "22100", "type": "services"},
-        {"ref": "88700", "type": "services"},
-        {"ref": "88800", "type": "services"},
-        {"ref": "24300", "type": "services"},
-        {"ref": "24500", "type": "services"},
-        {"ref": "24400", "type": "services"},
-        {"ref": "24200", "type": "services"},
+        {"ref": "22100"},
+        {"ref": "88700"},
+        {"ref": "88800"},
+        {"ref": "24300"},
+        {"ref": "24500"},
+        {"ref": "24400"},
+        {"ref": "24200"},
     ],
     "ptz_down": [
-        {"ref": "22100", "type": "services"},
-        {"ref": "88700", "type": "services"},
-        {"ref": "88800", "type": "services"},
-        {"ref": "24300", "type": "services"},
-        {"ref": "24500", "type": "services"},
-        {"ref": "24400", "type": "services"},
-        {"ref": "24200", "type": "services"},
+        {"ref": "22100"},
+        {"ref": "88700"},
+        {"ref": "88800"},
+        {"ref": "24300"},
+        {"ref": "24500"},
+        {"ref": "24400"},
+        {"ref": "24200"},
     ],
     "ptz_left": [
-        {"ref": "22100", "type": "services"},
-        {"ref": "88700", "type": "services"},
-        {"ref": "88800", "type": "services"},
-        {"ref": "24300", "type": "services"},
-        {"ref": "24500", "type": "services"},
-        {"ref": "24400", "type": "services"},
-        {"ref": "24200", "type": "services"},
+        {"ref": "22100"},
+        {"ref": "88700"},
+        {"ref": "88800"},
+        {"ref": "24300"},
+        {"ref": "24500"},
+        {"ref": "24400"},
+        {"ref": "24200"},
     ],
     "ptz_right": [
-        {"ref": "22100", "type": "services"},
-        {"ref": "88700", "type": "services"},
-        {"ref": "88800", "type": "services"},
-        {"ref": "24300", "type": "services"},
-        {"ref": "24500", "type": "services"},
-        {"ref": "24400", "type": "services"},
-        {"ref": "24200", "type": "services"},
+        {"ref": "22100"},
+        {"ref": "88700"},
+        {"ref": "88800"},
+        {"ref": "24300"},
+        {"ref": "24500"},
+        {"ref": "24400"},
+        {"ref": "24200"},
     ],
 }
 #  Required capacity for various select types
@@ -240,30 +297,30 @@ SELECT_TYPE_REF = {
             "ref": "17400",
             "default": "0",
             "options": ["0", "1", "2", "3", "5"],
-            "type": "properties",
+            "value_type": "int",
         },
         {
             "ref": "139700",
             "default": "0",
             "options": ["0", "1", "2", "3", "4"],
-            "type": "properties",
+            "value_type": "int",
         },
-        {"ref": "112400", "default": "2", "options": ["2", "3"], "type": "properties"},
+        {"ref": "112400", "default": "2", "options": ["2", "3"], "value_type": "int"},
     ],
     "mode": [
         {
             "ref": "15200",
             "default": "0",
-            "type": "properties",
             "options": ["0", "1", "2"],
+            "value_type": "int",
         }
     ],
     "device_volume": [
         {
             "ref": "15400",
             "default": "0",
-            "type": "properties",
             "options": ["-1", "0", "1", "2"],
+            "value_type": "int",
         }
     ],
 }
@@ -274,36 +331,88 @@ SENSOR_TYPE_ABILITY = {
 }
 SENSOR_TYPE_REF = {
     "storage_used": [
-        {"ref": "14600", "default": "unknown", "type": "properties"},
-        {"ref": "13400", "default": "unknown", "type": "properties"},
-        {"ref": "86600", "default": "unknown", "type": "properties"},
-    ],
-    "battery": [{"ref": "11600", "default": "15", "type": "properties"}],
-    "temperature_current": [
         {
-            "ref": "16000",
-            "type": "properties",
-            "default": "10",
+            "ref": "14600",
+            "default": "unknown",
+            "ref_type": "properties",
+            "expression": "('-1' if data['14603']=='0' else '-2') if data['14603'] != '1' else int(data['14602'] / data['14601'] * 100)",
         }
     ],
-    "humidity_current": [
+    "battery": [{"ref": "11600", "default": "15", "ref_type": "properties"}],
+    "temperature_current": [
+        {"ref": "16000", "default": "10", "ref_type": "properties"}
+    ],
+    "humidity_current": [{"ref": "16100", "default": "10", "ref_type": "properties"}],
+    "power": [
         {
-            "ref": "16100",
-            "type": "properties",
-            "default": "10",
+            "ref": "29000",
+            "default": "0",
+            "ref_type": "services",
+            "expression": "data['29023']",
+        }
+    ],
+    "voltage": [
+        {
+            "ref": "29000",
+            "default": "0",
+            "ref_type": "services",
+            "expression": "data['29021']",
+        }
+    ],
+    "current": [
+        {
+            "ref": "29000",
+            "default": "0",
+            "ref_type": "services",
+            "expression": "data['29022']",
+        }
+    ],
+    "switch_cnt": [
+        {
+            "ref": "29000",
+            "default": "0",
+            "ref_type": "services",
+            "expression": "data['29024']",
+        }
+    ],
+    "use_electricity": [
+        {
+            "ref": "115400",
+            "default": "0",
+            "ref_type": "properties",
+            "expression": "data['115401']",
+        }
+    ],
+    "use_time": [
+        {
+            "ref": "115400",
+            "default": "0",
+            "ref_type": "properties",
+            "expression": "data['115402']",
         }
     ],
 }
 
 BINARY_SENSOR_TYPE_ABILITY = {}
-BINARY_SENSOR_TYPE_REF = {
-    "door_contact_status": [
+BINARY_SENSOR_TYPE_REF = {"door_contact_status": [{"ref": "16300", "default": False}]}
+
+TEXT_TYPE_REF = {
+    "count_down_switch": [
         {
-            "ref": "16300",
-            "type": "properties",
-            "default": False,
+            "ref": "28800",
+            "default": "unknown",
+            "ref_type": "services",
+            "expression": "data['28823']",
         }
-    ]
+    ],
+    "overcharge_switch": [
+        {
+            "ref": "1008",
+            "default": "unknown",
+            "ref_type": "properties",
+            "value_type": "int",
+        }
+    ],
 }
 
 # The parameter values for switch
