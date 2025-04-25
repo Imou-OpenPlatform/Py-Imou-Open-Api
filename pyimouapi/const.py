@@ -121,17 +121,83 @@ PARAM_REF_TYPE = "ref_type"
 PARAM_EXPRESSION = "expression"
 PARAM_OUTPUT_DATA = "outputData"
 PARAM_VALUE_TYPE = "value_type"
+PARAM_ACCESS_TYPE = "accessType"
+PARAM_ABILITY = "ability"
+PARAM_FUNCTION_TYPE = "function_type"
 
 
 # Required capacity for various switch types
 SWITCH_TYPE_ABILITY = {
-    "motion_detect": ["MobileDetect", "MotionDetect", "AlarmMD"],
-    "close_camera": ["CloseCamera"],
-    "white_light": ["WhiteLight", "ChnWhiteLight"],
-    "ab_alarm_sound": ["AbAlarmSound"],
-    "audio_encode_control": ["AudioEncodeControl", "AudioEncodeControlV2"],
-    "header_detect": ["HeaderDetect", "AiHuman", "SMDH"],
+    "motion_detect": [
+        {
+            "ability": "MobileDetect",
+            "default": False,
+            "function_type": ["mobileDetect", "motionDetect"],
+        },
+        {
+            "ability": "AlarmMD",
+            "default": False,
+            "function_type": ["mobileDetect", "motionDetect"],
+        },
+        {"ability": "CRMD", "default": False, "function_type": "crEnabled"},
+    ],
+    "close_camera": [
+        {
+            "ability": "CloseCamera",
+            "default": False,
+            "function_type": "closeCamera",
+        }
+    ],
+    "white_light": [
+        {
+            "ability": "WhiteLight",
+            "default": False,
+            "function_type": "whiteLight",
+        },
+        {
+            "ability": "ChnWhiteLight",
+            "default": False,
+            "function_type": "whiteLight",
+        },
+    ],
+    "ab_alarm_sound": [
+        {
+            "ability": "AbAlarmSound",
+            "default": False,
+            "function_type": "abAlarmSound",
+        }
+    ],
+    "audio_encode_control": [
+        {
+            "ability": "AudioEncodeControl",
+            "default": False,
+            "function_type": "audioEncodeControl",
+        },
+        {
+            "ability": "AudioEncodeControlV2",
+            "default": False,
+            "function_type": "audioEncodeControl",
+        },
+    ],
+    "header_detect": [
+        {
+            "ability": "HeaderDetect",
+            "default": False,
+            "function_type": "headerDetect",
+        },
+        {
+            "ability": "AiHuman",
+            "default": False,
+            "function_type": "aiHuman",
+        },
+        {
+            "ability": "SMDH",
+            "default": False,
+            "function_type": "smdHuman",
+        },
+    ],
 }
+
 SWITCH_TYPE_REF = {
     "motion_detect": [
         {
@@ -304,7 +370,7 @@ SELECT_TYPE_REF = {
         {
             "ref": "17400",
             "default": "0",
-            "options": ["0", "1", "2", "3", "5"],
+            "options": ["0", "1", "2", "3"],
             "value_type": "int",
         },
         {
@@ -424,15 +490,6 @@ TEXT_TYPE_REF = {
     ],
 }
 
-# The parameter values for switch
-SWITCH_TYPE_ENABLE = {
-    "motion_detect": ["motionDetect", "mobileDetect"],
-    "close_camera": ["closeCamera"],
-    "white_light": ["whiteLight"],
-    "audio_encode_control": ["audioEncodeControl"],
-    "ab_alarm_sound": ["abAlarmSound"],
-    "header_detect": ["headerDetect", "aiHuman", "smdHuman"],
-}
 
 BUTTON_TYPE_PARAM_VALUE = {
     "ptz_up": 0,

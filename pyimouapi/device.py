@@ -52,6 +52,7 @@ from .const import (
     API_ENDPOINT_GET_IOT_DEVICE_DETAIL_INFO,
     PARAM_ABILITY_REFS,
     PARAM_CHANNELS,
+    PARAM_ACCESS_TYPE,
 )
 from .openapi import ImouOpenApiClient
 
@@ -118,6 +119,7 @@ class ImouDevice:
         self._parent_device_id = None
         self._is_multi = False
         self._is_ipc = False
+        self._access_type = "PaaS"
 
     @property
     def device_id(self) -> str:
@@ -173,6 +175,10 @@ class ImouDevice:
     def device_ability_refs(self) -> str:
         return self._device_ability_refs
 
+    @property
+    def access_type(self) -> str:
+        return self._access_type
+
     def set_product_id(self, product_id: str) -> None:
         self._product_id = product_id
 
@@ -199,6 +205,9 @@ class ImouDevice:
 
     def set_device_ability_refs(self, device_ability_refs: str):
         self._device_ability_refs = device_ability_refs
+
+    def set_access_type(self, access_type: str):
+        self._access_type = access_type
 
 
 class ImouDeviceManager:
@@ -240,6 +249,8 @@ class ImouDeviceManager:
                 imou_device.set_channel_number(device[PARAM_CHANNEL_NUM])
             if PARAM_MULTI_FLAG in device:
                 imou_device.set_is_multi(device[PARAM_MULTI_FLAG])
+            if PARAM_ACCESS_TYPE in device:
+                imou_device.set_access_type(device[PARAM_ACCESS_TYPE])
             if PARAM_CHANNEL_LIST in device:
                 channel_list = device[PARAM_CHANNEL_LIST]
                 channels = []

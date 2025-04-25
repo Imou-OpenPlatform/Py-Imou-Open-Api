@@ -6,7 +6,6 @@ import aiohttp
 
 from .const import (
     BUTTON_TYPE_PARAM_VALUE,
-    SWITCH_TYPE_ENABLE,
     PARAM_MOTION_DETECT,
     PARAM_STATUS,
     PARAM_STORAGE_USED,
@@ -60,6 +59,8 @@ from .const import (
     PARAM_SERVICES,
     TEXT_TYPE_REF,
     PARAM_VALUE_TYPE,
+    PARAM_ABILITY,
+    PARAM_FUNCTION_TYPE,
 )
 from .device import ImouDeviceManager, ImouDevice
 from .exceptions import RequestFailedException
@@ -230,7 +231,11 @@ class ImouHaDeviceManager(object):
                             self._async_get_device_switch_status_by_ability(
                                 device, ability_type
                             )
-                            for ability_type in SWITCH_TYPE_ENABLE[switch_type]
+                            for ability_type in (
+                                value[PARAM_FUNCTION_TYPE]
+                                if isinstance(value[PARAM_FUNCTION_TYPE], list)
+                                else [value[PARAM_FUNCTION_TYPE]]
+                            )
                         ],
                         return_exceptions=True,
                     )
@@ -497,7 +502,13 @@ class ImouHaDeviceManager(object):
                     self._async_set_device_switch_status_by_ability(
                         device, ability_type, enable
                     )
-                    for ability_type in SWITCH_TYPE_ENABLE[switch_type]
+                    for ability_type in (
+                        device.switches[switch_type][PARAM_FUNCTION_TYPE]
+                        if isinstance(
+                            device.switches[switch_type][PARAM_FUNCTION_TYPE], list
+                        )
+                        else [device.switches[switch_type][PARAM_FUNCTION_TYPE]]
+                    )
                 ],
                 return_exceptions=True,
             )
@@ -515,7 +526,7 @@ class ImouHaDeviceManager(object):
             ref_id = device.selects[select_type].get(PARAM_REF)
             value_type = device.selects[select_type].get(PARAM_VALUE_TYPE)
             await self._async_select_option_by_ref(device, option, ref_id, value_type)
-        if PARAM_NIGHT_VISION_MODE == select_type:
+        elif PARAM_NIGHT_VISION_MODE == select_type:
             await self.delegate.async_set_device_night_vision_mode(
                 device.device_id, device.channel_id, option
             )
@@ -683,7 +694,7 @@ class ImouHaDeviceManager(object):
         for switch_type, ability_list in SWITCH_TYPE_ABILITY.items():
             for ability in ability_list:
                 if ImouHaDeviceManager.entity_need_add_to_device(
-                    ability,
+                    ability.get(PARAM_ABILITY),
                     channel_abilities,
                     device_abilities,
                     is_ipc,
@@ -691,7 +702,10 @@ class ImouHaDeviceManager(object):
                     switch_type,
                     imou_ha_device.switches,
                 ):
-                    imou_ha_device.switches[switch_type] = {PARAM_STATE: False}
+                    imou_ha_device.switches[switch_type] = {
+                        PARAM_STATE: ability.get(PARAM_DEFAULT),
+                        PARAM_FUNCTION_TYPE: ability.get(PARAM_FUNCTION_TYPE),
+                    }
 
     @staticmethod
     async def async_get_stream_url(data: dict, resolution: str, protocol: str) -> str:
@@ -1237,30 +1251,34 @@ class ImouHaDeviceManager(object):
         # 如果是配件，需要拼接设备id
         if device.parent_product_id is not None:
             device_id = (
-                    device_id
-                    + "_"
-                    + device.parent_device_id
-                    + "_"
-                    + device.parent_product_id
+                device_id
+                + "_"
+                + device.parent_device_id
+                + "_"
+                + device.parent_product_id
             )
         # 首先查询当前开关状态
         switch_type = "switch"
-        await self._async_update_device_switch_status_by_ref(device,switch_type,device.switches[switch_type][PARAM_REF])
+        await self._async_update_device_switch_status_by_ref(
+            device, switch_type, device.switches[switch_type][PARAM_REF]
+        )
         param = {
-            "28601":1,
-            "28602":int(text_value)*60,
+            "28601": 1,
+            "28602": int(text_value) * 60,
         }
         if device.switches[switch_type][PARAM_STATE]:
             # 如果是开的，则倒计时关闭
-            param["28603"]=0
+            param["28603"] = 0
         else:
-            param["28603"]=1
+            param["28603"] = 1
         await self.delegate.async_iot_device_control(
-            device_id, device.product_id, '28600', param
+            device_id, device.product_id, "28600", param
         )
         # 等待1秒，查询倒计时
         await asyncio.sleep(1)
-        await self._async_update_device_text_status_by_ref(device,"count_down_switch",device.texts["count_down_switch"])
+        await self._async_update_device_text_status_by_ref(
+            device, "count_down_switch", device.texts["count_down_switch"]
+        )
 
 
 class DeviceStatus(Enum):
