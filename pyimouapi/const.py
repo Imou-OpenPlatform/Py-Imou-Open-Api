@@ -142,6 +142,10 @@ SWITCH_TYPE_REF = {
             "ref": "305000",
             "default": False,
         },
+        {
+            "ref": "108800",
+            "default": False,
+        },
     ],
     "close_camera": [
         {
@@ -190,6 +194,10 @@ SWITCH_TYPE_REF = {
         },
         {
             "ref": "108900",
+            "default": False,
+        },
+        {
+            "ref": "18200",
             "default": False,
         },
     ],
@@ -402,7 +410,7 @@ TEXT_TYPE_REF = {
             "ref": "28800",
             "default": "0",
             "ref_type": "services",
-            "expression": "str(data['28823']/60) if data['28821'] == 1 else '0'",
+            "expression": "str(int(data['28823']/60)) if data['28821'] == 1 else '0'",
             "value_type": "int",
         }
     ],

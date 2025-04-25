@@ -409,24 +409,38 @@ class ImouDeviceManager:
         )
 
     async def async_get_iot_device_properties(
-        self, device_id: str, product_id: str, properties: []
+        self, device_id: str, channel_id: str | None, product_id: str, properties: []
     ) -> dict[any, any]:
         params = {
-            PARAM_DEVICE_ID: device_id,
-            PARAM_PRODUCT_ID: product_id,
-            PARAM_PROPERTIES: properties,
+            PARAM_DEVICE_LIST: [
+                {
+                    PARAM_DEVICE_ID: device_id,
+                    PARAM_CHANNEL_ID: channel_id,
+                    PARAM_PRODUCT_ID: product_id,
+                    PARAM_PROPERTIES: properties,
+                }
+            ]
         }
-        return await self._imou_api_client.async_request_api(
-            API_ENDPOINT_GET_IOT_DEVICE_PROPERTIES, params
-        )
+        return (
+            await self._imou_api_client.async_request_api(
+                API_ENDPOINT_GET_IOT_DEVICE_PROPERTIES, params
+            )
+        ).get(PARAM_DEVICE_LIST, [{}])[0]
 
     async def async_set_iot_device_properties(
-        self, device_id: str, product_id: str, properties: dict
+        self, device_id: str, channel_id: str | None, product_id: str, properties: dict
     ) -> None:
         params = {
-            PARAM_DEVICE_ID: device_id,
-            PARAM_PRODUCT_ID: product_id,
-            PARAM_PROPERTIES: properties,
+            PARAM_DEVICE_LIST: [
+                {
+                    PARAM_DEVICE_ID: device_id,
+                    PARAM_CHANNEL_ID: int(channel_id)
+                    if channel_id is not None
+                    else channel_id,
+                    PARAM_PRODUCT_ID: product_id,
+                    PARAM_PROPERTIES: properties,
+                }
+            ]
         }
         await self._imou_api_client.async_request_api(
             API_ENDPOINT_SET_IOT_DEVICE_PROPERTIES, params

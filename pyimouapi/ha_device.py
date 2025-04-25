@@ -469,9 +469,15 @@ class ImouHaDeviceManager(object):
                     value = int(text_value)
                 elif "str" == value_type and not isinstance(value_type, str):
                     value = str(text_value)
+                else:
+                    value = text_value
                 await self.delegate.async_set_iot_device_properties(
-                    device_id, device.product_id, {ref_id: value}
+                    device_id, device.channel_id, device.product_id, {ref_id: value}
                 )
+                if device.channel_id is not None and device.channel_id == "0":
+                    await self.delegate.async_set_iot_device_properties(
+                        device.device_id, None, device.product_id, {ref_id: value}
+                    )
 
     async def async_switch_operation(
         self, device: ImouHaDevice, switch_type: str, enable: bool
@@ -939,7 +945,7 @@ class ImouHaDeviceManager(object):
                     + device.parent_product_id
                 )
             data = await self.delegate.async_get_iot_device_properties(
-                device_id, device.product_id, [ref]
+                device_id, device.channel_id, device.product_id, [ref]
             )
             if ref in data[PARAM_PROPERTIES]:
                 device.switches[switch_type][PARAM_STATE] = (
@@ -962,7 +968,7 @@ class ImouHaDeviceManager(object):
                     + device.parent_product_id
                 )
             data = await self.delegate.async_get_iot_device_properties(
-                device_id, device.product_id, [ref]
+                device_id, device.channel_id, device.product_id, [ref]
             )
             if ref in data[PARAM_PROPERTIES]:
                 device.selects[select_type][PARAM_CURRENT_OPTION] = (
@@ -1009,10 +1015,9 @@ class ImouHaDeviceManager(object):
             data = result[PARAM_CONTENT][PARAM_OUTPUT_DATA]
         else:
             result = await self.delegate.async_get_iot_device_properties(
-                device_id, device.product_id, [value[PARAM_REF]]
+                device_id, device.channel_id, device.product_id, [value[PARAM_REF]]
             )
             data = result[PARAM_PROPERTIES][value[PARAM_REF]]
-        state = None
         if value.get(PARAM_EXPRESSION) and isinstance(data, dict):
             state = self.get_expression_value(value[PARAM_EXPRESSION], data)
         else:
@@ -1055,8 +1060,12 @@ class ImouHaDeviceManager(object):
         else:
             value = option
         await self.delegate.async_set_iot_device_properties(
-            device_id, device.product_id, {ref: value}
+            device_id, device.channel_id, device.product_id, {ref: value}
         )
+        if device.channel_id is not None and device.channel_id == "0":
+            await self.delegate.async_set_iot_device_properties(
+                device.device_id, None, device.product_id, {ref: value}
+            )
 
     async def _async_switch_operation_by_ref(
         self, device: ImouHaDevice, switch_type: str, enable: bool, ref: str
@@ -1071,8 +1080,12 @@ class ImouHaDeviceManager(object):
                 + device.parent_product_id
             )
         await self.delegate.async_set_iot_device_properties(
-            device_id, device.product_id, {ref: 1 if enable else 0}
+            device_id, device.channel_id, device.product_id, {ref: 1 if enable else 0}
         )
+        if device.channel_id is not None and device.channel_id == "0":
+            await self.delegate.async_set_iot_device_properties(
+                device.device_id, None, device.product_id, {ref: 1 if enable else 0}
+            )
         await asyncio.sleep(3)
         await self._async_update_device_switch_status_by_ref(device, switch_type, ref)
 
@@ -1121,7 +1134,7 @@ class ImouHaDeviceManager(object):
                     + device.parent_product_id
                 )
             data = await self.delegate.async_get_iot_device_properties(
-                device_id, device.product_id, [ref]
+                device_id, device.channel_id, device.product_id, [ref]
             )
             if ref in data[PARAM_PROPERTIES]:
                 device.binary_sensors[binary_sensor_type][PARAM_STATE] = (
