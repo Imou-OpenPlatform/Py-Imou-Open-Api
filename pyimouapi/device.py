@@ -52,7 +52,7 @@ from .const import (
     API_ENDPOINT_GET_IOT_DEVICE_DETAIL_INFO,
     PARAM_ABILITY_REFS,
     PARAM_CHANNELS,
-    PARAM_ACCESS_TYPE,
+    PARAM_ACCESS_TYPE, API_ENDPOINT_WAKE_UP_DEVICE, PARAM_URL,
 )
 from .openapi import ImouOpenApiClient
 
@@ -483,6 +483,17 @@ class ImouDeviceManager:
         return await self._imou_api_client.async_request_api(
             API_ENDPOINT_GET_DEVICE_POWER_INFO, params
         )
+
+    async def async_wake_up_device(self, device_id: str) -> None:
+        params = {
+            PARAM_DEVICE_ID: device_id,
+            PARAM_URL: "/device/wakeup",
+        }
+        await self._imou_api_client.async_request_api(
+            API_ENDPOINT_WAKE_UP_DEVICE, params
+        )
+
+
 
     async def async_get_product_model(self, product_id: str) -> dict[any, any]:
         params = {

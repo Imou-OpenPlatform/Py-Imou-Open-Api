@@ -21,6 +21,7 @@ API_ENDPOINT_IOT_DEVICE_CONTROL = "/openapi/iotDeviceControl"
 API_ENDPOINT_GET_DEVICE_POWER_INFO = "/openapi/getDevicePowerInfo"
 API_ENDPOINT_GET_PRODUCT_MODEL = "/openapi/getProductModel"
 API_ENDPOINT_GET_IOT_DEVICE_DETAIL_INFO = "/openapi/getIotDeviceDetailInfo"
+API_ENDPOINT_WAKE_UP_DEVICE = "/openapi/wakeUpDevice"
 
 # error_codes
 ERROR_CODE_SUCCESS = "0"
@@ -31,6 +32,7 @@ ERROR_CODE_DEVICE_OFFLINE = "DV1007"
 ERROR_CODE_NO_STORAGE_MEDIUM = "DV1049"
 ERROR_CODE_LIVE_NOT_EXIST = "LV1002"
 ERROR_CODE_LIVE_ALREADY_EXIST = "LV1001"
+ERROR_CODE_DEVICE_SLEEPING = "DV1030"
 
 # params key
 PARAM_APP_ID = "appId"
@@ -124,7 +126,6 @@ PARAM_VALUE_TYPE = "value_type"
 PARAM_ACCESS_TYPE = "accessType"
 PARAM_ABILITY = "ability"
 PARAM_FUNCTION_TYPE = "function_type"
-
 
 # Required capacity for various switch types
 SWITCH_TYPE_ABILITY = {
@@ -407,9 +408,9 @@ SENSOR_TYPE_REF = {
     "storage_used": [
         {
             "ref": "14600",
-            "default": "-2",
+            "default": "e2",
             "ref_type": "properties",
-            "expression": "('-1' if data['14603']==0 else '-2') if data['14603'] != 1 else int(data['14602'] / data['14601'] * 100)",
+            "expression": "('e1' if data['14603']==0 else 'e2') if data['14603'] != 1 else int(data['14602'] / data['14601'] * 100)",
         }
     ],
     "battery": [{"ref": "11600", "default": "15", "ref_type": "properties"}],
@@ -486,10 +487,15 @@ TEXT_TYPE_REF = {
             "default": "100",
             "ref_type": "properties",
             "value_type": "int",
+        },
+        {
+            "ref": "128900",
+            "default": "100",
+            "ref_type": "properties",
+            "value_type": "int",
         }
     ],
 }
-
 
 BUTTON_TYPE_PARAM_VALUE = {
     "ptz_up": 0,
