@@ -394,7 +394,7 @@ SELECT_TYPE_REF = {
         {
             "ref": "15400",
             "default": "0",
-            "options": ["-1", "0", "1", "2"],
+            "options": ["99", "0", "1", "2"],
             "value_type": "int",
         }
     ],

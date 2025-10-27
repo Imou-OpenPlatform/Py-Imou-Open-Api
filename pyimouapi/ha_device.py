@@ -526,6 +526,9 @@ class ImouHaDeviceManager(object):
         if device.selects[select_type].get(PARAM_REF):
             ref_id = device.selects[select_type].get(PARAM_REF)
             value_type = device.selects[select_type].get(PARAM_VALUE_TYPE)
+            # 兼容下音量15400值为-1的情况
+            if ref_id == "15400" and option == "99":
+                option = "-1"
             await self._async_select_option_by_ref(device, option, ref_id, value_type)
         elif PARAM_NIGHT_VISION_MODE == select_type:
             await self.delegate.async_set_device_night_vision_mode(
@@ -964,7 +967,7 @@ class ImouHaDeviceManager(object):
             )
             if ref in data[PARAM_PROPERTIES]:
                 device.switches[switch_type][PARAM_STATE] = (
-                        data[PARAM_PROPERTIES][ref] == 1
+                    data[PARAM_PROPERTIES][ref] == 1
                 )
         except Exception as e:
             _LOGGER.error(f"_async_update_device_switch_status_by_ref fail:{e}")
@@ -986,11 +989,16 @@ class ImouHaDeviceManager(object):
                 device_id, device.channel_id, device.product_id, [ref]
             )
             if ref in data[PARAM_PROPERTIES]:
-                device.selects[select_type][PARAM_CURRENT_OPTION] = (
+                value=(
                     str(data[PARAM_PROPERTIES][ref])
                     if isinstance(data[PARAM_PROPERTIES][ref], int)
                     else data[PARAM_PROPERTIES][ref]
                 )
+                device.selects[select_type][PARAM_CURRENT_OPTION] = value
+                # 兼容音量值为-1的情况
+                if ref == "15400" and value == "-1":
+                    device.selects[select_type][PARAM_CURRENT_OPTION] = "99"
+
         except Exception as e:
             _LOGGER.error(f"Error while updating device select status: {e}")
 
