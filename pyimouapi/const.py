@@ -19,6 +19,9 @@ API_ENDPOINT_SET_IOT_DEVICE_PROPERTIES = "/openapi/setIotDeviceProperties"
 API_ENDPOINT_DEVICE_SD_CARD_STATUS = "/openapi/deviceSdcardStatus"
 API_ENDPOINT_IOT_DEVICE_CONTROL = "/openapi/iotDeviceControl"
 API_ENDPOINT_GET_DEVICE_POWER_INFO = "/openapi/getDevicePowerInfo"
+API_ENDPOINT_GET_PRODUCT_MODEL = "/openapi/getProductModel"
+API_ENDPOINT_GET_IOT_DEVICE_DETAIL_INFO = "/openapi/getIotDeviceDetailInfo"
+API_ENDPOINT_WAKE_UP_DEVICE = "/openapi/wakeUpDevice"
 
 # error_codes
 ERROR_CODE_SUCCESS = "0"
@@ -29,6 +32,7 @@ ERROR_CODE_DEVICE_OFFLINE = "DV1007"
 ERROR_CODE_NO_STORAGE_MEDIUM = "DV1049"
 ERROR_CODE_LIVE_NOT_EXIST = "LV1002"
 ERROR_CODE_LIVE_ALREADY_EXIST = "LV1001"
+ERROR_CODE_DEVICE_SLEEPING = "DV1030"
 
 # params key
 PARAM_APP_ID = "appId"
@@ -98,7 +102,6 @@ PARAM_BINARY_SENSOR_TYPE_REF = "binary_sensor_type_ref"
 PARAM_ONLINE = "onLine"
 PARAM_HD = "HD"
 PARAM_MULTI_FLAG = "multiFlag"
-
 PARAM_MOTION_DETECT = "motion_detect"
 PARAM_STORAGE_USED = "storage_used"
 PARAM_RESTART_DEVICE = "restart_device"
@@ -111,16 +114,176 @@ PARAM_ELECTRICITYS = "electricitys"
 PARAM_ELECTRIC = "electric"
 PARAM_LITELEC = "litElec"
 PARAM_ALKELEC = "alkElec"
-
+PARAM_SERVICES = "services"
+PARAM_STATE = "state"
+PARAM_TYPE = "type"
+PARAM_EXCEPTS = "excepts"
+PARAM_ABILITY_REFS = "abilityRefs"
+PARAM_REF_TYPE = "ref_type"
+PARAM_EXPRESSION = "expression"
+PARAM_OUTPUT_DATA = "outputData"
+PARAM_VALUE_TYPE = "value_type"
+PARAM_ACCESS_TYPE = "accessType"
+PARAM_ABILITY = "ability"
+PARAM_FUNCTION_TYPE = "function_type"
 
 # Required capacity for various switch types
 SWITCH_TYPE_ABILITY = {
-    "motion_detect": ["MobileDetect", "MotionDetect","AlarmMD"],
-    "close_camera": ["CloseCamera"],
-    "white_light": ["WhiteLight", "ChnWhiteLight"],
-    "ab_alarm_sound": ["AbAlarmSound"],
-    "audio_encode_control": ["AudioEncodeControl", "AudioEncodeControlV2"],
-    "header_detect": ["HeaderDetect","AiHuman","SMDH"],
+    "motion_detect": [
+        {
+            "ability": "MobileDetect",
+            "default": False,
+            "function_type": ["mobileDetect", "motionDetect"],
+        },
+        {
+            "ability": "AlarmMD",
+            "default": False,
+            "function_type": ["mobileDetect", "motionDetect"],
+        },
+        {"ability": "CRMD", "default": False, "function_type": "crEnabled"},
+    ],
+    "close_camera": [
+        {
+            "ability": "CloseCamera",
+            "default": False,
+            "function_type": "closeCamera",
+        }
+    ],
+    "white_light": [
+        {
+            "ability": "WhiteLight",
+            "default": False,
+            "function_type": "whiteLight",
+        },
+        {
+            "ability": "ChnWhiteLight",
+            "default": False,
+            "function_type": "whiteLight",
+        },
+    ],
+    "ab_alarm_sound": [
+        {
+            "ability": "AbAlarmSound",
+            "default": False,
+            "function_type": "abAlarmSound",
+        }
+    ],
+    "audio_encode_control": [
+        {
+            "ability": "AudioEncodeControl",
+            "default": False,
+            "function_type": "audioEncodeControl",
+        },
+        {
+            "ability": "AudioEncodeControlV2",
+            "default": False,
+            "function_type": "audioEncodeControl",
+        },
+    ],
+    "header_detect": [
+        {
+            "ability": "HeaderDetect",
+            "default": False,
+            "function_type": "headerDetect",
+        },
+        {
+            "ability": "AiHuman",
+            "default": False,
+            "function_type": "aiHuman",
+        },
+        {
+            "ability": "SMDH",
+            "default": False,
+            "function_type": "smdHuman",
+        },
+    ],
+}
+
+SWITCH_TYPE_REF = {
+    "motion_detect": [
+        {
+            "ref": "14800",
+            "default": False,
+        },
+        {
+            "ref": "305000",
+            "default": False,
+        },
+        {
+            "ref": "108800",
+            "default": False,
+        },
+    ],
+    "close_camera": [
+        {
+            "ref": "13100",
+            "default": False,
+        }
+    ],
+    "white_light": [
+        {
+            "ref": "19700",
+            "default": False,
+        }
+    ],
+    "ab_alarm_sound": [
+        {
+            "ref": "14200",
+            "default": False,
+        },
+        {
+            "ref": "115300",
+            "default": False,
+        },
+    ],
+    "audio_encode_control": [
+        {
+            "ref": "13900",
+            "default": False,
+        },
+        {
+            "ref": "104000",
+            "default": False,
+        },
+        {
+            "ref": "103800",
+            "default": False,
+        },
+    ],
+    "header_detect": [
+        {
+            "ref": "17100",
+            "default": False,
+        },
+        {
+            "ref": "17900",
+            "default": False,
+        },
+        {
+            "ref": "108900",
+            "default": False,
+        },
+        {
+            "ref": "18200",
+            "default": False,
+        },
+    ],
+    "light": [
+        {
+            "ref": "11400",
+            "default": False,
+        },
+        {
+            "ref": "12700",
+            "default": False,
+        },
+    ],
+    "switch": [
+        {
+            "ref": "11900",
+            "default": False,
+        }
+    ],
 }
 #  Required capacity for various button types
 BUTTON_TYPE_ABILITY = {
@@ -130,51 +293,208 @@ BUTTON_TYPE_ABILITY = {
     "ptz_left": ["PT", "PTZ"],
     "ptz_right": ["PT", "PTZ"],
 }
+BUTTON_TYPE_REF = {
+    "restart_device": [
+        {"ref": "2300"},
+        {"ref": "21200"},
+        {"ref": "90600"},
+    ],
+    "mute": [
+        {
+            "ref": "21600",
+            "excepts": [
+                "emi4a5sapwg0pnj0",
+                "BZFACWD1",
+                "Q5egDcb6",
+                "2BFWLKHL",
+                "2BTLSNHP",
+                "GF3QAMMD",
+                "35gL0U5A",
+            ],
+        },
+        {
+            "ref": "2200",
+            "excepts": [
+                "emi4a5sapwg0pnj0",
+                "BZFACWD1",
+                "Q5egDcb6",
+                "2BFWLKHL",
+                "2BTLSNHP",
+                "GF3QAMMD",
+                "35gL0U5A",
+            ],
+        },
+    ],
+    "ptz_up": [
+        {"ref": "22100"},
+        {"ref": "88700"},
+        {"ref": "88800"},
+        {"ref": "24300"},
+        {"ref": "24500"},
+        {"ref": "24400"},
+        {"ref": "24200"},
+    ],
+    "ptz_down": [
+        {"ref": "22100"},
+        {"ref": "88700"},
+        {"ref": "88800"},
+        {"ref": "24300"},
+        {"ref": "24500"},
+        {"ref": "24400"},
+        {"ref": "24200"},
+    ],
+    "ptz_left": [
+        {"ref": "22100"},
+        {"ref": "88700"},
+        {"ref": "88800"},
+        {"ref": "24300"},
+        {"ref": "24500"},
+        {"ref": "24400"},
+        {"ref": "24200"},
+    ],
+    "ptz_right": [
+        {"ref": "22100"},
+        {"ref": "88700"},
+        {"ref": "88800"},
+        {"ref": "24300"},
+        {"ref": "24500"},
+        {"ref": "24400"},
+        {"ref": "24200"},
+    ],
+}
 #  Required capacity for various select types
 SELECT_TYPE_ABILITY = {
     "night_vision_mode": ["NVM"],
+}
+SELECT_TYPE_REF = {
+    "night_vision_mode": [
+        {
+            "ref": "17400",
+            "default": "0",
+            "options": ["0", "1", "2", "3"],
+            "value_type": "int",
+        },
+        {
+            "ref": "139700",
+            "default": "0",
+            "options": ["0", "1", "2", "3", "4"],
+            "value_type": "int",
+        },
+        {"ref": "112400", "default": "2", "options": ["2", "3"], "value_type": "int"},
+    ],
+    "mode": [
+        {
+            "ref": "15200",
+            "default": "0",
+            "options": ["0", "1", "2"],
+            "value_type": "int",
+        }
+    ],
+    "device_volume": [
+        {
+            "ref": "15400",
+            "default": "0",
+            "options": ["99", "0", "1", "2"],
+            "value_type": "int",
+        }
+    ],
 }
 #  Required capacity for various sensor types
 SENSOR_TYPE_ABILITY = {
     "storage_used": ["LocalStorage", "LocalStorageEnable"],
     "battery": ["Electric"],
 }
-
-BINARY_SENSOR_TYPE_ABILITY = {}
-
-# Levels of capacity
-ABILITY_LEVEL_TYPE = {
-    "MobileDetect": 2,
-    "MotionDetect": 2,
-    "PT": 2,
-    "PTZ": 2,
-    "CloseCamera": 2,
-    "WhiteLight": 1,
-    "ChnWhiteLight": 2,
-    "AbAlarmSound": 1,
-    "AudioEncodeControl": 2,
-    "AudioEncodeControlV2": 2,
-    "NVM": 2,
-    "LocalStorage": 1,
-    "LocalStorageEnable": 1,
-    "Reboot": 1,
-    "Electric": 3,
-    "HeaderDetect": 2,
-    "AlarmMD":2,
-    "HumanDetect":2,
-    "AiHuman":2,
-    "SMDH":2,
+SENSOR_TYPE_REF = {
+    "storage_used": [
+        {
+            "ref": "14600",
+            "default": "e2",
+            "ref_type": "properties",
+            "expression": "('e1' if data['14603']==0 else 'e2') if data['14603'] != 1 else int(data['14602'] / data['14601'] * 100)",
+        }
+    ],
+    "battery": [{"ref": "11600", "default": "15", "ref_type": "properties"}],
+    "temperature_current": [
+        {"ref": "16000", "default": "10", "ref_type": "properties"}
+    ],
+    "humidity_current": [{"ref": "16100", "default": "10", "ref_type": "properties"}],
+    "power": [
+        {
+            "ref": "29000",
+            "default": 0,
+            "ref_type": "services",
+            "expression": "data['29023']",
+        }
+    ],
+    "voltage": [
+        {
+            "ref": "29000",
+            "default": 0,
+            "ref_type": "services",
+            "expression": "round(data['29021']/1000,2)",
+        }
+    ],
+    "current": [
+        {
+            "ref": "29000",
+            "default": 0,
+            "ref_type": "services",
+            "expression": "round(data['29022']/1000,2)",
+        }
+    ],
+    "switch_cnt": [
+        {
+            "ref": "29000",
+            "default": 0,
+            "ref_type": "services",
+            "expression": "data['29024']",
+        }
+    ],
+    "use_electricity": [
+        {
+            "ref": "115400",
+            "default": 0,
+            "ref_type": "properties",
+            "expression": "round(data['115401']/1000,2)",
+        }
+    ],
+    "use_time": [
+        {
+            "ref": "115400",
+            "default": 0,
+            "ref_type": "properties",
+            "expression": "round(data['115402']/60,0)",
+        }
+    ],
 }
 
+BINARY_SENSOR_TYPE_ABILITY = {}
+BINARY_SENSOR_TYPE_REF = {"door_contact_status": [{"ref": "16300", "default": False}]}
 
-# The parameter values for switch
-SWITCH_TYPE_ENABLE = {
-    "motion_detect": ["motionDetect", "mobileDetect"],
-    "close_camera": ["closeCamera"],
-    "white_light": ["whiteLight"],
-    "audio_encode_control": ["audioEncodeControl"],
-    "ab_alarm_sound": ["abAlarmSound"],
-    "header_detect": ["headerDetect","aiHuman","smdHuman"],
+TEXT_TYPE_REF = {
+    "count_down_switch": [
+        {
+            "ref": "28800",
+            "default": "0",
+            "ref_type": "services",
+            "expression": "str(int(data['28823']/60)) if data['28821'] == 1 else '0'",
+            "value_type": "int",
+        }
+    ],
+    "overcharge_switch": [
+        {
+            "ref": "1008",
+            "default": "100",
+            "ref_type": "properties",
+            "value_type": "int",
+        },
+        {
+            "ref": "128900",
+            "default": "100",
+            "ref_type": "properties",
+            "value_type": "int",
+        },
+    ],
 }
 
 BUTTON_TYPE_PARAM_VALUE = {
@@ -184,432 +504,11 @@ BUTTON_TYPE_PARAM_VALUE = {
     "ptz_right": 3,
 }
 
-THINGS_MODEL_PRODUCT_TYPE_REF = {
-    "z76s20l415gnhhl1": {
-        "button_type_ref": {
-            "restart_device": {"ref": "2300", "type": "service"},
-            "mute": {"ref": "21600", "type": "service"},
-        },
-        "switch_type_ref": {
-            "light": {
-                "ref": "11400",
-                "type": "property",
-                "default": False,
-            }
-        },
-        "select_type_ref": {
-            "mode": {
-                "ref": "15200",
-                "default": 0,
-                "type": "property",
-                "options": ["0", "1", "2"],
-            },
-            "device_volume": {
-                "ref": "15400",
-                "default": 0,
-                "type": "property",
-                "options": ["-1", "0", "1", "2"],
-            },
-        },
-    },
-    "BDHCWWPX": {
-        "button_type_ref": {
-            "restart_device": {"ref": "2300", "type": "service"},
-            "mute": {"ref": "21600", "type": "service"},
-        },
-        "switch_type_ref": {
-            "light": {
-                "ref": "11400",
-                "type": "property",
-                "default": False,
-            }
-        },
-        "select_type_ref": {
-            "mode": {
-                "ref": "15200",
-                "default": 0,
-                "type": "property",
-                "options": ["0", "1", "2"],
-            },
-            "device_volume": {
-                "ref": "15400",
-                "default": 0,
-                "type": "property",
-                "options": ["-1", "0", "1", "2"],
-            },
-        },
-    },
-    "Z8vP1yHQ": {
-        "button_type_ref": {
-            "restart_device": {"ref": "2300", "type": "service"},
-            "mute": {"ref": "21600", "type": "service"},
-        },
-        "switch_type_ref": {
-            "light": {
-                "ref": "11400",
-                "type": "property",
-                "default": False,
-            }
-        },
-        "select_type_ref": {
-            "mode": {
-                "ref": "15200",
-                "default": 0,
-                "type": "property",
-                "options": ["0", "1", "2"],
-            },
-            "device_volume": {
-                "ref": "15400",
-                "default": 0,
-                "type": "property",
-                "options": ["-1", "0", "1", "2"],
-            },
-        },
-    },
-    "Q3YSZ54R": {
-        "button_type_ref": {
-            "restart_device": {"ref": "2300", "type": "service"},
-            "mute": {"ref": "21600", "type": "service"},
-        },
-        "switch_type_ref": {
-            "light": {
-                "ref": "11400",
-                "type": "property",
-                "default": False,
-            }
-        },
-        "select_type_ref": {
-            "mode": {
-                "ref": "15200",
-                "default": 0,
-                "type": "property",
-                "options": ["0", "1", "2"],
-            },
-            "device_volume": {
-                "ref": "15400",
-                "default": 0,
-                "type": "property",
-                "options": ["-1", "0", "1", "2"],
-            },
-        },
-    },
-    "qfwybtpd03zxiyxi": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        },
-    },
-    "FNXACFDW": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        },
-    },
-    "JugGcmux": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        },
-    },
-    "LDW5X6MH": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        },
-    },
-    "o8828zgeg1g9cfuz": {
-        "button_type_ref": {
-            "mute": {"ref": "2200", "type": "service"},
-        },
-        "select_type_ref": {
-            "device_volume": {
-                "ref": "15400",
-                "default": 0,
-                "type": "property",
-                "options": ["-1", "0", "1", "2"],
-            },
-        },
-    },
-    "zUX0TxU1": {
-        "button_type_ref": {
-            "mute": {"ref": "2200", "type": "service"},
-        },
-        "select_type_ref": {
-            "device_volume": {
-                "ref": "15400",
-                "default": 0,
-                "type": "property",
-                "options": ["-1", "0", "1", "2"],
-            },
-        },
-    },
-    "emi4a5sapwg0pnj0": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        },
-    },
-    "BZFACWD1": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        }
-    },
-    "Q5egDcb6": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        }
-    },
-    "2BFWLKHL": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        }
-    },
-    "W53ATH8Y": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        },
-        "binary_sensor_type_ref": {
-            "door_contact_status": {
-                "ref": "16300",
-                "type": "property",
-                "default": 1,
-            }
-        },
-    },
-    "qlkc2jscyskjl2l0": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        },
-        "binary_sensor_type_ref": {
-            "door_contact_status": {
-                "ref": "16300",
-                "type": "property",
-                "default": 1,
-            }
-        },
-    },
-    "x8MRRKFQ": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        },
-        "binary_sensor_type_ref": {
-            "door_contact_status": {
-                "ref": "16300",
-                "type": "property",
-                "default": 1,
-            }
-        },
-    },
-    "SSDCUXUC": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        },
-        "binary_sensor_type_ref": {
-            "door_contact_status": {
-                "ref": "16300",
-                "type": "property",
-                "default": 1,
-            }
-        },
-    },
-    "XQA32TH3": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        },
-    },
-    "ilgltwx0a0x7rykg": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        },
-    },
-    "LfR1ec32": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        },
-    },
-    "UKSULRRR": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        },
-    },
-    "jp6he4js8mu0u37d": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            },
-            "temperature_current": {
-                "ref": "16000",
-                "type": "property",
-                "default": "10",
-            },
-            "humidity_current": {
-                "ref": "16100",
-                "type": "property",
-                "default": "10",
-            },
-        },
-    },
-    "6YESATMM": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            },
-            "temperature_current": {
-                "ref": "16000",
-                "type": "property",
-                "default": "10",
-            },
-            "humidity_current": {
-                "ref": "16100",
-                "type": "property",
-                "default": "10",
-            },
-        },
-    },
-    "qghXYTvz": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            },
-            "temperature_current": {
-                "ref": "16000",
-                "type": "property",
-                "default": "10",
-            },
-            "humidity_current": {
-                "ref": "16100",
-                "type": "property",
-                "default": "10",
-            },
-        },
-    },
-    "BNBAXRTQ": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            },
-            "temperature_current": {
-                "ref": "16000",
-                "type": "property",
-                "default": "10",
-            },
-            "humidity_current": {
-                "ref": "16100",
-                "type": "property",
-                "default": "10",
-            },
-        },
-    },
-    "2BTLSNHP": {
-
-    },
-    "GF3QAMMD": {
-
-    },
-    "35gL0U5A": {
-
-    },
-    "zfdw8yfg3d94bbos": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        },
-    },
-    "1TUJJFGY": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        },
-    },
-    "Y3H4T3CM": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        },
-    },
-    "rQ1SMVkC": {
-        "sensor_type_ref": {
-            "battery": {
-                "ref": "11600",
-                "type": "property",
-                "default": "15",
-            }
-        },
-    },
+NIGHT_VISION_MODE_MAP = {
+    "intelligent": "Intelligent",
+    "fullcolor": "FullColor",
+    "infrared": "Infrared",
+    "off": "Off",
+    "lowlight": "LowLight",
+    "smartlowlight": "SmartLowLight"
 }
