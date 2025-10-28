@@ -52,7 +52,10 @@ from .const import (
     API_ENDPOINT_GET_IOT_DEVICE_DETAIL_INFO,
     PARAM_ABILITY_REFS,
     PARAM_CHANNELS,
-    PARAM_ACCESS_TYPE, API_ENDPOINT_WAKE_UP_DEVICE, PARAM_URL,
+    PARAM_ACCESS_TYPE,
+    API_ENDPOINT_WAKE_UP_DEVICE,
+    PARAM_URL,
+    NIGHT_VISION_MODE_MAP,
 )
 from .openapi import ImouOpenApiClient
 
@@ -357,6 +360,8 @@ class ImouDeviceManager:
         self, device_id: str, channel_id: str, night_vision_mode: str
     ) -> None:
         """set device night vision mode"""
+        if night_vision_mode in NIGHT_VISION_MODE_MAP:
+            night_vision_mode = NIGHT_VISION_MODE_MAP[night_vision_mode]
         params = {
             PARAM_DEVICE_ID: device_id,
             PARAM_CHANNEL_ID: channel_id,

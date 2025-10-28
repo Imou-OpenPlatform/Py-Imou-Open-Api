@@ -578,9 +578,9 @@ class ImouHaDeviceManager(object):
         if data[PARAM_MODE] is not None:
             device.selects[PARAM_NIGHT_VISION_MODE][PARAM_CURRENT_OPTION] = data[
                 PARAM_MODE
-            ]
+            ].lower()
         if data[PARAM_MODES] is not None:
-            device.selects[PARAM_NIGHT_VISION_MODE][PARAM_OPTIONS] = data[PARAM_MODES]
+            device.selects[PARAM_NIGHT_VISION_MODE][PARAM_OPTIONS] = [item.lower() for item in data[PARAM_MODES]]
 
     @staticmethod
     def configure_device_by_ability(

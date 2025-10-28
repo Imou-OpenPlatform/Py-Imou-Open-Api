@@ -493,7 +493,7 @@ TEXT_TYPE_REF = {
             "default": "100",
             "ref_type": "properties",
             "value_type": "int",
-        }
+        },
     ],
 }
 
@@ -502,4 +502,13 @@ BUTTON_TYPE_PARAM_VALUE = {
     "ptz_down": 1,
     "ptz_left": 2,
     "ptz_right": 3,
+}
+
+NIGHT_VISION_MODE_MAP = {
+    "intelligent": "Intelligent",
+    "fullcolor": "FullColor",
+    "infrared": "Infrared",
+    "off": "Off",
+    "lowlight": "LowLight",
+    "smartlowlight": "SmartLowLight"
 }
