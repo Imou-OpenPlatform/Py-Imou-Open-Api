@@ -2,8 +2,13 @@ from setuptools import setup, find_packages
 
 setup(
     name="pyimouapi",
-    version="1.2.2",
+    version="1.2.3",
     packages=find_packages(),
+    install_requires=[
+        "aiohttp>=3.11.9,<4.0",
+        "async-timeout>=4.0",
+        "simpleeval>=1.0.3",
+    ],
     description="A package for imou open api",
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
