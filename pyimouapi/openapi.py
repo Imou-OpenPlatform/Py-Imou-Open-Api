@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import json
 import logging
@@ -6,7 +7,6 @@ import time
 import uuid
 
 import aiohttp
-import async_timeout
 
 from .const import (
     API_ENDPOINT_ACCESS_TOKEN,
@@ -85,7 +85,7 @@ class ImouOpenApiClient:
         url = f"https://{self._api_url}{endpoint}"
         try:
             async with aiohttp.ClientSession() as session:
-                async with async_timeout.timeout(30):
+                async with asyncio.timeout(30):
                     response = await session.request(
                         "POST", url, json=body, headers=headers
                     )
