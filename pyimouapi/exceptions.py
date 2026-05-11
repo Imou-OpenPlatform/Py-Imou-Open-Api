@@ -14,8 +14,10 @@ class ImouException(Exception):
 
     def traceback(self) -> str:
         """Return the traceback as a string."""
-        etype, value, trace = sys.exc_info()
-        return "".join(traceback.format_exception(etype, value, trace, None))
+        exc_info = sys.exc_info()
+        if exc_info[0] is None:
+            return ""
+        return "".join(traceback.format_exception(*exc_info))
 
     def get_title(self) -> str:
         """Return the title of the exception which will be then translated."""

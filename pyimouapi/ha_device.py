@@ -323,10 +323,8 @@ class ImouHaDeviceManager(object):
                         return await self._async_get_device_exist_stream(
                             device, live_resolution, live_protocol
                         )
-                    else:
-                        raise exception
-            else:
-                raise exception
+                    raise ex
+            raise exception
 
     async def _async_get_device_exist_stream(
             self, device: ImouHaDevice, resolution: str, protocol: str
@@ -352,8 +350,9 @@ class ImouHaDeviceManager(object):
             _LOGGER.debug(f"wait {wait_seconds} seconds to download a picture")
             await asyncio.sleep(wait_seconds)
         try:
-            async with aiohttp.ClientSession() as session:
-                response = await session.request("GET", data[PARAM_URL])
+            timeout = aiohttp.ClientTimeout(total=120)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                response = await session.get(data[PARAM_URL])
                 if response.status != 200:
                     raise RequestFailedException(
                         f"request failed,status code {response.status}"

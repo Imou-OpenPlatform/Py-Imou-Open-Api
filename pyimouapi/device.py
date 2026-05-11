@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from .const import (
     API_ENDPOINT_LIST_DEVICE_DETAILS,
     PARAM_PAGE_SIZE,
@@ -137,7 +141,7 @@ class ImouDevice:
         return self._device_status
 
     @property
-    def channels(self) -> []:
+    def channels(self) -> list[ImouChannel]:
         return self._channels
 
     @property
@@ -157,15 +161,15 @@ class ImouDevice:
         return self._device_version
 
     @property
-    def product_id(self) -> str:
+    def product_id(self) -> str | None:
         return self._product_id
 
     @property
-    def parent_product_id(self) -> str:
+    def parent_product_id(self) -> str | None:
         return self._parent_product_id
 
     @property
-    def parent_device_id(self) -> str:
+    def parent_device_id(self) -> str | None:
         return self._parent_device_id
 
     @property
@@ -185,7 +189,7 @@ class ImouDevice:
     def set_product_id(self, product_id: str) -> None:
         self._product_id = product_id
 
-    def set_channels(self, channels: []) -> None:
+    def set_channels(self, channels: list[ImouChannel]) -> None:
         self._channels = channels
 
     def set_channel_number(self, channel_number: int):
@@ -311,7 +315,7 @@ class ImouDeviceManager:
 
     async def async_get_device_status(
         self, device_id: str, channel_id: str, enable_type: str
-    ) -> dict[any, any]:
+    ) -> dict[str, Any]:
         """obtain device capability switch status"""
         params = {
             PARAM_DEVICE_ID: device_id,
@@ -322,7 +326,7 @@ class ImouDeviceManager:
             API_ENDPOINT_GET_DEVICE_STATUS, params
         )
 
-    async def async_get_device_online_status(self, device_id: str) -> dict[any, any]:
+    async def async_get_device_online_status(self, device_id: str) -> dict[str, Any]:
         """GET DEVICE ONLINE STATUS"""
         params = {
             PARAM_DEVICE_ID: device_id,
@@ -346,7 +350,7 @@ class ImouDeviceManager:
 
     async def async_get_device_night_vision_mode(
         self, device_id: str, channel_id: str
-    ) -> dict[any, any]:
+    ) -> dict[str, Any]:
         """obtain device night vision mode"""
         params = {
             PARAM_DEVICE_ID: device_id,
@@ -371,7 +375,7 @@ class ImouDeviceManager:
             API_ENDPOINT_SET_DEVICE_NIGHT_VISION_MODE, params
         )
 
-    async def async_get_device_storage(self, device_id: str) -> dict[any, any]:
+    async def async_get_device_storage(self, device_id: str) -> dict[str, Any]:
         """obtain device storage media capacity information"""
         params = {PARAM_DEVICE_ID: device_id}
         return await self._imou_api_client.async_request_api(
@@ -387,7 +391,7 @@ class ImouDeviceManager:
 
     async def async_get_stream_url(
         self, device_id: str, channel_id: str
-    ) -> dict[any, any]:
+    ) -> dict[str, Any]:
         """obtain the hls stream address of the device"""
         params = {PARAM_DEVICE_ID: device_id, PARAM_CHANNEL_ID: channel_id}
         return await self._imou_api_client.async_request_api(
@@ -396,7 +400,7 @@ class ImouDeviceManager:
 
     async def async_get_device_snap(
         self, device_id: str, channel_id: str
-    ) -> dict[any, any]:
+    ) -> dict[str, Any]:
         params = {PARAM_DEVICE_ID: device_id, PARAM_CHANNEL_ID: channel_id}
         return await self._imou_api_client.async_request_api(
             API_ENDPOINT_SET_DEVICE_SNAP, params
@@ -404,7 +408,7 @@ class ImouDeviceManager:
 
     async def async_create_stream_url(
         self, device_id: str, channel_id: str, stream_id: int = 0
-    ) -> dict[any, any]:
+    ) -> dict[str, Any]:
         """create device hls stream address"""
         params = {
             PARAM_DEVICE_ID: device_id,
@@ -425,8 +429,12 @@ class ImouDeviceManager:
         )
 
     async def async_get_iot_device_properties(
-        self, device_id: str, channel_id: str | None, product_id: str, properties: []
-    ) -> dict[any, any]:
+        self,
+        device_id: str,
+        channel_id: str | None,
+        product_id: str,
+        properties: list[Any],
+    ) -> dict[str, Any]:
         params = {
             PARAM_DEVICE_LIST: [
                 {
@@ -462,15 +470,15 @@ class ImouDeviceManager:
             API_ENDPOINT_SET_IOT_DEVICE_PROPERTIES, params
         )
 
-    async def async_get_device_sd_card_status(self, device_id: str) -> dict[any, any]:
+    async def async_get_device_sd_card_status(self, device_id: str) -> dict[str, Any]:
         params = {PARAM_DEVICE_ID: device_id}
         return await self._imou_api_client.async_request_api(
             API_ENDPOINT_DEVICE_SD_CARD_STATUS, params
         )
 
     async def async_iot_device_control(
-        self, device_id: str, product_id: str, ref: str, content: dict
-    ) -> dict[str, any]:
+        self, device_id: str, product_id: str, ref: str, content: dict[str, Any]
+    ) -> dict[str, Any]:
         params = {
             PARAM_DEVICE_ID: device_id,
             PARAM_PRODUCT_ID: product_id,
@@ -481,7 +489,7 @@ class ImouDeviceManager:
             API_ENDPOINT_IOT_DEVICE_CONTROL, params
         )
 
-    async def async_get_device_power_info(self, device_id: str) -> dict[any, any]:
+    async def async_get_device_power_info(self, device_id: str) -> dict[str, Any]:
         params = {
             PARAM_DEVICE_ID: device_id,
         }
@@ -498,9 +506,7 @@ class ImouDeviceManager:
             API_ENDPOINT_WAKE_UP_DEVICE, params
         )
 
-
-
-    async def async_get_product_model(self, product_id: str) -> dict[any, any]:
+    async def async_get_product_model(self, product_id: str) -> dict[str, Any]:
         params = {
             PARAM_PRODUCT_ID: product_id,
         }
@@ -510,7 +516,7 @@ class ImouDeviceManager:
 
     async def async_get_iot_device_detail_info(
         self, device_id: str, product_id: str
-    ) -> dict[any, any]:
+    ) -> dict[str, Any]:
         params = {
             PARAM_DEVICE_ID: device_id,
             PARAM_PRODUCT_ID: product_id,
