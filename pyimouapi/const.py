@@ -413,7 +413,15 @@ SENSOR_TYPE_REF = {
             "expression": "('e1' if data['14603']==0 else 'e2') if data['14603'] != 1 else int(data['14602'] / data['14601'] * 100)",
         }
     ],
-    "battery": [{"ref": "11600", "default": "15", "ref_type": "properties"}],
+    "battery": [
+        {"ref": "11600", "default": "15", "ref_type": "properties"},
+        {
+            "ref": "106200",
+            "default": "0",
+            "ref_type": "properties",
+            "expression": "battery_106200(data)",
+        },
+    ],
     "temperature_current": [
         {"ref": "16000", "default": "10", "ref_type": "properties"}
     ],

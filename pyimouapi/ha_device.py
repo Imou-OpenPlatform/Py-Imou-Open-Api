@@ -69,6 +69,53 @@ from simpleeval import SimpleEval
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
+
+def _battery_level_from_106200_list(data) -> int:
+    """解析 ref 106200 电量属性: [{"106202": 电池类型, "106203": 电量}, ...]。
+    多条时取 106202==0 的 106203；仅一条时取该条的 106203。
+    键均为字符串。
+    """
+    if not isinstance(data, list) or not data:
+        return 0
+
+    k_type, k_level = "106202", "106203"
+
+    def _to_int(v):
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return int(v)
+        if isinstance(v, int):
+            return v
+        if isinstance(v, float):
+            return int(v)
+        try:
+            return int(str(v).strip())
+        except ValueError:
+            return None
+
+    if len(data) == 1:
+        row = data[0]
+        if not isinstance(row, dict):
+            return 0
+        level = _to_int(row.get(k_level))
+        return level if level is not None else 0
+
+    for row in data:
+        if not isinstance(row, dict):
+            continue
+        if _to_int(row.get(k_type)) == 0:
+            level = _to_int(row.get(k_level))
+            if level is not None:
+                return level
+
+    row0 = data[0]
+    if not isinstance(row0, dict):
+        return 0
+    level = _to_int(row0.get(k_level))
+    return level if level is not None else 0
+
+
 NUMBER_TYPE = [
     PARAM_STORAGE_USED,
     PARAM_TEMPERATURE_CURRENT,
@@ -412,9 +459,15 @@ class ImouHaDeviceManager(object):
         return devices
 
     @staticmethod
-    def get_expression_value(expression: str, data: dict):
+    def get_expression_value(expression: str, data):
         s = SimpleEval(
-            names={"data": data}, functions={"round": round, "int": int, "str": str}
+            names={"data": data},
+            functions={
+                "round": round,
+                "int": int,
+                "str": str,
+                "battery_106200": _battery_level_from_106200_list,
+            },
         )
         return s.eval(expression)
 
@@ -1040,7 +1093,7 @@ class ImouHaDeviceManager(object):
                 device_id, device.channel_id, device.product_id, [value[PARAM_REF]]
             )
             data = result[PARAM_PROPERTIES][value[PARAM_REF]]
-        if value.get(PARAM_EXPRESSION) and isinstance(data, dict):
+        if value.get(PARAM_EXPRESSION) and isinstance(data, (dict, list)):
             state = self.get_expression_value(value[PARAM_EXPRESSION], data)
         else:
             state = data
