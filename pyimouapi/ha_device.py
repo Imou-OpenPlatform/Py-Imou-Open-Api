@@ -1,71 +1,72 @@
 import asyncio
 import logging
 from enum import Enum
+from typing import Any
 
 import aiohttp
+from simpleeval import SimpleEval
 
 from .const import (
+    BINARY_SENSOR_TYPE_ABILITY,
+    BINARY_SENSOR_TYPE_REF,
+    BUTTON_TYPE_ABILITY,
     BUTTON_TYPE_PARAM_VALUE,
+    BUTTON_TYPE_REF,
+    ERROR_CODE_DEVICE_SLEEPING,
+    ERROR_CODE_LIVE_ALREADY_EXIST,
+    ERROR_CODE_LIVE_NOT_EXIST,
+    ERROR_CODE_NO_STORAGE_MEDIUM,
+    PARAM_ABILITY,
+    PARAM_ALKELEC,
+    PARAM_BATTERY,
+    PARAM_CHANNEL_ID,
+    PARAM_CHANNELS,
+    PARAM_CONTENT,
+    PARAM_CURRENT_OPTION,
+    PARAM_DEFAULT,
+    PARAM_ELECTRIC,
+    PARAM_ELECTRICITYS,
+    PARAM_EXCEPTS,
+    PARAM_EXPRESSION,
+    PARAM_FUNCTION_TYPE,
+    PARAM_HD,
+    PARAM_HLS,
+    PARAM_HUMIDITY_CURRENT,
+    PARAM_LITELEC,
+    PARAM_MODE,
+    PARAM_MODES,
     PARAM_MOTION_DETECT,
+    PARAM_NIGHT_VISION_MODE,
+    PARAM_ON,
+    PARAM_ONLINE,
+    PARAM_OPTIONS,
+    PARAM_OUTPUT_DATA,
+    PARAM_PROPERTIES,
+    PARAM_PTZ,
+    PARAM_REF,
+    PARAM_REF_TYPE,
+    PARAM_RESTART_DEVICE,
+    PARAM_SERVICES,
+    PARAM_STATE,
     PARAM_STATUS,
     PARAM_STORAGE_USED,
-    PARAM_NIGHT_VISION_MODE,
-    PARAM_MODE,
-    PARAM_CURRENT_OPTION,
-    PARAM_MODES,
-    PARAM_OPTIONS,
-    PARAM_CHANNELS,
-    PARAM_CHANNEL_ID,
-    PARAM_USED_BYTES,
-    PARAM_TOTAL_BYTES,
-    PARAM_STREAMS,
-    PARAM_HLS,
-    PARAM_RESTART_DEVICE,
-    PARAM_URL,
     PARAM_STREAM_ID,
-    SWITCH_TYPE_ABILITY,
-    BUTTON_TYPE_ABILITY,
-    PARAM_DEFAULT,
-    PARAM_PROPERTIES,
-    PARAM_REF,
-    PARAM_ON,
-    ERROR_CODE_LIVE_NOT_EXIST,
-    ERROR_CODE_LIVE_ALREADY_EXIST,
-    PARAM_PTZ,
-    PARAM_ONLINE,
-    PARAM_HD,
-    SELECT_TYPE_ABILITY,
-    SENSOR_TYPE_ABILITY,
+    PARAM_STREAMS,
     PARAM_TEMPERATURE_CURRENT,
-    PARAM_HUMIDITY_CURRENT,
-    PARAM_BATTERY,
-    PARAM_ELECTRICITYS,
-    PARAM_LITELEC,
-    PARAM_ELECTRIC,
-    PARAM_ALKELEC,
-    ERROR_CODE_NO_STORAGE_MEDIUM,
-    BINARY_SENSOR_TYPE_ABILITY,
-    SWITCH_TYPE_REF,
-    PARAM_STATE,
-    BUTTON_TYPE_REF,
-    SELECT_TYPE_REF,
-    PARAM_EXCEPTS,
-    BINARY_SENSOR_TYPE_REF,
-    SENSOR_TYPE_REF,
-    PARAM_REF_TYPE,
-    PARAM_EXPRESSION,
-    PARAM_CONTENT,
-    PARAM_OUTPUT_DATA,
-    PARAM_SERVICES,
-    TEXT_TYPE_REF,
+    PARAM_TOTAL_BYTES,
+    PARAM_URL,
+    PARAM_USED_BYTES,
     PARAM_VALUE_TYPE,
-    PARAM_ABILITY,
-    PARAM_FUNCTION_TYPE, ERROR_CODE_DEVICE_SLEEPING,
+    SELECT_TYPE_ABILITY,
+    SELECT_TYPE_REF,
+    SENSOR_TYPE_ABILITY,
+    SENSOR_TYPE_REF,
+    SWITCH_TYPE_ABILITY,
+    SWITCH_TYPE_REF,
+    TEXT_TYPE_REF,
 )
-from .device import ImouDeviceManager, ImouDevice
+from .device import ImouDevice, ImouDeviceManager
 from .exceptions import RequestFailedException
-
-from simpleeval import SimpleEval
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
@@ -122,17 +123,22 @@ NUMBER_TYPE = [
     PARAM_HUMIDITY_CURRENT,
     PARAM_BATTERY,
 ]
-PRODUCT_MODEL_ILLEGAL_LIST = ["z76s20l415gnhhl1", "o8828zgeg1g9cfuz", "Q3YSZ54R", "BDHCWWPX"]
+PRODUCT_MODEL_ILLEGAL_LIST = [
+    "z76s20l415gnhhl1",
+    "o8828zgeg1g9cfuz",
+    "Q3YSZ54R",
+    "BDHCWWPX",
+]
 
 
-class ImouHaDevice(object):
+class ImouHaDevice:
     def __init__(
-            self,
-            device_id: str,
-            device_name: str,
-            manufacturer: str,
-            model: str,
-            swversion: str,
+        self,
+        device_id: str,
+        device_name: str,
+        manufacturer: str,
+        model: str,
+        swversion: str,
     ):
         self._device_id = device_id
         self._device_name = device_name
@@ -240,13 +246,150 @@ class ImouHaDevice(object):
         self._channel_name = channel_name
 
 
-class ImouHaDeviceManager(object):
+class ImouHaDeviceManager:
     def __init__(self, device_manager: ImouDeviceManager):
         self._delegate = device_manager
 
     @property
     def delegate(self):
         return self._delegate
+
+    @staticmethod
+    def _resolve_device_id(device: ImouHaDevice) -> str:
+        device_id = device.device_id
+        if device.parent_product_id is not None:
+            device_id = (
+                f"{device_id}_{device.parent_device_id}_{device.parent_product_id}"
+            )
+        return device_id
+
+    @staticmethod
+    def _lookup_property(
+        detail_info: dict, channel_id: str | None, ref: str
+    ) -> Any | None:
+        if channel_id is None:
+            properties = detail_info.get(PARAM_PROPERTIES) or {}
+            return properties.get(ref)
+
+        channels = detail_info.get(PARAM_CHANNELS) or []
+        for channel in channels:
+            if str(channel.get(PARAM_CHANNEL_ID)) != str(channel_id):
+                continue
+            channel_properties = channel.get(PARAM_PROPERTIES) or {}
+            if ref in channel_properties:
+                return channel_properties[ref]
+            break
+
+        if str(channel_id) == "0":
+            properties = detail_info.get(PARAM_PROPERTIES) or {}
+            return properties.get(ref)
+
+        return None
+
+    @staticmethod
+    def _debug_missing_property_ref(
+        device: ImouHaDevice,
+        ref: str,
+        *,
+        source: str,
+        kind: str | None = None,
+        key: str | None = None,
+    ) -> None:
+        entity = f"{kind}.{key}" if kind and key else "unknown"
+        _LOGGER.debug(
+            "property ref %s not found (%s), device_id=%s channel_id=%s entity=%s",
+            ref,
+            source,
+            device.device_id,
+            device.channel_id,
+            entity,
+        )
+
+    @staticmethod
+    def _collect_property_entities(
+        device: ImouHaDevice,
+    ) -> list[tuple[str, str, dict[str, Any]]]:
+        entities: list[tuple[str, str, dict[str, Any]]] = []
+        for kind, mapping in (
+            ("switch", device.switches),
+            ("select", device.selects),
+            ("sensor", device.sensors),
+            ("binary_sensor", device.binary_sensors),
+            ("text", device.texts),
+        ):
+            for key, value in mapping.items():
+                if PARAM_REF not in value:
+                    continue
+                if value.get(PARAM_REF_TYPE, PARAM_PROPERTIES) == PARAM_SERVICES:
+                    continue
+                entities.append((kind, key, value))
+        return entities
+
+    def _apply_property_value(
+        self,
+        device: ImouHaDevice,
+        kind: str,
+        key: str,
+        meta: dict[str, Any],
+        raw_value: Any,
+    ) -> None:
+        ref = meta[PARAM_REF]
+        if kind == "switch":
+            device.switches[key][PARAM_STATE] = raw_value == 1
+        elif kind == "binary_sensor":
+            device.binary_sensors[key][PARAM_STATE] = raw_value == 1
+        elif kind == "select":
+            value = str(raw_value) if isinstance(raw_value, int) else raw_value
+            device.selects[key][PARAM_CURRENT_OPTION] = value
+            if ref == "15400" and value == "-1":
+                device.selects[key][PARAM_CURRENT_OPTION] = "99"
+        elif kind in ("sensor", "text"):
+            if meta.get(PARAM_EXPRESSION) and isinstance(raw_value, dict | list):
+                state = self.get_expression_value(meta[PARAM_EXPRESSION], raw_value)
+            else:
+                state = raw_value
+            target = device.sensors if kind == "sensor" else device.texts
+            target[key][PARAM_STATE] = str(state) if isinstance(state, int) else state
+
+    async def _async_fetch_device_detail(self, device: ImouHaDevice) -> dict[str, Any]:
+        return await self.delegate.async_get_iot_device_detail_info(
+            self._resolve_device_id(device), device.product_id
+        )
+
+    async def _async_update_properties_from_detail(
+        self, device: ImouHaDevice, detail: dict[str, Any]
+    ) -> None:
+        for kind, key, meta in self._collect_property_entities(device):
+            ref = meta[PARAM_REF]
+            raw = self._lookup_property(detail, device.channel_id, ref)
+            if raw is None:
+                self._debug_missing_property_ref(
+                    device,
+                    ref,
+                    source="getIotDeviceDetailInfo",
+                    kind=kind,
+                    key=key,
+                )
+                continue
+            self._apply_property_value(device, kind, key, meta, raw)
+
+    async def _async_update_services_entities(self, device: ImouHaDevice) -> None:
+        for sensor_type, value in device.sensors.items():
+            if (
+                PARAM_REF in value
+                and value.get(PARAM_REF_TYPE, PARAM_PROPERTIES) == PARAM_SERVICES
+            ):
+                await self._async_update_device_sensor_status_by_ref(
+                    device, sensor_type, value
+                )
+        for text_type, value in device.texts.items():
+            if (
+                PARAM_REF in value
+                and value.get(PARAM_REF_TYPE, PARAM_PROPERTIES) == PARAM_SERVICES
+            ):
+                await self._async_update_device_text_status_by_ref(
+                    device, text_type, value
+                )
 
     async def async_update_device_status(self, device: ImouHaDevice):
         """Update device status, with the updater calling every time the coordinator is updated"""
@@ -255,12 +398,25 @@ class ImouHaDeviceManager(object):
         if device.sensors[PARAM_STATUS][PARAM_STATE] == DeviceStatus.OFFLINE.value:
             _LOGGER.info(f"device {device.device_name} is offline,stop updating")
             return
+
+        if device.product_id is not None:
+            try:
+                detail = await self._async_fetch_device_detail(device)
+                entities = self._collect_property_entities(device)
+                _LOGGER.debug(
+                    "fetched device detail for %s, updating %d property entities",
+                    self._resolve_device_id(device),
+                    len(entities),
+                )
+                await self._async_update_properties_from_detail(device, detail)
+            except Exception as e:
+                _LOGGER.error(f"async_get_iot_device_detail_info failed: {e}")
+
         await asyncio.gather(
+            self._async_update_services_entities(device),
             self._async_update_device_switch_status(device),
             self._async_update_device_select_status(device),
             self._async_update_device_sensor_status(device),
-            self._async_update_device_binary_sensor_status(device),
-            self._async_update_device_text_status(device),
             return_exceptions=True,
         )
         _LOGGER.debug(f"update_device_status finish: {device.__str__()}")
@@ -269,9 +425,7 @@ class ImouHaDeviceManager(object):
         """UPDATE SWITCH STATUS"""
         for switch_type, value in device.switches.items():
             if PARAM_REF in value:
-                await self._async_update_device_switch_status_by_ref(
-                    device, switch_type, value[PARAM_REF]
-                )
+                continue
             else:
                 device.switches[switch_type][PARAM_STATE] = any(
                     await asyncio.gather(
@@ -293,9 +447,7 @@ class ImouHaDeviceManager(object):
         """UPDATE SELECT STATUS"""
         for select_type, value in device.selects.items():
             if PARAM_REF in value:
-                await self._async_update_device_select_status_by_ref(
-                    device, select_type, value[PARAM_REF]
-                )
+                continue
             else:
                 await self._async_update_device_select_status_by_type(
                     device, select_type
@@ -305,9 +457,7 @@ class ImouHaDeviceManager(object):
         """UPDATE SENSOR STATUS"""
         for sensor_type, value in device.sensors.items():
             if PARAM_REF in value:
-                await self._async_update_device_sensor_status_by_ref(
-                    device, sensor_type, value
-                )
+                continue
             elif sensor_type == PARAM_STORAGE_USED:
                 await self._async_update_device_storage(device)
             elif sensor_type == PARAM_BATTERY:
@@ -353,7 +503,7 @@ class ImouHaDeviceManager(object):
                 device.sensors[PARAM_STORAGE_USED][PARAM_STATE] = "e2"
 
     async def async_get_device_stream(
-            self, device: ImouHaDevice, live_resolution: str, live_protocol: str
+        self, device: ImouHaDevice, live_resolution: str, live_protocol: str
     ):
         try:
             return await self._async_get_device_exist_stream(
@@ -374,7 +524,7 @@ class ImouHaDeviceManager(object):
             raise exception
 
     async def _async_get_device_exist_stream(
-            self, device: ImouHaDevice, resolution: str, protocol: str
+        self, device: ImouHaDevice, resolution: str, protocol: str
     ):
         data = await self.delegate.async_get_stream_url(
             device.device_id, device.channel_id
@@ -382,7 +532,7 @@ class ImouHaDeviceManager(object):
         return await self.async_get_stream_url(data, resolution, protocol)
 
     async def _async_create_device_stream(
-            self, device: ImouHaDevice, resolution: str, protocol: str
+        self, device: ImouHaDevice, resolution: str, protocol: str
     ):
         data = await self.delegate.async_create_stream_url(
             device.device_id, device.channel_id
@@ -489,9 +639,9 @@ class ImouHaDeviceManager(object):
         return imou_ha_device
 
     async def async_press_button(
-            self, device: ImouHaDevice, button_type: str, duration: int
+        self, device: ImouHaDevice, button_type: str, duration: int
     ):
-        if PARAM_RESTART_DEVICE == button_type:
+        if button_type == PARAM_RESTART_DEVICE:
             await self.delegate.async_restart_device(device.device_id)
         elif PARAM_PTZ in button_type:
             await self.delegate.async_control_device_ptz(
@@ -505,11 +655,11 @@ class ImouHaDeviceManager(object):
             await self._async_press_button_by_ref(device, ref_id)
 
     async def async_set_text_value(
-            self, device: ImouHaDevice, text_type: str, text_value: str
+        self, device: ImouHaDevice, text_type: str, text_value: str
     ):
         if device.texts[text_type].get(PARAM_REF):
             ref_id = device.texts[text_type].get(PARAM_REF)
-            if "28800" == ref_id:
+            if ref_id == "28800":
                 await self._async_set_count_down_switch_time(device, text_value)
             else:
                 value_type = device.texts[text_type].get(PARAM_VALUE_TYPE)
@@ -517,15 +667,15 @@ class ImouHaDeviceManager(object):
                 # 如果是配件，需要拼接设备id
                 if device.parent_product_id is not None:
                     device_id = (
-                            device_id
-                            + "_"
-                            + device.parent_device_id
-                            + "_"
-                            + device.parent_product_id
+                        device_id
+                        + "_"
+                        + device.parent_device_id
+                        + "_"
+                        + device.parent_product_id
                     )
-                if "int" == value_type and text_value.isdigit():
+                if value_type == "int" and text_value.isdigit():
                     value = int(text_value)
-                elif "str" == value_type and not isinstance(value_type, str):
+                elif value_type == "str" and not isinstance(value_type, str):
                     value = str(text_value)
                 else:
                     value = text_value
@@ -538,14 +688,14 @@ class ImouHaDeviceManager(object):
                     )
 
     async def async_switch_operation(
-            self, device: ImouHaDevice, switch_type: str, enable: bool
+        self, device: ImouHaDevice, switch_type: str, enable: bool
     ):
         if device.switches[switch_type].get(PARAM_REF):
             ref_id = device.switches[switch_type].get(PARAM_REF)
             await self._async_switch_operation_by_ref(
                 device, switch_type, enable, ref_id
             )
-        elif PARAM_MOTION_DETECT == switch_type:
+        elif switch_type == PARAM_MOTION_DETECT:
             await self.delegate.async_modify_device_alarm_status(
                 device.device_id, device.channel_id, enable
             )
@@ -570,10 +720,10 @@ class ImouHaDeviceManager(object):
                 raise result[0]
 
     async def async_select_option(
-            self,
-            device: ImouHaDevice,
-            select_type: str,
-            option: str,
+        self,
+        device: ImouHaDevice,
+        select_type: str,
+        option: str,
     ):
         if device.selects[select_type].get(PARAM_REF):
             ref_id = device.selects[select_type].get(PARAM_REF)
@@ -582,13 +732,13 @@ class ImouHaDeviceManager(object):
             if ref_id == "15400" and option == "99":
                 option = "-1"
             await self._async_select_option_by_ref(device, option, ref_id, value_type)
-        elif PARAM_NIGHT_VISION_MODE == select_type:
+        elif select_type == PARAM_NIGHT_VISION_MODE:
             await self.delegate.async_set_device_night_vision_mode(
                 device.device_id, device.channel_id, option
             )
 
     async def _async_get_device_switch_status_by_ability(
-            self, device: ImouHaDevice, ability_type: str
+        self, device: ImouHaDevice, ability_type: str
     ) -> bool:
         # Updating the interface requires capturing exceptions for two main purposes:
         # 1. To prevent the updater from failing to load due to exceptions;
@@ -602,14 +752,14 @@ class ImouHaDeviceManager(object):
             return False
 
     async def _async_set_device_switch_status_by_ability(
-            self, device: ImouHaDevice, ability_type: str, enable: bool
+        self, device: ImouHaDevice, ability_type: str, enable: bool
     ) -> None:
         await self.delegate.async_set_device_status(
             device.device_id, device.channel_id, ability_type, enable
         )
 
     async def _async_update_device_select_status_by_type(
-            self, device: ImouHaDevice, select_type: str
+        self, device: ImouHaDevice, select_type: str
     ):
         if select_type == PARAM_NIGHT_VISION_MODE:
             try:
@@ -632,14 +782,16 @@ class ImouHaDeviceManager(object):
                 PARAM_MODE
             ].lower()
         if data[PARAM_MODES] is not None:
-            device.selects[PARAM_NIGHT_VISION_MODE][PARAM_OPTIONS] = [item.lower() for item in data[PARAM_MODES]]
+            device.selects[PARAM_NIGHT_VISION_MODE][PARAM_OPTIONS] = [
+                item.lower() for item in data[PARAM_MODES]
+            ]
 
     @staticmethod
     def configure_device_by_ability(
-            channel_abilities: list[str],
-            is_ipc: bool,
-            device_abilities: list[str],
-            imou_ha_device: ImouHaDevice,
+        channel_abilities: list[str],
+        is_ipc: bool,
+        device_abilities: list[str],
+        imou_ha_device: ImouHaDevice,
     ):
         # Determine which platform  entity should be added, based on the ability
         ImouHaDeviceManager.configure_switch_by_ability(
@@ -675,21 +827,21 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_sensor_by_ability(
-            channel_abilities: list[str],
-            is_ipc: bool,
-            device_abilities: list[str],
-            imou_ha_device: ImouHaDevice,
+        channel_abilities: list[str],
+        is_ipc: bool,
+        device_abilities: list[str],
+        imou_ha_device: ImouHaDevice,
     ):
         for sensor_type, ability_list in SENSOR_TYPE_ABILITY.items():
             for ability in ability_list:
                 if ImouHaDeviceManager.entity_need_add_to_device(
-                        ability,
-                        channel_abilities,
-                        device_abilities,
-                        is_ipc,
-                        imou_ha_device.channel_id,
-                        sensor_type,
-                        imou_ha_device.sensors,
+                    ability,
+                    channel_abilities,
+                    device_abilities,
+                    is_ipc,
+                    imou_ha_device.channel_id,
+                    sensor_type,
+                    imou_ha_device.sensors,
                 ):
                     imou_ha_device.sensors[sensor_type] = {
                         PARAM_STATE: "unknown"
@@ -699,21 +851,21 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_select_by_ability(
-            channel_abilities: list[str],
-            is_ipc: bool,
-            device_abilities: list[str],
-            imou_ha_device: ImouHaDevice,
+        channel_abilities: list[str],
+        is_ipc: bool,
+        device_abilities: list[str],
+        imou_ha_device: ImouHaDevice,
     ):
         for select_type, ability_list in SELECT_TYPE_ABILITY.items():
             for ability in ability_list:
                 if ImouHaDeviceManager.entity_need_add_to_device(
-                        ability,
-                        channel_abilities,
-                        device_abilities,
-                        is_ipc,
-                        imou_ha_device.channel_id,
-                        select_type,
-                        imou_ha_device.selects,
+                    ability,
+                    channel_abilities,
+                    device_abilities,
+                    is_ipc,
+                    imou_ha_device.channel_id,
+                    select_type,
+                    imou_ha_device.selects,
                 ):
                     imou_ha_device.selects[select_type] = {
                         PARAM_CURRENT_OPTION: "",
@@ -722,41 +874,41 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_button_by_ability(
-            channel_abilities: list[str],
-            is_ipc: bool,
-            device_abilities: list[str],
-            imou_ha_device: ImouHaDevice,
+        channel_abilities: list[str],
+        is_ipc: bool,
+        device_abilities: list[str],
+        imou_ha_device: ImouHaDevice,
     ):
         for button_type, ability_list in BUTTON_TYPE_ABILITY.items():
             for ability in ability_list:
                 if ImouHaDeviceManager.entity_need_add_to_device(
-                        ability,
-                        channel_abilities,
-                        device_abilities,
-                        is_ipc,
-                        imou_ha_device.channel_id,
-                        button_type,
-                        imou_ha_device.buttons,
+                    ability,
+                    channel_abilities,
+                    device_abilities,
+                    is_ipc,
+                    imou_ha_device.channel_id,
+                    button_type,
+                    imou_ha_device.buttons,
                 ):
                     imou_ha_device.buttons[button_type] = {}
 
     @staticmethod
     def configure_switch_by_ability(
-            channel_abilities: list[str],
-            is_ipc: bool,
-            device_abilities: list[str],
-            imou_ha_device: ImouHaDevice,
+        channel_abilities: list[str],
+        is_ipc: bool,
+        device_abilities: list[str],
+        imou_ha_device: ImouHaDevice,
     ):
         for switch_type, ability_list in SWITCH_TYPE_ABILITY.items():
             for ability in ability_list:
                 if ImouHaDeviceManager.entity_need_add_to_device(
-                        ability.get(PARAM_ABILITY),
-                        channel_abilities,
-                        device_abilities,
-                        is_ipc,
-                        imou_ha_device.channel_id,
-                        switch_type,
-                        imou_ha_device.switches,
+                    ability.get(PARAM_ABILITY),
+                    channel_abilities,
+                    device_abilities,
+                    is_ipc,
+                    imou_ha_device.channel_id,
+                    switch_type,
+                    imou_ha_device.switches,
                 ):
                     imou_ha_device.switches[switch_type] = {
                         PARAM_STATE: ability.get(PARAM_DEFAULT),
@@ -768,8 +920,8 @@ class ImouHaDeviceManager(object):
         if data.get(PARAM_STREAMS):
             for stream in data[PARAM_STREAMS]:
                 if (
-                        stream[PARAM_HLS].startswith(protocol + ":")
-                        and (0 if resolution == PARAM_HD else 1) == stream[PARAM_STREAM_ID]
+                    stream[PARAM_HLS].startswith(protocol + ":")
+                    and (0 if resolution == PARAM_HD else 1) == stream[PARAM_STREAM_ID]
                 ):
                     _LOGGER.debug(f"get_device_stream {stream[PARAM_HLS]}")
                     return stream[PARAM_HLS]
@@ -777,11 +929,11 @@ class ImouHaDeviceManager(object):
         return ""
 
     async def _async_configure_device_by_ref(
-            self,
-            channel_ability_refs: list[str],
-            is_ipc: bool,
-            device_ability_refs: list[str],
-            imou_ha_device: ImouHaDevice,
+        self,
+        channel_ability_refs: list[str],
+        is_ipc: bool,
+        device_ability_refs: list[str],
+        imou_ha_device: ImouHaDevice,
     ):
         self.configure_switch_by_ref(
             channel_ability_refs,
@@ -822,70 +974,69 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def entity_need_add_to_device(
-            ability_or_ref: str,
-            channel_abilities_or_refs: list[str],
-            device_abilities_or_refs: list[str],
-            is_ipc: bool,
-            channel_id: str,
-            entity_type: str,
-            exists_entities: dict[str, any],
+        ability_or_ref: str,
+        channel_abilities_or_refs: list[str],
+        device_abilities_or_refs: list[str],
+        is_ipc: bool,
+        channel_id: str,
+        entity_type: str,
+        exists_entities: dict[str, any],
     ) -> bool:
         return (
-                channel_id is None
+            (channel_id is None and ability_or_ref in device_abilities_or_refs)
+            or ability_or_ref in channel_abilities_or_refs
+            or (
+                is_ipc
+                and channel_id is not None
+                and channel_id == "0"
                 and ability_or_ref in device_abilities_or_refs
-                or ability_or_ref in channel_abilities_or_refs
-                or (
-                        is_ipc
-                        and channel_id is not None
-                        and channel_id == "0"
-                        and ability_or_ref in device_abilities_or_refs
-                )
+            )
         ) and entity_type not in exists_entities
 
     @staticmethod
     def entity_need_add_to_device_by_ref(
-            ref_id: str,
-            channel_ability_refs: list[str],
-            device_ability_refs: list[str],
-            is_ipc: bool,
-            channel_id: str,
-            entity_type: str,
-            exists_entities: dict[str, any],
-            product_id: str,
-            except_product_ids: list[str],
+        ref_id: str,
+        channel_ability_refs: list[str],
+        device_ability_refs: list[str],
+        is_ipc: bool,
+        channel_id: str,
+        entity_type: str,
+        exists_entities: dict[str, any],
+        product_id: str,
+        except_product_ids: list[str],
     ) -> bool:
         return (
-                product_id not in except_product_ids
-                and ImouHaDeviceManager.entity_need_add_to_device(
-            ref_id,
-            channel_ability_refs,
-            device_ability_refs,
-            is_ipc,
-            channel_id,
-            entity_type,
-            exists_entities,
-        )
+            product_id not in except_product_ids
+            and ImouHaDeviceManager.entity_need_add_to_device(
+                ref_id,
+                channel_ability_refs,
+                device_ability_refs,
+                is_ipc,
+                channel_id,
+                entity_type,
+                exists_entities,
+            )
         )
 
     @staticmethod
     def configure_switch_by_ref(
-            channel_ability_refs: list[str],
-            is_ipc: bool,
-            device_ability_refs: list[str],
-            imou_ha_device: ImouHaDevice,
+        channel_ability_refs: list[str],
+        is_ipc: bool,
+        device_ability_refs: list[str],
+        imou_ha_device: ImouHaDevice,
     ):
         for switch_type, ref_list in SWITCH_TYPE_REF.items():
             for ref in ref_list:
                 if ImouHaDeviceManager.entity_need_add_to_device_by_ref(
-                        ref[PARAM_REF],
-                        channel_ability_refs,
-                        device_ability_refs,
-                        is_ipc,
-                        imou_ha_device.channel_id,
-                        switch_type,
-                        imou_ha_device.switches,
-                        imou_ha_device.product_id,
-                        ref.get(PARAM_EXCEPTS, []),
+                    ref[PARAM_REF],
+                    channel_ability_refs,
+                    device_ability_refs,
+                    is_ipc,
+                    imou_ha_device.channel_id,
+                    switch_type,
+                    imou_ha_device.switches,
+                    imou_ha_device.product_id,
+                    ref.get(PARAM_EXCEPTS, []),
                 ):
                     imou_ha_device.switches[switch_type] = {
                         PARAM_STATE: ref[PARAM_DEFAULT],
@@ -895,23 +1046,23 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_button_by_ref(
-            channel_ability_refs: list[str],
-            is_ipc: bool,
-            device_ability_refs: list[str],
-            imou_ha_device: ImouHaDevice,
+        channel_ability_refs: list[str],
+        is_ipc: bool,
+        device_ability_refs: list[str],
+        imou_ha_device: ImouHaDevice,
     ):
         for button_type, ref_list in BUTTON_TYPE_REF.items():
             for ref in ref_list:
                 if ImouHaDeviceManager.entity_need_add_to_device_by_ref(
-                        ref[PARAM_REF],
-                        channel_ability_refs,
-                        device_ability_refs,
-                        is_ipc,
-                        imou_ha_device.channel_id,
-                        button_type,
-                        imou_ha_device.buttons,
-                        imou_ha_device.product_id,
-                        ref.get(PARAM_EXCEPTS, []),
+                    ref[PARAM_REF],
+                    channel_ability_refs,
+                    device_ability_refs,
+                    is_ipc,
+                    imou_ha_device.channel_id,
+                    button_type,
+                    imou_ha_device.buttons,
+                    imou_ha_device.product_id,
+                    ref.get(PARAM_EXCEPTS, []),
                 ):
                     imou_ha_device.buttons[button_type] = {
                         PARAM_REF: ref[PARAM_REF],
@@ -920,23 +1071,23 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_select_by_ref(
-            channel_ability_refs: list[str],
-            is_ipc: bool,
-            device_ability_refs: list[str],
-            imou_ha_device: ImouHaDevice,
+        channel_ability_refs: list[str],
+        is_ipc: bool,
+        device_ability_refs: list[str],
+        imou_ha_device: ImouHaDevice,
     ):
         for select_type, ref_list in SELECT_TYPE_REF.items():
             for ref in ref_list:
                 if ImouHaDeviceManager.entity_need_add_to_device_by_ref(
-                        ref[PARAM_REF],
-                        channel_ability_refs,
-                        device_ability_refs,
-                        is_ipc,
-                        imou_ha_device.channel_id,
-                        select_type,
-                        imou_ha_device.selects,
-                        imou_ha_device.product_id,
-                        ref.get(PARAM_EXCEPTS, []),
+                    ref[PARAM_REF],
+                    channel_ability_refs,
+                    device_ability_refs,
+                    is_ipc,
+                    imou_ha_device.channel_id,
+                    select_type,
+                    imou_ha_device.selects,
+                    imou_ha_device.product_id,
+                    ref.get(PARAM_EXCEPTS, []),
                 ):
                     imou_ha_device.selects[select_type] = {
                         PARAM_REF: ref[PARAM_REF],
@@ -948,23 +1099,23 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_sensor_by_ref(
-            channel_ability_refs: list[str],
-            is_ipc: bool,
-            device_ability_refs: list[str],
-            imou_ha_device: ImouHaDevice,
+        channel_ability_refs: list[str],
+        is_ipc: bool,
+        device_ability_refs: list[str],
+        imou_ha_device: ImouHaDevice,
     ):
         for sensor_type, ref_list in SENSOR_TYPE_REF.items():
             for ref in ref_list:
                 if ImouHaDeviceManager.entity_need_add_to_device_by_ref(
-                        ref[PARAM_REF],
-                        channel_ability_refs,
-                        device_ability_refs,
-                        is_ipc,
-                        imou_ha_device.channel_id,
-                        sensor_type,
-                        imou_ha_device.sensors,
-                        imou_ha_device.product_id,
-                        ref.get(PARAM_EXCEPTS, []),
+                    ref[PARAM_REF],
+                    channel_ability_refs,
+                    device_ability_refs,
+                    is_ipc,
+                    imou_ha_device.channel_id,
+                    sensor_type,
+                    imou_ha_device.sensors,
+                    imou_ha_device.product_id,
+                    ref.get(PARAM_EXCEPTS, []),
                 ):
                     imou_ha_device.sensors[sensor_type] = {
                         PARAM_REF: ref[PARAM_REF],
@@ -976,23 +1127,23 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_binary_sensor_by_ref(
-            channel_ability_refs: list[str],
-            is_ipc: bool,
-            device_ability_refs: list[str],
-            imou_ha_device: ImouHaDevice,
+        channel_ability_refs: list[str],
+        is_ipc: bool,
+        device_ability_refs: list[str],
+        imou_ha_device: ImouHaDevice,
     ):
         for binary_sensor_type, ref_list in BINARY_SENSOR_TYPE_REF.items():
             for ref in ref_list:
                 if ImouHaDeviceManager.entity_need_add_to_device_by_ref(
-                        ref[PARAM_REF],
-                        channel_ability_refs,
-                        device_ability_refs,
-                        is_ipc,
-                        imou_ha_device.channel_id,
-                        binary_sensor_type,
-                        imou_ha_device.binary_sensors,
-                        imou_ha_device.product_id,
-                        ref.get(PARAM_EXCEPTS, []),
+                    ref[PARAM_REF],
+                    channel_ability_refs,
+                    device_ability_refs,
+                    is_ipc,
+                    imou_ha_device.channel_id,
+                    binary_sensor_type,
+                    imou_ha_device.binary_sensors,
+                    imou_ha_device.product_id,
+                    ref.get(PARAM_EXCEPTS, []),
                 ):
                     imou_ha_device.binary_sensors[binary_sensor_type] = {
                         PARAM_REF: ref[PARAM_REF],
@@ -1001,19 +1152,10 @@ class ImouHaDeviceManager(object):
                     break
 
     async def _async_update_device_switch_status_by_ref(
-            self, device: ImouHaDevice, switch_type: str, ref: str
+        self, device: ImouHaDevice, switch_type: str, ref: str
     ):
         try:
-            device_id = device.device_id
-            # 如果是配件，需要拼接设备id
-            if device.parent_product_id is not None:
-                device_id = (
-                        device_id
-                        + "_"
-                        + device.parent_device_id
-                        + "_"
-                        + device.parent_product_id
-                )
+            device_id = self._resolve_device_id(device)
             data = await self.delegate.async_get_iot_device_properties(
                 device_id, device.channel_id, device.product_id, [ref]
             )
@@ -1021,59 +1163,67 @@ class ImouHaDeviceManager(object):
                 device.switches[switch_type][PARAM_STATE] = (
                     data[PARAM_PROPERTIES][ref] == 1
                 )
+            else:
+                self._debug_missing_property_ref(
+                    device,
+                    ref,
+                    source="getIotDeviceProperties",
+                    kind="switch",
+                    key=switch_type,
+                )
         except Exception as e:
             _LOGGER.error(f"_async_update_device_switch_status_by_ref fail:{e}")
 
     async def _async_update_device_select_status_by_ref(
-            self, device: ImouHaDevice, select_type: str, ref: str
+        self, device: ImouHaDevice, select_type: str, ref: str
     ):
         try:
-            device_id = device.device_id
-            if device.parent_product_id is not None:
-                device_id = (
-                        device_id
-                        + "_"
-                        + device.parent_device_id
-                        + "_"
-                        + device.parent_product_id
-                )
+            device_id = self._resolve_device_id(device)
             data = await self.delegate.async_get_iot_device_properties(
                 device_id, device.channel_id, device.product_id, [ref]
             )
             if ref in data[PARAM_PROPERTIES]:
-                value=(
+                value = (
                     str(data[PARAM_PROPERTIES][ref])
                     if isinstance(data[PARAM_PROPERTIES][ref], int)
                     else data[PARAM_PROPERTIES][ref]
                 )
                 device.selects[select_type][PARAM_CURRENT_OPTION] = value
-                # 兼容音量值为-1的情况
                 if ref == "15400" and value == "-1":
                     device.selects[select_type][PARAM_CURRENT_OPTION] = "99"
-
+            else:
+                self._debug_missing_property_ref(
+                    device,
+                    ref,
+                    source="getIotDeviceProperties",
+                    kind="select",
+                    key=select_type,
+                )
         except Exception as e:
             _LOGGER.error(f"Error while updating device select status: {e}")
 
     async def _async_update_device_sensor_status_by_ref(
-            self,
-            device: ImouHaDevice,
-            sensor_type: str,
-            value: dict[str, any],
+        self,
+        device: ImouHaDevice,
+        sensor_type: str,
+        value: dict[str, any],
     ):
         try:
             device_id = device.device_id
             # 如果是配件，需要拼接设备id
             if device.parent_product_id is not None:
                 device_id = (
-                        device_id
-                        + "_"
-                        + device.parent_device_id
-                        + "_"
-                        + device.parent_product_id
+                    device_id
+                    + "_"
+                    + device.parent_device_id
+                    + "_"
+                    + device.parent_product_id
                 )
             state = await self._get_state_from_properties_or_services(
-                device, device_id, value
+                device, device_id, value, kind="sensor", key=sensor_type
             )
+            if state is None:
+                return
             device.sensors[sensor_type][PARAM_STATE] = (
                 str(state) if isinstance(state, int) else state
             )
@@ -1081,7 +1231,13 @@ class ImouHaDeviceManager(object):
             _LOGGER.error(f"_async_update_device_sensor_status_by_ref fail:{e}")
 
     async def _get_state_from_properties_or_services(
-            self, device: ImouHaDevice, device_id: str, value: dict
+        self,
+        device: ImouHaDevice,
+        device_id: str,
+        value: dict,
+        *,
+        kind: str | None = None,
+        key: str | None = None,
     ):
         if value.get(PARAM_REF_TYPE, PARAM_PROPERTIES) == PARAM_SERVICES:
             result = await self.delegate.async_iot_device_control(
@@ -1089,11 +1245,22 @@ class ImouHaDeviceManager(object):
             )
             data = result[PARAM_CONTENT][PARAM_OUTPUT_DATA]
         else:
+            ref = value[PARAM_REF]
             result = await self.delegate.async_get_iot_device_properties(
-                device_id, device.channel_id, device.product_id, [value[PARAM_REF]]
+                device_id, device.channel_id, device.product_id, [ref]
             )
-            data = result[PARAM_PROPERTIES][value[PARAM_REF]]
-        if value.get(PARAM_EXPRESSION) and isinstance(data, (dict, list)):
+            properties = result.get(PARAM_PROPERTIES) or {}
+            if ref not in properties:
+                self._debug_missing_property_ref(
+                    device,
+                    ref,
+                    source="getIotDeviceProperties",
+                    kind=kind,
+                    key=key,
+                )
+                return None
+            data = properties[ref]
+        if value.get(PARAM_EXPRESSION) and isinstance(data, dict | list):
             state = self.get_expression_value(value[PARAM_EXPRESSION], data)
         else:
             state = data
@@ -1103,33 +1270,31 @@ class ImouHaDeviceManager(object):
         device_id = device.device_id
         if device.parent_product_id is not None:
             device_id = (
-                    device_id
-                    + "_"
-                    + device.parent_device_id
-                    + "_"
-                    + device.parent_product_id
+                device_id
+                + "_"
+                + device.parent_device_id
+                + "_"
+                + device.parent_product_id
             )
         await self.delegate.async_iot_device_control(
             device_id, device.product_id, ref, {}
         )
 
     async def _async_select_option_by_ref(
-            self, device: ImouHaDevice, option: str, ref: str, value_type: str
+        self, device: ImouHaDevice, option: str, ref: str, value_type: str
     ):
         device_id = device.device_id
         # 如果是配件，需要拼接设备id
         if device.parent_product_id is not None:
             device_id = (
-                    device_id
-                    + "_"
-                    + device.parent_device_id
-                    + "_"
-                    + device.parent_product_id
+                device_id
+                + "_"
+                + device.parent_device_id
+                + "_"
+                + device.parent_product_id
             )
-        if "int" == value_type and (
-                ref != "15400"
-                or device.product_id
-                not in PRODUCT_MODEL_ILLEGAL_LIST
+        if value_type == "int" and (
+            ref != "15400" or device.product_id not in PRODUCT_MODEL_ILLEGAL_LIST
         ):
             value = int(option)
         else:
@@ -1143,16 +1308,16 @@ class ImouHaDeviceManager(object):
             )
 
     async def _async_switch_operation_by_ref(
-            self, device: ImouHaDevice, switch_type: str, enable: bool, ref: str
+        self, device: ImouHaDevice, switch_type: str, enable: bool, ref: str
     ):
         device_id = device.device_id
         if device.parent_product_id is not None:
             device_id = (
-                    device_id
-                    + "_"
-                    + device.parent_device_id
-                    + "_"
-                    + device.parent_product_id
+                device_id
+                + "_"
+                + device.parent_device_id
+                + "_"
+                + device.parent_product_id
             )
         await self.delegate.async_set_iot_device_properties(
             device_id, device.channel_id, device.product_id, {ref: 1 if enable else 0}
@@ -1166,21 +1331,21 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_binary_sensor_by_ability(
-            channel_abilities: list[str],
-            is_ipc: bool,
-            device_abilities: list[str],
-            imou_ha_device: ImouHaDevice,
+        channel_abilities: list[str],
+        is_ipc: bool,
+        device_abilities: list[str],
+        imou_ha_device: ImouHaDevice,
     ):
         for binary_sensor_type, ability_list in BINARY_SENSOR_TYPE_ABILITY.items():
             for ability in ability_list:
                 if ImouHaDeviceManager.entity_need_add_to_device(
-                        ability,
-                        channel_abilities,
-                        device_abilities,
-                        is_ipc,
-                        imou_ha_device.channel_id,
-                        binary_sensor_type,
-                        imou_ha_device.binary_sensors,
+                    ability,
+                    channel_abilities,
+                    device_abilities,
+                    is_ipc,
+                    imou_ha_device.channel_id,
+                    binary_sensor_type,
+                    imou_ha_device.binary_sensors,
                 ):
                     imou_ha_device.binary_sensors[binary_sensor_type] = {
                         PARAM_STATE: False
@@ -1195,25 +1360,24 @@ class ImouHaDeviceManager(object):
                 )
 
     async def _async_update_device_binary_sensor_status_by_ref(
-            self, device: ImouHaDevice, binary_sensor_type: str, ref: str
+        self, device: ImouHaDevice, binary_sensor_type: str, ref: str
     ):
         try:
-            device_id = device.device_id
-            # 如果是配件，需要拼接设备id
-            if device.parent_product_id is not None:
-                device_id = (
-                        device_id
-                        + "_"
-                        + device.parent_device_id
-                        + "_"
-                        + device.parent_product_id
-                )
+            device_id = self._resolve_device_id(device)
             data = await self.delegate.async_get_iot_device_properties(
                 device_id, device.channel_id, device.product_id, [ref]
             )
             if ref in data[PARAM_PROPERTIES]:
                 device.binary_sensors[binary_sensor_type][PARAM_STATE] = (
-                        data[PARAM_PROPERTIES][ref] == 1
+                    data[PARAM_PROPERTIES][ref] == 1
+                )
+            else:
+                self._debug_missing_property_ref(
+                    device,
+                    ref,
+                    source="getIotDeviceProperties",
+                    kind="binary_sensor",
+                    key=binary_sensor_type,
                 )
         except Exception as e:
             _LOGGER.warning(
@@ -1254,23 +1418,23 @@ class ImouHaDeviceManager(object):
 
     @staticmethod
     def configure_text_by_ref(
-            channel_ability_refs: list[str],
-            is_ipc: bool,
-            device_ability_refs: list[str],
-            imou_ha_device: ImouHaDevice,
+        channel_ability_refs: list[str],
+        is_ipc: bool,
+        device_ability_refs: list[str],
+        imou_ha_device: ImouHaDevice,
     ):
         for text_type, ref_list in TEXT_TYPE_REF.items():
             for ref in ref_list:
                 if ImouHaDeviceManager.entity_need_add_to_device_by_ref(
-                        ref[PARAM_REF],
-                        channel_ability_refs,
-                        device_ability_refs,
-                        is_ipc,
-                        imou_ha_device.channel_id,
-                        text_type,
-                        imou_ha_device.texts,
-                        imou_ha_device.product_id,
-                        ref.get(PARAM_EXCEPTS, []),
+                    ref[PARAM_REF],
+                    channel_ability_refs,
+                    device_ability_refs,
+                    is_ipc,
+                    imou_ha_device.channel_id,
+                    text_type,
+                    imou_ha_device.texts,
+                    imou_ha_device.product_id,
+                    ref.get(PARAM_EXCEPTS, []),
                 ):
                     imou_ha_device.texts[text_type] = {
                         PARAM_REF: ref[PARAM_REF],
@@ -1289,25 +1453,27 @@ class ImouHaDeviceManager(object):
                 )
 
     async def _async_update_device_text_status_by_ref(
-            self,
-            device: ImouHaDevice,
-            text_type: str,
-            value: dict[str, any],
+        self,
+        device: ImouHaDevice,
+        text_type: str,
+        value: dict[str, any],
     ):
         try:
             device_id = device.device_id
             # 如果是配件，需要拼接设备id
             if device.parent_product_id is not None:
                 device_id = (
-                        device_id
-                        + "_"
-                        + device.parent_device_id
-                        + "_"
-                        + device.parent_product_id
+                    device_id
+                    + "_"
+                    + device.parent_device_id
+                    + "_"
+                    + device.parent_product_id
                 )
             state = await self._get_state_from_properties_or_services(
-                device, device_id, value
+                device, device_id, value, kind="text", key=text_type
             )
+            if state is None:
+                return
             device.texts[text_type][PARAM_STATE] = (
                 str(state) if isinstance(state, int) else state
             )
@@ -1315,17 +1481,17 @@ class ImouHaDeviceManager(object):
             _LOGGER.error(f"_async_update_device_text_status_by_ref fail:{e}")
 
     async def _async_set_count_down_switch_time(
-            self, device: ImouHaDevice, text_value: str
+        self, device: ImouHaDevice, text_value: str
     ):
         device_id = device.device_id
         # 如果是配件，需要拼接设备id
         if device.parent_product_id is not None:
             device_id = (
-                    device_id
-                    + "_"
-                    + device.parent_device_id
-                    + "_"
-                    + device.parent_product_id
+                device_id
+                + "_"
+                + device.parent_device_id
+                + "_"
+                + device.parent_product_id
             )
         # 首先查询当前开关状态
         switch_type = "switch"

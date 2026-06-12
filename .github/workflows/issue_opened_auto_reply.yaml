@@ -1,0 +1,33 @@
+name: Issue opened — auto welcome reply
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  welcome-comment:
+    runs-on: ubuntu-latest
+    if: github.event.issue.user.login != 'github-actions[bot]' && github.event.issue.user.type != 'Bot'
+    steps:
+      - name: Post welcome & reporting checklist
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const body = [
+              'Thank you for opening an issue! Please complete the sections in the issue template above so we can help you faster.',
+              '',
+              '**Tip:** For professional technical support, you may also submit a support ticket:',
+              '',
+              '- **For China Region:** [Click here to submit a ticket (Imou Open)](https://open.imou.com/support)',
+              '- **For Overseas Region:** [Click here to submit a ticket (Imou Cloud)](https://www.imou.com/support/contact-us)',
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });

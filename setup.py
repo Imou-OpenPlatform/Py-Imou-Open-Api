@@ -1,8 +1,10 @@
-from setuptools import setup, find_packages
+from pathlib import Path
+
+from setuptools import find_packages, setup
 
 setup(
     name="pyimouapi",
-    version="1.2.7",
+    version="1.2.8",
     packages=find_packages(),
     python_requires=">=3.11",
     install_requires=[
@@ -10,7 +12,7 @@ setup(
         "simpleeval>=1.0.3",
     ],
     description="A package for imou open api",
-    long_description=open("README.md", encoding="utf-8").read(),
+    long_description=Path("README.md").read_text(encoding="utf-8"),
     long_description_content_type="text/markdown",
     url="https://github.com/Imou-OpenPlatform/Py-Imou-Open-Api",
     author="Imou-OpenPlatform",

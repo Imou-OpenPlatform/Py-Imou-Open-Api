@@ -518,5 +518,5 @@ NIGHT_VISION_MODE_MAP = {
     "infrared": "Infrared",
     "off": "Off",
     "lowlight": "LowLight",
-    "smartlowlight": "SmartLowLight"
+    "smartlowlight": "SmartLowLight",
 }

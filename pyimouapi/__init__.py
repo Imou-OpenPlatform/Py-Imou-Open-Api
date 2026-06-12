@@ -1,9 +1,20 @@
-__version__ = "1.2.7"
+__version__ = "1.2.8"
 
-from .device import ImouDeviceManager, ImouDevice, ImouChannel
+from .device import ImouChannel, ImouDevice, ImouDeviceManager
 from .exceptions import (
     ConnectFailedException,
-    RequestFailedException,
     InvalidAppIdOrSecretException,
+    RequestFailedException,
 )
 from .openapi import ImouOpenApiClient
+
+__all__ = [
+    "ConnectFailedException",
+    "ImouChannel",
+    "ImouDevice",
+    "ImouDeviceManager",
+    "ImouOpenApiClient",
+    "InvalidAppIdOrSecretException",
+    "RequestFailedException",
+    "__version__",
+]

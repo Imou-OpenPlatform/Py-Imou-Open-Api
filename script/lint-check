@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+uv run ruff check pyimouapi tests
+uv run ruff format --check pyimouapi tests
+uv run codespell pyimouapi tests README.md CHANGELOG.md CONTRIBUTING.md AGENTS.md
+uv run yamllint \
+  .github/workflows/ci-lint.yml \
+  .github/workflows/ci-test.yml \
+  .github/workflows/publish.yml \
+  .github/dependabot.yml \
+  .pre-commit-config.yaml \
+  .yamllint.yml

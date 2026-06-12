@@ -1,0 +1,31 @@
+name: Close inactive issues after maintainer reply
+
+on:
+  schedule:
+    - cron: "42 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: close-inactive-issues
+  cancel-in-progress: false
+
+jobs:
+  close-stale:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Stale label then close when last comment is maintainer-only thread
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAINTAINERS: Imou-OpenPlatform
+          STALE_AFTER_DAYS: "21"
+          INACTIVE_DAYS: "30"
+          STALE_LABEL: stale
+          INACTIVE_EXCLUDE_LABELS: no-auto-close,enhancement
+        run: python3 .github/scripts/close_inactive_author_issues.py

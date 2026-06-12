@@ -6,9 +6,9 @@ import secrets
 import time
 import uuid
 from typing import Any
+from urllib.parse import urlparse
 
 import aiohttp
-from urllib.parse import urlparse
 
 from .const import (
     API_ENDPOINT_ACCESS_TOKEN,
@@ -17,25 +17,25 @@ from .const import (
     ERROR_CODE_SUCCESS,
     ERROR_CODE_TOKEN_OVERDUE,
     PARAM_ACCESS_TOKEN,
-    PARAM_SYSTEM,
-    PARAM_VER,
-    PARAM_SIGN,
     PARAM_APP_ID,
-    PARAM_TIME,
+    PARAM_CODE,
+    PARAM_CURRENT_DOMAIN,
+    PARAM_DATA,
+    PARAM_ID,
+    PARAM_MSG,
     PARAM_NONCE,
     PARAM_PARAMS,
-    PARAM_ID,
     PARAM_RESULT,
-    PARAM_DATA,
-    PARAM_CODE,
+    PARAM_SIGN,
+    PARAM_SYSTEM,
+    PARAM_TIME,
     PARAM_TOKEN,
-    PARAM_MSG,
-    PARAM_CURRENT_DOMAIN,
+    PARAM_VER,
 )
 from .exceptions import (
     ConnectFailedException,
-    RequestFailedException,
     InvalidAppIdOrSecretException,
+    RequestFailedException,
 )
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
@@ -88,9 +88,7 @@ class ImouOpenApiClient:
         timestamp = round(time.time())
         nonce = secrets.token_urlsafe()
         sign = hashlib.md5(
-            f"time:{timestamp},nonce:{nonce},appSecret:{self._app_secret}".encode(
-                "utf-8"
-            )
+            f"time:{timestamp},nonce:{nonce},appSecret:{self._app_secret}".encode()
         ).hexdigest()
         request_id = str(uuid.uuid4())
         headers = {"Content-Type": "application/json"}
@@ -109,9 +107,13 @@ class ImouOpenApiClient:
         session = await self._async_get_session()
         try:
             async with asyncio.timeout(30):
-                response = await session.request("POST", url, json=body, headers=headers)
+                response = await session.request(
+                    "POST", url, json=body, headers=headers
+                )
                 response_body = json.loads(await response.text())
-                _LOGGER.debug("url: %s request body: %s response: %s", url, body, response_body)
+                _LOGGER.debug(
+                    "url: %s request body: %s response: %s", url, body, response_body
+                )
         except Exception as exception:
             raise ConnectFailedException(f"connect failed,{exception}") from exception
         if response.status != 200:
@@ -128,11 +130,7 @@ class ImouOpenApiClient:
                 await self.async_get_token()
                 return await self.async_request_api(endpoint, params)
             raise RequestFailedException(msg)
-        response_data = (
-            response_body[PARAM_RESULT][PARAM_DATA]
-            if PARAM_DATA in response_body[PARAM_RESULT]
-            else {}
-        )
+        response_data = response_body[PARAM_RESULT].get(PARAM_DATA, {})
         return response_data
 
     @property
