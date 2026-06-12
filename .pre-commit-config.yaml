@@ -1,0 +1,26 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-json
+        exclude: (.vscode|.devcontainer)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^(pyimouapi|tests)/.+\.py$
+      - id: ruff-format
+        files: ^(pyimouapi|tests)/.+\.py$
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.3.0
+    hooks:
+      - id: codespell
+        args:
+          - --ignore-words-list=aiport,astroid,checkin,currenty,hass,iif,incomfort,lookin,nam,NotIn
+          - --skip=./.*,*.csv,*.json,*.ambr
+          - --quiet-level=2
+        exclude_types: [csv, json, html]

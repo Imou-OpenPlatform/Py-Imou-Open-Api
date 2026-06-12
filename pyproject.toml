@@ -1,3 +1,70 @@
 [build-system]
 requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyimouapi"
+version = "1.2.8"
+description = "A package for imou open api"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Imou-OpenPlatform", email = "cloud_openteam_service@imou.com" }]
+dependencies = [
+  "aiohttp>=3.11.9,<4.0",
+  "simpleeval>=1.0.3",
+]
+
+[project.urls]
+Homepage = "https://github.com/Imou-OpenPlatform/Py-Imou-Open-Api"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pyimouapi*"]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.24",
+  "pytest-timeout>=2.3",
+  "ruff>=0.8.3",
+  "codespell>=2.3.0",
+  "yamllint>=1.35.0",
+  "pre-commit>=4.0.0",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["pyimouapi", "tests"]
+extend-exclude = [
+  "build",
+  "dist",
+  ".github/scripts",
+]
+
+[tool.ruff.lint]
+select = [
+  "E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "RUF",
+]
+ignore = ["N818"]
+
+[tool.ruff.lint.per-file-ignores]
+"pyimouapi/ha_device.py" = ["E501", "RUF002", "RUF003"]
+"pyimouapi/const.py" = ["E501"]
+"pyimouapi/device.py" = ["E501"]
+"pyimouapi/openapi.py" = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+pythonpath = ["."]
+timeout = 30
+
+[tool.codespell]
+ignore-words-list = "aiport,astroid,checkin,currenty,hass,iif,incomfort,lookin,nam,NotIn"
+skip = "./.*,*.csv,*.json,*.ambr"
