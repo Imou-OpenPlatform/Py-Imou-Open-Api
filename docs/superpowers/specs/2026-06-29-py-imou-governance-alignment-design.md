@@ -1,7 +1,7 @@
 # Py-Imou-Open-Api 治理规则全量对齐 Imou-Home-Assistant — 设计规格
 
 **日期** 2026-06-29
-**状态** 待审阅
+**状态** 已批准
 **范围** 以 Imou-Home-Assistant 为规范源，对 Py-Imou-Open-Api 的 Issue/PR 模板、CI、本地工具链与贡献文档做全量审计并对齐（保留合理仓库差异）。
 
 ---
