@@ -70,7 +70,9 @@ instance/
 .scrapy
 
 # Sphinx documentation
-docs/
+docs/*
+!docs/superpowers/
+!docs/superpowers/**
 docs/_build/
 
 # PyBuilder
