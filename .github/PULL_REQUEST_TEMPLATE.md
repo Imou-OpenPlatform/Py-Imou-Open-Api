@@ -15,6 +15,7 @@ Fixes #
 
 - [ ] I understand the code I am submitting and can explain how it works.
 - [ ] Local `script/lint-check` and `script/test` pass.
+- [ ] I have manually verified the changed behavior (see **Testing** below).
 - [ ] New behavior has tests; bugfixes include regression tests where applicable.
 - [ ] No commented-out dead code.
 - [ ] If the public API changed: describe verification steps below.
@@ -29,7 +30,7 @@ Fixes #
 
 ## Testing
 
-<!-- Describe how you verified the change (unit tests, manual API calls, Home Assistant integration, etc.). -->
+<!-- Required: unit tests, manual API calls, and/or Home Assistant integration verification. -->
 
 ## Additional notes
 

@@ -1,3 +1,7 @@
+# 按评论时间线：若**最后一条评论**来自维护者，且超过 STALE_AFTER_DAYS 天 → 打 stale 标签；
+# 超过 INACTIVE_DAYS 天 → 评论并关闭。若最后一条来自非维护者，则移除 stale（表示已有新回复）。
+# 带标签 no-auto-close 或 enhancement 的 Issue 整单跳过（不打 stale、不关）。
+# 请在仓库 Labels 中预先创建与 STALE_LABEL 同名的标签（默认 stale）。
 name: Close inactive issues after maintainer reply
 
 on:
@@ -18,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Stale label then close when last comment is maintainer-only thread
         env:

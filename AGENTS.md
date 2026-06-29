@@ -14,6 +14,7 @@ This repository contains the **pyimouapi** Python library for the Imou Open Plat
 - Preserve public API compatibility unless the PR explicitly scopes a breaking change.
 - New behavior should include unit tests under `tests/`.
 - Keep `setup.py`, `pyimouapi/__init__.py`, and `pyproject.toml` versions in sync when releasing.
+- Dependabot covers GitHub Actions only. Python dependency bumps are manual (`pyproject.toml` + `uv lock`).
 
 ## AI limitations
 

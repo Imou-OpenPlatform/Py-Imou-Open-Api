@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- Governance aligned with Imou-Home-Assistant: checkout@v7, workflow comments, pre-commit ruff rev, contributor docs, PR/issue templates.
+
 ## 1.2.8
 
 ### Changed
