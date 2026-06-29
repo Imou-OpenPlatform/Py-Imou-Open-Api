@@ -1,3 +1,4 @@
+# 新建 Issue 时由 bot 自动回复；字段清单见各 ISSUE_TEMPLATE，此处仅补充支持工单链接。
 name: Issue opened — auto welcome reply
 
 on:

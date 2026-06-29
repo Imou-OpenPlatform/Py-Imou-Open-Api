@@ -22,5 +22,5 @@ labels: bug
 ## Logs
 
 ```text
-Paste relevant logs here
+Paste relevant logs here (include tracebacks if applicable)
 ```

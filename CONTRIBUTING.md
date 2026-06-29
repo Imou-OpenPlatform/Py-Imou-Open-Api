@@ -58,6 +58,24 @@ Pre-commit hooks run automatically on `git commit` after `script/setup`.
 - Preserve backward compatibility for public APIs consumed by [Imou-Home-Assistant](https://github.com/Imou-OpenPlatform/Imou-Home-Assistant) unless explicitly scoped.
 - Keep version strings aligned across `setup.py`, `pyimouapi/__init__.py`, and `pyproject.toml` when releasing.
 
+## Dependency upgrades
+
+[Dependabot](https://docs.github.com/en/code-security/dependabot) opens weekly PRs for **GitHub Actions** only. Python dependencies are upgraded manually so `pyproject.toml` and `uv.lock` stay in sync.
+
+### Dev-only packages (`ruff`, `pytest`, etc.)
+
+1. Bump the version in `pyproject.toml` (`[dependency-groups].dev`).
+2. Regenerate the lockfile: `uv lock`
+3. Run `script/lint-check` and `script/test`.
+4. Open a `chore/…` PR.
+
+### Runtime packages (`aiohttp`, `simpleeval`, etc.)
+
+1. Bump in `pyproject.toml` `[project].dependencies`.
+2. `uv lock`
+3. Run `script/lint-check` and `script/test`; add tests if public API changes.
+4. Open a `chore/…` PR. When releasing, bump `setup.py`, `pyimouapi/__init__.py`, and `pyproject.toml` together.
+
 ## Testing
 
 - Automated tests live in `tests/` and use pytest with pytest-asyncio.
@@ -118,3 +136,4 @@ See `.github/BRANCH_PROTECTION.md` for step-by-step instructions.
 3. **PR 目标分支**：`main`；使用仓库 PR 模板填写说明。
 4. **发版**：维护者自行 bump 版本、更新 CHANGELOG、打 tag；PyPI 由 `publish.yml` 发布。
 5. **HA 集成**：API 行为变更后，在 Imou-Home-Assistant 仓库另开 PR bump `pyimouapi` 版本。
+6. **依赖升级**：仅 GitHub Actions 由 Dependabot 自动提 PR；Python 依赖手动升级。发版时须同步 bump `setup.py`、`pyimouapi/__init__.py`、`pyproject.toml`。
