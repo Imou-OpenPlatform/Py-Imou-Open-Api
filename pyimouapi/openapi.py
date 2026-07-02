@@ -5,13 +5,15 @@ import logging
 import secrets
 import time
 import uuid
-from typing import Any
+from collections.abc import Iterable
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 import aiohttp
 
 from .const import (
     API_ENDPOINT_ACCESS_TOKEN,
+    API_ENDPOINT_SET_MESSAGE_CALLBACK,
     ERROR_CODE_INVALID_APP,
     ERROR_CODE_INVALID_SIGN,
     ERROR_CODE_SUCCESS,
@@ -132,6 +134,31 @@ class ImouOpenApiClient:
             raise RequestFailedException(msg)
         response_data = response_body[PARAM_RESULT].get(PARAM_DATA, {})
         return response_data
+
+    async def async_set_message_callback(
+        self,
+        *,
+        status: Literal["on", "off"],
+        callback_url: str | None = None,
+        callback_flag: str | Iterable[str] | None = None,
+        base_push: str = "2",
+    ) -> dict[str, Any]:
+        """Register or unregister Imou Open Platform message callback."""
+        params: dict[str, Any] = {
+            "status": status,
+            "basePush": base_push,
+        }
+        if status == "on":
+            if callback_url is None:
+                raise ValueError("callback_url is required when status is 'on'")
+            params["callbackUrl"] = callback_url
+            if callback_flag is None:
+                params["callbackFlag"] = "alarm,deviceStatus"
+            elif isinstance(callback_flag, str):
+                params["callbackFlag"] = callback_flag
+            else:
+                params["callbackFlag"] = ",".join(callback_flag)
+        return await self.async_request_api(API_ENDPOINT_SET_MESSAGE_CALLBACK, params)
 
     @property
     def access_token(self) -> str | None:
