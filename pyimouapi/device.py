@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from .const import (
@@ -62,6 +63,14 @@ from .const import (
     PARAM_URL,
 )
 from .openapi import ImouOpenApiClient
+
+
+@dataclass(frozen=True)
+class ImouDeviceSummary:
+    device_id: str
+    name: str
+    model: str
+    status: str  # "0" offline, "1" online
 
 
 class ImouChannel:
@@ -285,6 +294,38 @@ class ImouDeviceManager:
         if data[PARAM_COUNT] == page_size:
             devices.extend(await self.async_get_devices(page + 1, page_size))
         return devices
+
+    async def async_get_device_summaries(
+        self, page: int = 1, page_size: int = 50
+    ) -> list[ImouDeviceSummary]:
+        params = {
+            PARAM_PAGE: page,
+            PARAM_PAGE_SIZE: page_size,
+        }
+        data = await self._imou_api_client.async_request_api(
+            API_ENDPOINT_LIST_DEVICE_DETAILS, params
+        )
+        if data[PARAM_COUNT] == 0:
+            return []
+        summaries: list[ImouDeviceSummary] = []
+        for device in data[PARAM_DEVICE_LIST]:
+            device_id = device.get(PARAM_DEVICE_ID)
+            if not device_id:
+                continue
+            name = device.get(PARAM_DEVICE_NAME) or device_id
+            model = device.get(PARAM_DEVICE_MODEL, "")
+            status = str(device.get(PARAM_DEVICE_STATUS, ""))
+            summaries.append(
+                ImouDeviceSummary(
+                    device_id=device_id,
+                    name=name,
+                    model=model,
+                    status=status,
+                )
+            )
+        if data[PARAM_COUNT] >= page_size:
+            summaries.extend(await self.async_get_device_summaries(page + 1, page_size))
+        return summaries
 
     async def async_control_device_ptz(
         self, device_id: str, channel_id: str, operation: int, duration: int
