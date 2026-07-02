@@ -4,9 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### Changed
+## 1.2.9
 
-- Governance aligned with Imou-Home-Assistant: checkout@v7, workflow comments, pre-commit ruff rev, contributor docs, PR/issue templates.
+### Added
+
+- `async_set_message_callback` on `ImouOpenApiClient` to register or unregister Imou Open Platform message callbacks.
+- `ImouDeviceSummary` dataclass and `async_get_device_summaries` on `ImouDeviceManager` for lightweight paginated device listing.
 
 ## 1.2.8
 

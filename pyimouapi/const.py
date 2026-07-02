@@ -22,6 +22,7 @@ API_ENDPOINT_GET_DEVICE_POWER_INFO = "/openapi/getDevicePowerInfo"
 API_ENDPOINT_GET_PRODUCT_MODEL = "/openapi/getProductModel"
 API_ENDPOINT_GET_IOT_DEVICE_DETAIL_INFO = "/openapi/getIotDeviceDetailInfo"
 API_ENDPOINT_WAKE_UP_DEVICE = "/openapi/wakeUpDevice"
+API_ENDPOINT_SET_MESSAGE_CALLBACK = "/openapi/setMessageCallback"
 
 # error_codes
 ERROR_CODE_SUCCESS = "0"
