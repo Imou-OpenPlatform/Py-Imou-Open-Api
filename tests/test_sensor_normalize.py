@@ -8,14 +8,11 @@ from pyimouapi.const import (
     PARAM_STATE,
     PARAM_STATE_VARIANT,
     PARAM_STORAGE_USED,
-)
-from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
-from pyimouapi.sensor import (
     STATE_VARIANT_ENUM,
     STATE_VARIANT_NUMERIC,
-    apply_sensor_state,
-    normalize_sensor_state,
 )
+from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
+from pyimouapi.sensor import apply_sensor_state, normalize_sensor_state
 
 
 @pytest.mark.parametrize(
@@ -58,8 +55,7 @@ async def test_update_device_battery_stores_int():
     delegate.async_get_device_power_info = AsyncMock(
         return_value={"electricitys": [{"litElec": "88"}]}
     )
-    manager = ImouHaDeviceManager(MagicMock())
-    manager.delegate = delegate
+    manager = ImouHaDeviceManager(delegate)
     await manager._async_update_device_battery(device)
     assert device.sensors[PARAM_BATTERY][PARAM_STATE] == 88
     assert device.sensors[PARAM_BATTERY][PARAM_STATE_VARIANT] == STATE_VARIANT_NUMERIC
@@ -74,8 +70,7 @@ async def test_update_device_storage_stores_int_percentage():
     delegate.async_get_device_storage = AsyncMock(
         return_value={"usedBytes": 50, "totalBytes": 100}
     )
-    manager = ImouHaDeviceManager(MagicMock())
-    manager.delegate = delegate
+    manager = ImouHaDeviceManager(delegate)
     await manager._async_update_device_storage(device)
     assert device.sensors[PARAM_STORAGE_USED][PARAM_STATE] == 50
     assert (
