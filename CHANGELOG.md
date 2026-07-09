@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.0]
+
+### Changed
+
+- Sensor `PARAM_STATE` values are normalized to `int`/`float` for numeric sensors.
+- Added `PARAM_STATE_VARIANT` (`numeric` | `enum`) on sensor entries.
+- Added `pyimouapi.sensor.normalize_sensor_state` and `apply_sensor_state`.
+
 ## 1.2.9
 
 ### Added

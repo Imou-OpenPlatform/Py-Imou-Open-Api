@@ -67,6 +67,7 @@ from .const import (
 )
 from .device import ImouDevice, ImouDeviceManager
 from .exceptions import RequestFailedException
+from .sensor import apply_sensor_state
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
@@ -146,9 +147,8 @@ class ImouHaDevice:
         self._model = model
         self._swversion = swversion
         self._switches = {}
-        self._sensors = {
-            PARAM_STATUS: {PARAM_STATE: DeviceStatus.OFFLINE.value},
-        }
+        self._sensors: dict[str, dict[str, Any]] = {}
+        apply_sensor_state(self._sensors, PARAM_STATUS, DeviceStatus.OFFLINE.value)
         self._binary_sensors = {}
         self._selects = {}
         self._buttons = {}
@@ -348,8 +348,12 @@ class ImouHaDeviceManager:
                 state = self.get_expression_value(meta[PARAM_EXPRESSION], raw_value)
             else:
                 state = raw_value
-            target = device.sensors if kind == "sensor" else device.texts
-            target[key][PARAM_STATE] = str(state) if isinstance(state, int) else state
+            if kind == "sensor":
+                apply_sensor_state(device.sensors, key, state)
+            else:
+                device.texts[key][PARAM_STATE] = (
+                    str(state) if isinstance(state, int) else state
+                )
 
     async def _async_fetch_device_detail(self, device: ImouHaDevice) -> dict[str, Any]:
         return await self.delegate.async_get_iot_device_detail_info(
@@ -472,14 +476,18 @@ class ImouHaDeviceManager:
                 )
             data = await self.delegate.async_get_device_online_status(device_id)
             if device.channel_id is None and device.product_id is not None:
-                device.sensors[PARAM_STATUS][PARAM_STATE] = self.get_device_status(
-                    data[PARAM_ONLINE]
+                apply_sensor_state(
+                    device.sensors,
+                    PARAM_STATUS,
+                    self.get_device_status(data[PARAM_ONLINE]),
                 )
             else:
                 for channel in data[PARAM_CHANNELS]:
                     if channel[PARAM_CHANNEL_ID] == device.channel_id:
-                        device.sensors[PARAM_STATUS][PARAM_STATE] = (
-                            self.get_device_status(channel[PARAM_ONLINE])
+                        apply_sensor_state(
+                            device.sensors,
+                            PARAM_STATUS,
+                            self.get_device_status(channel[PARAM_ONLINE]),
                         )
                         break
         except Exception as e:
@@ -492,15 +500,15 @@ class ImouHaDeviceManager:
                 percentage_used = int(
                     data[PARAM_USED_BYTES] * 100 / data[PARAM_TOTAL_BYTES]
                 )
-                device.sensors[PARAM_STORAGE_USED][PARAM_STATE] = str(percentage_used)
+                apply_sensor_state(device.sensors, PARAM_STORAGE_USED, percentage_used)
             else:
-                device.sensors[PARAM_STORAGE_USED][PARAM_STATE] = "e2"
+                apply_sensor_state(device.sensors, PARAM_STORAGE_USED, "e2")
         except RequestFailedException as exception:
             _LOGGER.error(f"_async_update_device_storage error:  {exception}")
             if ERROR_CODE_NO_STORAGE_MEDIUM in exception.message:
-                device.sensors[PARAM_STORAGE_USED][PARAM_STATE] = "e1"
+                apply_sensor_state(device.sensors, PARAM_STORAGE_USED, "e1")
             else:
-                device.sensors[PARAM_STORAGE_USED][PARAM_STATE] = "e2"
+                apply_sensor_state(device.sensors, PARAM_STORAGE_USED, "e2")
 
     async def async_get_device_stream(
         self, device: ImouHaDevice, live_resolution: str, live_protocol: str
@@ -843,11 +851,12 @@ class ImouHaDeviceManager:
                     sensor_type,
                     imou_ha_device.sensors,
                 ):
-                    imou_ha_device.sensors[sensor_type] = {
-                        PARAM_STATE: "unknown"
-                        if sensor_type not in NUMBER_TYPE
-                        else "0"
-                    }
+                    imou_ha_device.sensors[sensor_type] = {}
+                    apply_sensor_state(
+                        imou_ha_device.sensors,
+                        sensor_type,
+                        "unknown" if sensor_type not in NUMBER_TYPE else "0",
+                    )
 
     @staticmethod
     def configure_select_by_ability(
@@ -1119,10 +1128,12 @@ class ImouHaDeviceManager:
                 ):
                     imou_ha_device.sensors[sensor_type] = {
                         PARAM_REF: ref[PARAM_REF],
-                        PARAM_STATE: ref[PARAM_DEFAULT],
                         PARAM_REF_TYPE: ref.get(PARAM_REF_TYPE),
                         PARAM_EXPRESSION: ref.get(PARAM_EXPRESSION),
                     }
+                    apply_sensor_state(
+                        imou_ha_device.sensors, sensor_type, ref[PARAM_DEFAULT]
+                    )
                     break
 
     @staticmethod
@@ -1224,9 +1235,7 @@ class ImouHaDeviceManager:
             )
             if state is None:
                 return
-            device.sensors[sensor_type][PARAM_STATE] = (
-                str(state) if isinstance(state, int) else state
-            )
+            apply_sensor_state(device.sensors, sensor_type, state)
         except Exception as e:
             _LOGGER.error(f"_async_update_device_sensor_status_by_ref fail:{e}")
 
@@ -1387,22 +1396,16 @@ class ImouHaDeviceManager:
     async def _async_update_device_battery(self, device, retry: bool = False):
         try:
             data = await self.delegate.async_get_device_power_info(device.device_id)
+            battery_level = "0"
             if data.get(PARAM_ELECTRICITYS):
                 electricity = data[PARAM_ELECTRICITYS][0]
                 if PARAM_LITELEC in electricity:
-                    device.sensors[PARAM_BATTERY][PARAM_STATE] = str(
-                        electricity[PARAM_LITELEC]
-                    )
+                    battery_level = electricity[PARAM_LITELEC]
                 elif PARAM_ALKELEC in electricity:
-                    device.sensors[PARAM_BATTERY][PARAM_STATE] = str(
-                        electricity[PARAM_ALKELEC]
-                    )
+                    battery_level = electricity[PARAM_ALKELEC]
                 elif PARAM_ELECTRIC in electricity:
-                    device.sensors[PARAM_BATTERY][PARAM_STATE] = str(
-                        electricity[PARAM_ELECTRIC]
-                    )
-            else:
-                device.sensors[PARAM_BATTERY][PARAM_STATE] = "0"
+                    battery_level = electricity[PARAM_ELECTRIC]
+            apply_sensor_state(device.sensors, PARAM_BATTERY, battery_level)
         except RequestFailedException as exception:
             # 如果在休眠，则唤醒设备后重试一次
             if ERROR_CODE_DEVICE_SLEEPING in exception.message and not retry:
@@ -1411,10 +1414,10 @@ class ImouHaDeviceManager:
                     await self._async_update_device_battery(device, True)
                 except RequestFailedException as e:
                     _LOGGER.error(f"_async_update_device_battery error:  {e}")
-                    device.sensors[PARAM_BATTERY][PARAM_STATE] = "0"
+                    apply_sensor_state(device.sensors, PARAM_BATTERY, "0")
             else:
                 _LOGGER.error(f"_async_update_device_battery error:  {exception}")
-                device.sensors[PARAM_BATTERY][PARAM_STATE] = "0"
+                apply_sensor_state(device.sensors, PARAM_BATTERY, "0")
 
     @staticmethod
     def configure_text_by_ref(
