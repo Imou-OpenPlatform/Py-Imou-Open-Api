@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -49,6 +51,8 @@ from .const import (
     PARAM_DURATION,
     PARAM_ENABLE,
     PARAM_ENABLE_TYPE,
+    PARAM_EVENTS,
+    PARAM_IDENTIFIER,
     PARAM_MODE,
     PARAM_MULTI_FLAG,
     PARAM_OPERATION,
@@ -63,6 +67,27 @@ from .const import (
     PARAM_URL,
 )
 from .openapi import ImouOpenApiClient
+
+_LOGGER = logging.getLogger(__name__)
+
+
+def _parse_event_ref_map(data: dict[str, Any] | None) -> dict[str, str]:
+    """Build {event.ref: event.identifier} from a getProductModel payload."""
+    if not isinstance(data, dict):
+        return {}
+    events = data.get(PARAM_EVENTS)
+    if not isinstance(events, list):
+        return {}
+    mapping: dict[str, str] = {}
+    for item in events:
+        if not isinstance(item, dict):
+            continue
+        ref = item.get(PARAM_REF)
+        identifier = item.get(PARAM_IDENTIFIER)
+        if ref is None or identifier is None or identifier == "":
+            continue
+        mapping[str(ref)] = str(identifier)
+    return mapping
 
 
 @dataclass(frozen=True)
@@ -229,6 +254,50 @@ class ImouDevice:
 class ImouDeviceManager:
     def __init__(self, imou_api_client: ImouOpenApiClient):
         self._imou_api_client = imou_api_client
+        self._event_maps: dict[str, dict[str, str]] = {}
+        self._event_map_locks: dict[str, asyncio.Lock] = {}
+        self._event_map_locks_guard = asyncio.Lock()
+
+    async def _async_lock_for_product(self, product_id: str) -> asyncio.Lock:
+        async with self._event_map_locks_guard:
+            lock = self._event_map_locks.get(product_id)
+            if lock is None:
+                lock = asyncio.Lock()
+                self._event_map_locks[product_id] = lock
+            return lock
+
+    async def async_ensure_event_map(self, product_id: str) -> None:
+        """Fetch and cache events ref→identifier for product_id if missing."""
+        if not product_id:
+            return
+        if product_id in self._event_maps:
+            return
+        lock = await self._async_lock_for_product(product_id)
+        async with lock:
+            if product_id in self._event_maps:
+                return
+            try:
+                data = await self.async_get_product_model(product_id)
+            except Exception:
+                _LOGGER.warning(
+                    "getProductModel failed for product_id=%s",
+                    product_id,
+                    exc_info=True,
+                )
+                return
+            self._event_maps[product_id] = _parse_event_ref_map(data)
+
+    async def async_resolve_event_identifier(
+        self, product_id: str, ref: str
+    ) -> str | None:
+        """Return event identifier for ref, fetching the product model if needed."""
+        if not product_id or ref is None or ref == "":
+            return None
+        await self.async_ensure_event_map(product_id)
+        mapping = self._event_maps.get(product_id)
+        if mapping is None:
+            return None
+        return mapping.get(str(ref))
 
     async def async_get_devices(
         self, page: int = 1, page_size: int = 10

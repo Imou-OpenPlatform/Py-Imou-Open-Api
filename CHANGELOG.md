@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.1]
+
+### Added
+
+- `ImouDeviceManager.async_ensure_event_map` / `async_resolve_event_identifier` for lazy `getProductModel` event ref→identifier caching
+
 ## [1.3.0]
 
 ### Changed
