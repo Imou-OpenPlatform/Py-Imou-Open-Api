@@ -258,6 +258,10 @@ class ImouDeviceManager:
         self._event_map_locks: dict[str, asyncio.Lock] = {}
         self._event_map_locks_guard = asyncio.Lock()
 
+    async def async_close(self) -> None:
+        """Close the underlying Open API HTTP session."""
+        await self._imou_api_client.async_close()
+
     async def _async_lock_for_product(self, product_id: str) -> asyncio.Lock:
         async with self._event_map_locks_guard:
             lock = self._event_map_locks.get(product_id)
@@ -555,11 +559,13 @@ class ImouDeviceManager:
                 }
             ]
         }
-        return (
-            await self._imou_api_client.async_request_api(
-                API_ENDPOINT_GET_IOT_DEVICE_PROPERTIES, params
-            )
-        ).get(PARAM_DEVICE_LIST, [{}])[0]
+        data = await self._imou_api_client.async_request_api(
+            API_ENDPOINT_GET_IOT_DEVICE_PROPERTIES, params
+        )
+        device_list = data.get(PARAM_DEVICE_LIST) if isinstance(data, dict) else None
+        if not device_list:
+            return {}
+        return device_list[0]
 
     async def async_set_iot_device_properties(
         self, device_id: str, channel_id: str | None, product_id: str, properties: dict
@@ -655,12 +661,15 @@ class ImouDeviceManager:
         if device_detail.get(PARAM_CHANNELS) and imou_device.channels:
             channels_detail = device_detail.get(PARAM_CHANNELS)
             channel_detail_map = {
-                channel_detail.get(PARAM_CHANNEL_ID): channel_detail.get(
+                str(channel_detail.get(PARAM_CHANNEL_ID)): channel_detail.get(
                     PARAM_ABILITY_REFS, "unknown"
                 )
                 for channel_detail in channels_detail
+                if channel_detail.get(PARAM_CHANNEL_ID) is not None
             }
             for channel in imou_device.channels:
-                channel_id = channel.channel_id
-                if channel_id in channel_detail_map:
+                channel_id = (
+                    str(channel.channel_id) if channel.channel_id is not None else None
+                )
+                if channel_id is not None and channel_id in channel_detail_map:
                     channel.set_channel_ability_refs(channel_detail_map[channel_id])

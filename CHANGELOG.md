@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Compare `channelId` as string when matching online status and abilityRefs maps
+- Guard empty `deviceList` in `async_get_iot_device_properties`
+- Honor `value_type=str` when setting IoT text properties
+- Add `async_close` on device managers to close the Open API session
+
 ## [1.3.1]
 
 ### Added
