@@ -254,6 +254,10 @@ class ImouHaDeviceManager:
     def delegate(self):
         return self._delegate
 
+    async def async_close(self) -> None:
+        """Close the underlying Open API HTTP session."""
+        await self._delegate.async_close()
+
     @staticmethod
     def _resolve_device_id(device: ImouHaDevice) -> str:
         device_id = device.device_id
@@ -482,8 +486,11 @@ class ImouHaDeviceManager:
                     self.get_device_status(data[PARAM_ONLINE]),
                 )
             else:
+                device_channel_id = (
+                    str(device.channel_id) if device.channel_id is not None else None
+                )
                 for channel in data[PARAM_CHANNELS]:
-                    if channel[PARAM_CHANNEL_ID] == device.channel_id:
+                    if str(channel[PARAM_CHANNEL_ID]) == device_channel_id:
                         apply_sensor_state(
                             device.sensors,
                             PARAM_STATUS,
@@ -681,9 +688,12 @@ class ImouHaDeviceManager:
                         + "_"
                         + device.parent_product_id
                     )
-                if value_type == "int" and text_value.isdigit():
-                    value = int(text_value)
-                elif value_type == "str" and not isinstance(value_type, str):
+                if value_type == "int":
+                    try:
+                        value = int(text_value)
+                    except (TypeError, ValueError):
+                        value = text_value
+                elif value_type == "str":
                     value = str(text_value)
                 else:
                     value = text_value
