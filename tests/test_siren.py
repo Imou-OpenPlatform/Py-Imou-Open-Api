@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from pyimouapi.const import (
     PARAM_INPUT_REF,
     PARAM_REF,
     PARAM_SIREN_START,
     PARAM_SIREN_STOP,
 )
+from pyimouapi.device import ImouDeviceManager
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
 
@@ -77,3 +81,31 @@ def test_ability_blocks_siren_ref_when_already_registered() -> None:
     )
     assert device.buttons[PARAM_SIREN_START] == {}
     assert device.buttons[PARAM_SIREN_STOP] == {}
+
+
+@pytest.mark.asyncio
+async def test_async_siren_start_calls_api() -> None:
+    client = MagicMock()
+    client.async_request_api = AsyncMock()
+    manager = ImouDeviceManager(client)
+
+    await manager.async_siren_start("DEV001", "0")
+
+    client.async_request_api.assert_awaited_once_with(
+        "/openapi/sirenStart",
+        {"deviceId": "DEV001", "channelId": "0"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_async_siren_stop_calls_api() -> None:
+    client = MagicMock()
+    client.async_request_api = AsyncMock()
+    manager = ImouDeviceManager(client)
+
+    await manager.async_siren_stop("DEV001", "0")
+
+    client.async_request_api.assert_awaited_once_with(
+        "/openapi/sirenStop",
+        {"deviceId": "DEV001", "channelId": "0"},
+    )

@@ -28,6 +28,8 @@ from .const import (
     API_ENDPOINT_SET_DEVICE_SNAP,
     API_ENDPOINT_SET_DEVICE_STATUS,
     API_ENDPOINT_SET_IOT_DEVICE_PROPERTIES,
+    API_ENDPOINT_SIREN_START,
+    API_ENDPOINT_SIREN_STOP,
     API_ENDPOINT_TURN_COLLECTION,
     API_ENDPOINT_WAKE_UP_DEVICE,
     NIGHT_VISION_MODE_MAP,
@@ -666,6 +668,20 @@ class ImouDeviceManager:
         await self._imou_api_client.async_request_api(
             API_ENDPOINT_TURN_COLLECTION, params
         )
+
+    async def async_siren_start(self, device_id: str, channel_id: str) -> None:
+        params = {
+            PARAM_DEVICE_ID: device_id,
+            PARAM_CHANNEL_ID: channel_id,
+        }
+        await self._imou_api_client.async_request_api(API_ENDPOINT_SIREN_START, params)
+
+    async def async_siren_stop(self, device_id: str, channel_id: str) -> None:
+        params = {
+            PARAM_DEVICE_ID: device_id,
+            PARAM_CHANNEL_ID: channel_id,
+        }
+        await self._imou_api_client.async_request_api(API_ENDPOINT_SIREN_STOP, params)
 
     async def _async_update_device_ability_refs(self, imou_device: ImouDevice) -> None:
         device_id = imou_device.device_id
