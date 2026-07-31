@@ -1,7 +1,7 @@
 # Imou 警笛开启/关闭 Button — 设计规格
 
 **日期** 2026-07-31
-**状态** 待审阅
+**状态** 已批准
 **范围** 在 Py-Imou-Open-Api 与 Imou-Home-Assistant 中新增警笛「开启」「关闭」两个 Button 实体，支持 PaaS 与 IoT 双轨设备。
 
 ---
