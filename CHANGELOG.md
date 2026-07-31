@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.4]
+
+### Added
+
+- Siren start/stop button support: PaaS `sirenStart`/`sirenStop` and IoT refs `25500`/`22200`
+- `ImouDeviceManager.async_siren_start()` / `async_siren_stop()`
+- IoT `siren_start` sends `clientLocalTime` via ref `25501` (ISO 8601)
+
 ## [1.3.3]
 
 ### Added

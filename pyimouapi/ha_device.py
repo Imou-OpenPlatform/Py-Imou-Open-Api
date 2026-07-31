@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime
 from enum import Enum
 from typing import Any
 
@@ -55,6 +56,8 @@ from .const import (
     PARAM_REF_TYPE,
     PARAM_RESTART_DEVICE,
     PARAM_SERVICES,
+    PARAM_SIREN_START,
+    PARAM_SIREN_STOP,
     PARAM_STATE,
     PARAM_STATUS,
     PARAM_STORAGE_USED,
@@ -741,9 +744,29 @@ class ImouHaDeviceManager:
                 BUTTON_TYPE_PARAM_VALUE[button_type],
                 duration,
             )
-        elif device.buttons[button_type].get(PARAM_REF):
+        elif button_type in (
+            PARAM_SIREN_START,
+            PARAM_SIREN_STOP,
+        ) and not device.buttons[button_type].get(PARAM_REF):
+            await self._async_siren_paas(device, button_type)
+            return
+        if device.buttons[button_type].get(PARAM_REF):
             ref_id = device.buttons[button_type].get(PARAM_REF)
-            await self._async_press_button_by_ref(device, ref_id)
+            content: dict = {}
+            if input_ref := device.buttons[button_type].get(PARAM_INPUT_REF):
+                content = {
+                    input_ref: datetime.now().astimezone().isoformat(timespec="seconds")
+                }
+            await self._async_press_button_by_ref(device, ref_id, content)
+
+    async def _async_siren_paas(self, device: ImouHaDevice, button_type: str) -> None:
+        if device.channel_id is None:
+            raise RequestFailedException(f"{button_type} requires channel")
+        channel_id = str(device.channel_id)
+        if button_type == PARAM_SIREN_START:
+            await self.delegate.async_siren_start(device.device_id, channel_id)
+        elif button_type == PARAM_SIREN_STOP:
+            await self.delegate.async_siren_stop(device.device_id, channel_id)
 
     async def async_set_text_value(
         self, device: ImouHaDevice, text_type: str, text_value: str
@@ -1388,18 +1411,14 @@ class ImouHaDeviceManager:
             state = data
         return state
 
-    async def _async_press_button_by_ref(self, device: ImouHaDevice, ref: str):
-        device_id = device.device_id
-        if device.parent_product_id is not None:
-            device_id = (
-                device_id
-                + "_"
-                + device.parent_device_id
-                + "_"
-                + device.parent_product_id
-            )
+    async def _async_press_button_by_ref(
+        self, device: ImouHaDevice, ref: str, content: dict | None = None
+    ):
+        if content is None:
+            content = {}
+        device_id = self._resolve_device_id(device)
         await self.delegate.async_iot_device_control(
-            device_id, device.product_id, ref, {}
+            device_id, device.product_id, ref, content
         )
 
     async def _async_select_option_by_ref(

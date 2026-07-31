@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pyimouapi.const import (
@@ -12,6 +13,7 @@ from pyimouapi.const import (
     PARAM_SIREN_STOP,
 )
 from pyimouapi.device import ImouDeviceManager
+from pyimouapi.exceptions import RequestFailedException
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
 
@@ -109,3 +111,97 @@ async def test_async_siren_stop_calls_api() -> None:
         "/openapi/sirenStop",
         {"deviceId": "DEV001", "channelId": "0"},
     )
+
+
+@pytest.mark.asyncio
+async def test_press_siren_start_iot_sends_client_local_time() -> None:
+    device = _ha_device()
+    device.buttons[PARAM_SIREN_START] = {
+        PARAM_REF: "25500",
+        PARAM_INPUT_REF: "25501",
+    }
+    delegate = MagicMock()
+    delegate.async_iot_device_control = AsyncMock()
+    manager = ImouHaDeviceManager(delegate)
+    with patch("pyimouapi.ha_device.datetime") as mock_dt:
+        aware = datetime(2026, 7, 31, 15, 8, tzinfo=UTC)
+        now_mock = MagicMock()
+        now_mock.astimezone.return_value = aware
+        mock_dt.now.return_value = now_mock
+        await manager.async_press_button(device, PARAM_SIREN_START, 500)
+
+    delegate.async_iot_device_control.assert_awaited_once_with(
+        "DEV001",
+        "prod1",
+        "25500",
+        {"25501": "2026-07-31T15:08:00+00:00"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_press_siren_stop_iot_empty_content() -> None:
+    device = _ha_device()
+    device.buttons[PARAM_SIREN_STOP] = {PARAM_REF: "22200"}
+    delegate = MagicMock()
+    delegate.async_iot_device_control = AsyncMock()
+    manager = ImouHaDeviceManager(delegate)
+
+    await manager.async_press_button(device, PARAM_SIREN_STOP, 500)
+
+    delegate.async_iot_device_control.assert_awaited_once_with(
+        "DEV001", "prod1", "22200", {}
+    )
+
+
+@pytest.mark.asyncio
+async def test_press_mute_iot_still_empty_content() -> None:
+    device = _ha_device()
+    device.buttons["mute"] = {PARAM_REF: "21600"}
+    delegate = MagicMock()
+    delegate.async_iot_device_control = AsyncMock()
+    manager = ImouHaDeviceManager(delegate)
+
+    await manager.async_press_button(device, "mute", 500)
+
+    delegate.async_iot_device_control.assert_awaited_once_with(
+        "DEV001", "prod1", "21600", {}
+    )
+
+
+@pytest.mark.asyncio
+async def test_press_siren_start_paas() -> None:
+    device = _ha_device()
+    device.buttons[PARAM_SIREN_START] = {}
+    delegate = MagicMock()
+    delegate.async_siren_start = AsyncMock()
+    delegate.async_iot_device_control = AsyncMock()
+    manager = ImouHaDeviceManager(delegate)
+
+    await manager.async_press_button(device, PARAM_SIREN_START, 500)
+
+    delegate.async_siren_start.assert_awaited_once_with("DEV001", "0")
+    delegate.async_iot_device_control.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_press_siren_stop_paas() -> None:
+    device = _ha_device()
+    device.buttons[PARAM_SIREN_STOP] = {}
+    delegate = MagicMock()
+    delegate.async_siren_stop = AsyncMock()
+    manager = ImouHaDeviceManager(delegate)
+
+    await manager.async_press_button(device, PARAM_SIREN_STOP, 500)
+
+    delegate.async_siren_stop.assert_awaited_once_with("DEV001", "0")
+
+
+@pytest.mark.asyncio
+async def test_press_siren_paas_requires_channel() -> None:
+    device = _ha_device()
+    device.set_channel_id(None)
+    device.buttons[PARAM_SIREN_START] = {}
+    manager = ImouHaDeviceManager(MagicMock())
+
+    with pytest.raises(RequestFailedException):
+        await manager.async_press_button(device, PARAM_SIREN_START, 500)
