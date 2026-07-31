@@ -25,6 +25,8 @@ API_ENDPOINT_WAKE_UP_DEVICE = "/openapi/wakeUpDevice"
 API_ENDPOINT_SET_MESSAGE_CALLBACK = "/openapi/setMessageCallback"
 API_ENDPOINT_GET_COLLECTION = "/openapi/getCollection"
 API_ENDPOINT_TURN_COLLECTION = "/openapi/turnCollection"
+API_ENDPOINT_SIREN_START = "/openapi/sirenStart"
+API_ENDPOINT_SIREN_STOP = "/openapi/sirenStop"
 
 # error_codes
 ERROR_CODE_SUCCESS = "0"
@@ -110,6 +112,9 @@ PARAM_MULTI_FLAG = "multiFlag"
 PARAM_MOTION_DETECT = "motion_detect"
 PARAM_STORAGE_USED = "storage_used"
 PARAM_RESTART_DEVICE = "restart_device"
+PARAM_SIREN_START = "siren_start"
+PARAM_SIREN_STOP = "siren_stop"
+PARAM_INPUT_REF = "input_ref"
 PARAM_NIGHT_VISION_MODE = "night_vision_mode"
 PARAM_COLLECTION_POINT = "collection_point"
 PARAM_COLLECTION_POINT_PROMPT = "__select_collection_point__"
@@ -140,6 +145,9 @@ IOT_GET_COLLECTION_REF = "21500"
 IOT_TURN_COLLECTION_REF = "22000"
 IOT_TURN_COLLECTION_NAME_REF = "22001"
 IOT_COLLECTION_NAME_REF = "21551"
+IOT_SIREN_START_REF = "25500"
+IOT_SIREN_START_INPUT_REF = "25501"
+IOT_SIREN_STOP_REF = "22200"
 PARAM_VALUE_TYPE = "value_type"
 PARAM_ACCESS_TYPE = "accessType"
 PARAM_ABILITY = "ability"
@@ -310,6 +318,8 @@ BUTTON_TYPE_ABILITY = {
     "ptz_down": ["PT", "PTZ"],
     "ptz_left": ["PT", "PTZ"],
     "ptz_right": ["PT", "PTZ"],
+    "siren_start": ["Siren"],
+    "siren_stop": ["Siren"],
 }
 BUTTON_TYPE_REF = {
     "restart_device": [
@@ -342,6 +352,12 @@ BUTTON_TYPE_REF = {
                 "35gL0U5A",
             ],
         },
+    ],
+    "siren_start": [
+        {"ref": IOT_SIREN_START_REF, "input_ref": IOT_SIREN_START_INPUT_REF},
+    ],
+    "siren_stop": [
+        {"ref": IOT_SIREN_STOP_REF},
     ],
     "ptz_up": [
         {"ref": "22100"},

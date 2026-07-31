@@ -39,6 +39,7 @@ from .const import (
     PARAM_HD,
     PARAM_HLS,
     PARAM_HUMIDITY_CURRENT,
+    PARAM_INPUT_REF,
     PARAM_LITELEC,
     PARAM_MODE,
     PARAM_MODES,
@@ -1175,9 +1176,10 @@ class ImouHaDeviceManager:
                     imou_ha_device.product_id,
                     ref.get(PARAM_EXCEPTS, []),
                 ):
-                    imou_ha_device.buttons[button_type] = {
-                        PARAM_REF: ref[PARAM_REF],
-                    }
+                    button_entry = {PARAM_REF: ref[PARAM_REF]}
+                    if ref.get(PARAM_INPUT_REF):
+                        button_entry[PARAM_INPUT_REF] = ref[PARAM_INPUT_REF]
+                    imou_ha_device.buttons[button_type] = button_entry
                     break
 
     @staticmethod
