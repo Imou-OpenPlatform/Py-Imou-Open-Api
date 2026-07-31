@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- PaaS siren: IPC devices omit channel params; non-IPC devices use `channels` array instead of `channelId`
+- IoT SirenStart `clientLocalTime` format corrected to `yyyyMMdd'T'HHmmss`
+- Collection point placeholder state key renamed to `select_collection_point` (Hassfest-compatible)
+
 ## [1.3.3]
 
 ### Added
@@ -20,12 +26,6 @@ All notable changes to this project will be documented in this file.
 
 - IoT collection point refresh reuses `_get_state_from_properties_or_services` (same path as other service reads)
 - Select/switch writes update local entity state optimistically; no post-write cloud read (IoT switch ref path no longer sleeps and re-queries properties)
-
-### Fixed
-
-- PaaS siren: IPC devices omit channel params; non-IPC devices use `channels` array instead of `channelId`
-- IoT SirenStart `clientLocalTime` format corrected to `yyyyMMdd'T'HHmmss`
-- Collection point placeholder state key renamed to `select_collection_point` (Hassfest-compatible)
 
 ## [1.3.2]
 
