@@ -10,6 +10,7 @@ from .const import (
     API_ENDPOINT_CONTROL_DEVICE_PTZ,
     API_ENDPOINT_DEVICE_SD_CARD_STATUS,
     API_ENDPOINT_DEVICE_STORAGE,
+    API_ENDPOINT_GET_COLLECTION,
     API_ENDPOINT_GET_DEVICE_ALARM_PARAM,
     API_ENDPOINT_GET_DEVICE_LIVE_INFO,
     API_ENDPOINT_GET_DEVICE_NIGHT_VISION_MODE,
@@ -27,6 +28,7 @@ from .const import (
     API_ENDPOINT_SET_DEVICE_SNAP,
     API_ENDPOINT_SET_DEVICE_STATUS,
     API_ENDPOINT_SET_IOT_DEVICE_PROPERTIES,
+    API_ENDPOINT_TURN_COLLECTION,
     API_ENDPOINT_WAKE_UP_DEVICE,
     NIGHT_VISION_MODE_MAP,
     PARAM_ABILITY_REFS,
@@ -39,6 +41,7 @@ from .const import (
     PARAM_CHANNEL_NUM,
     PARAM_CHANNEL_STATUS,
     PARAM_CHANNELS,
+    PARAM_COLLECTION_NAME,
     PARAM_CONTENT,
     PARAM_COUNT,
     PARAM_DEVICE_ABILITY,
@@ -639,6 +642,29 @@ class ImouDeviceManager:
         }
         return await self._imou_api_client.async_request_api(
             API_ENDPOINT_GET_IOT_DEVICE_DETAIL_INFO, params
+        )
+
+    async def async_get_device_collection(
+        self, device_id: str, channel_id: str
+    ) -> dict[str, Any]:
+        params = {
+            PARAM_DEVICE_ID: device_id,
+            PARAM_CHANNEL_ID: channel_id,
+        }
+        return await self._imou_api_client.async_request_api(
+            API_ENDPOINT_GET_COLLECTION, params
+        )
+
+    async def async_turn_device_collection(
+        self, device_id: str, channel_id: str, name: str
+    ) -> None:
+        params = {
+            PARAM_DEVICE_ID: device_id,
+            PARAM_CHANNEL_ID: channel_id,
+            PARAM_COLLECTION_NAME: name,
+        }
+        await self._imou_api_client.async_request_api(
+            API_ENDPOINT_TURN_COLLECTION, params
         )
 
     async def _async_update_device_ability_refs(self, imou_device: ImouDevice) -> None:

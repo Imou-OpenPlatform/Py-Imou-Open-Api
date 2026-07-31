@@ -6,6 +6,11 @@ from typing import Any
 import aiohttp
 from simpleeval import SimpleEval
 
+from .collection_point import (
+    build_collection_point_options,
+    parse_iot_collection_names,
+    parse_paas_collection_names,
+)
 from .const import (
     BINARY_SENSOR_TYPE_ABILITY,
     BINARY_SENSOR_TYPE_REF,
@@ -21,6 +26,8 @@ from .const import (
     PARAM_BATTERY,
     PARAM_CHANNEL_ID,
     PARAM_CHANNELS,
+    PARAM_COLLECTION_POINT,
+    PARAM_COLLECTION_POINT_PROMPT,
     PARAM_CONTENT,
     PARAM_CURRENT_OPTION,
     PARAM_DEFAULT,
@@ -54,6 +61,8 @@ from .const import (
     PARAM_STREAMS,
     PARAM_TEMPERATURE_CURRENT,
     PARAM_TOTAL_BYTES,
+    PARAM_TURN_INPUT_REF,
+    PARAM_TURN_REF,
     PARAM_URL,
     PARAM_USED_BYTES,
     PARAM_VALUE_TYPE,
@@ -454,12 +463,78 @@ class ImouHaDeviceManager:
     async def _async_update_device_select_status(self, device: ImouHaDevice):
         """UPDATE SELECT STATUS"""
         for select_type, value in device.selects.items():
-            if PARAM_REF in value:
+            if select_type == PARAM_COLLECTION_POINT:
+                await self._async_update_device_collection_points(device)
+            elif PARAM_REF in value:
                 continue
             else:
                 await self._async_update_device_select_status_by_type(
                     device, select_type
                 )
+
+    async def _async_update_device_collection_points(self, device: ImouHaDevice):
+        """Refresh collection point preset names."""
+        if device.channel_id is None:
+            return
+        try:
+            names: list[str]
+            select_state = device.selects[PARAM_COLLECTION_POINT]
+            if select_state.get(PARAM_TURN_REF):
+                output = await self._get_state_from_properties_or_services(
+                    device,
+                    self._resolve_device_id(device),
+                    select_state,
+                    kind="select",
+                    key=PARAM_COLLECTION_POINT,
+                )
+                names = parse_iot_collection_names(output) if output is not None else []
+            else:
+                data = await self.delegate.async_get_device_collection(
+                    device.device_id, str(device.channel_id)
+                )
+                names = parse_paas_collection_names(data)
+        except Exception as err:
+            _LOGGER.warning(
+                "Failed to fetch collection points for %s: %s",
+                device.device_name,
+                err,
+            )
+            return
+
+        device.selects[PARAM_COLLECTION_POINT][PARAM_OPTIONS] = (
+            build_collection_point_options(names)
+        )
+        device.selects[PARAM_COLLECTION_POINT][PARAM_CURRENT_OPTION] = (
+            PARAM_COLLECTION_POINT_PROMPT
+        )
+
+    async def _async_select_collection_point_option(
+        self, device: ImouHaDevice, option: str
+    ) -> None:
+        if option == PARAM_COLLECTION_POINT_PROMPT:
+            return
+        if device.channel_id is None:
+            raise RequestFailedException("collection_point requires channel")
+
+        select_state = device.selects[PARAM_COLLECTION_POINT]
+        turn_ref = select_state.get(PARAM_TURN_REF)
+        if turn_ref:
+            if device.product_id is None:
+                raise RequestFailedException("collection_point iot requires product_id")
+            input_ref = select_state.get(PARAM_TURN_INPUT_REF)
+            if not input_ref:
+                raise RequestFailedException("collection_point missing turn input ref")
+            await self.delegate.async_iot_device_control(
+                self._resolve_device_id(device),
+                device.product_id,
+                turn_ref,
+                {input_ref: option},
+            )
+        else:
+            await self.delegate.async_turn_device_collection(
+                device.device_id, str(device.channel_id), option
+            )
+        select_state[PARAM_CURRENT_OPTION] = PARAM_COLLECTION_POINT_PROMPT
 
     async def _async_update_device_sensor_status(self, device: ImouHaDevice):
         """UPDATE SENSOR STATUS"""
@@ -736,6 +811,7 @@ class ImouHaDeviceManager:
             # Request all failed, consider this operation a failure
             if all(isinstance(result_item, Exception) for result_item in result):
                 raise result[0]
+        device.switches[switch_type][PARAM_STATE] = enable
 
     async def async_select_option(
         self,
@@ -743,16 +819,26 @@ class ImouHaDeviceManager:
         select_type: str,
         option: str,
     ):
+        if select_type == PARAM_COLLECTION_POINT:
+            await self._async_select_collection_point_option(device, option)
+            return
         if device.selects[select_type].get(PARAM_REF):
             ref_id = device.selects[select_type].get(PARAM_REF)
             value_type = device.selects[select_type].get(PARAM_VALUE_TYPE)
+            write_option = option
             # 兼容下音量15400值为-1的情况
             if ref_id == "15400" and option == "99":
-                option = "-1"
-            await self._async_select_option_by_ref(device, option, ref_id, value_type)
+                write_option = "-1"
+            await self._async_select_option_by_ref(
+                device, write_option, ref_id, value_type
+            )
+            device.selects[select_type][PARAM_CURRENT_OPTION] = option
         elif select_type == PARAM_NIGHT_VISION_MODE:
             await self.delegate.async_set_device_night_vision_mode(
                 device.device_id, device.channel_id, option
+            )
+            device.selects[PARAM_NIGHT_VISION_MODE][PARAM_CURRENT_OPTION] = (
+                option.lower()
             )
 
     async def _async_get_device_switch_status_by_ability(
@@ -886,10 +972,16 @@ class ImouHaDeviceManager:
                     select_type,
                     imou_ha_device.selects,
                 ):
-                    imou_ha_device.selects[select_type] = {
-                        PARAM_CURRENT_OPTION: "",
-                        PARAM_OPTIONS: [],
-                    }
+                    if select_type == PARAM_COLLECTION_POINT:
+                        imou_ha_device.selects[select_type] = {
+                            PARAM_CURRENT_OPTION: PARAM_COLLECTION_POINT_PROMPT,
+                            PARAM_OPTIONS: [PARAM_COLLECTION_POINT_PROMPT],
+                        }
+                    else:
+                        imou_ha_device.selects[select_type] = {
+                            PARAM_CURRENT_OPTION: "",
+                            PARAM_OPTIONS: [],
+                        }
 
     @staticmethod
     def configure_button_by_ability(
@@ -1108,12 +1200,21 @@ class ImouHaDeviceManager:
                     imou_ha_device.product_id,
                     ref.get(PARAM_EXCEPTS, []),
                 ):
-                    imou_ha_device.selects[select_type] = {
+                    select_entry = {
                         PARAM_REF: ref[PARAM_REF],
                         PARAM_OPTIONS: ref[PARAM_OPTIONS],
                         PARAM_CURRENT_OPTION: ref[PARAM_DEFAULT],
                         PARAM_VALUE_TYPE: ref.get(PARAM_VALUE_TYPE, "str"),
                     }
+                    if ref.get(PARAM_TURN_REF):
+                        select_entry[PARAM_TURN_REF] = ref[PARAM_TURN_REF]
+                        select_entry[PARAM_TURN_INPUT_REF] = ref.get(
+                            PARAM_TURN_INPUT_REF
+                        )
+                        select_entry[PARAM_REF_TYPE] = ref.get(
+                            PARAM_REF_TYPE, PARAM_PROPERTIES
+                        )
+                    imou_ha_device.selects[select_type] = select_entry
                     break
 
     @staticmethod
@@ -1345,8 +1446,7 @@ class ImouHaDeviceManager:
             await self.delegate.async_set_iot_device_properties(
                 device.device_id, None, device.product_id, {ref: 1 if enable else 0}
             )
-        await asyncio.sleep(3)
-        await self._async_update_device_switch_status_by_ref(device, switch_type, ref)
+        device.switches[switch_type][PARAM_STATE] = enable
 
     @staticmethod
     def configure_binary_sensor_by_ability(

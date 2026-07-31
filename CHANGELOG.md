@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.3]
+
+### Added
+
+- Collection point (PTZ preset) support: `getCollection` / `turnCollection` PaaS APIs and IoT `GetCollection` / `TurnCollection` services
+- `ImouDeviceManager.async_get_device_collection()` / `async_turn_device_collection()`
+- `pyimouapi.collection_point` — parse PaaS / IoT preset name lists; `build_collection_point_options()` for select UIs
+- `select.collection_point` on `ImouHaDevice` when the device has `CollectionPoint` ability or IoT refs `21500`/`22000` (placeholder current option; preset order preserved from API)
+
+### Changed
+
+- IoT collection point refresh reuses `_get_state_from_properties_or_services` (same path as other service reads)
+- Select/switch writes update local entity state optimistically; no post-write cloud read (IoT switch ref path no longer sleeps and re-queries properties)
+
 ## [1.3.2]
 
 ### Fixed

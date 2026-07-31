@@ -23,6 +23,8 @@ API_ENDPOINT_GET_PRODUCT_MODEL = "/openapi/getProductModel"
 API_ENDPOINT_GET_IOT_DEVICE_DETAIL_INFO = "/openapi/getIotDeviceDetailInfo"
 API_ENDPOINT_WAKE_UP_DEVICE = "/openapi/wakeUpDevice"
 API_ENDPOINT_SET_MESSAGE_CALLBACK = "/openapi/setMessageCallback"
+API_ENDPOINT_GET_COLLECTION = "/openapi/getCollection"
+API_ENDPOINT_TURN_COLLECTION = "/openapi/turnCollection"
 
 # error_codes
 ERROR_CODE_SUCCESS = "0"
@@ -109,6 +111,8 @@ PARAM_MOTION_DETECT = "motion_detect"
 PARAM_STORAGE_USED = "storage_used"
 PARAM_RESTART_DEVICE = "restart_device"
 PARAM_NIGHT_VISION_MODE = "night_vision_mode"
+PARAM_COLLECTION_POINT = "collection_point"
+PARAM_COLLECTION_POINT_PROMPT = "__select_collection_point__"
 PARAM_PTZ = "ptz"
 PARAM_TEMPERATURE_CURRENT = "temperature_current"
 PARAM_HUMIDITY_CURRENT = "humidity_current"
@@ -128,6 +132,14 @@ PARAM_ABILITY_REFS = "abilityRefs"
 PARAM_REF_TYPE = "ref_type"
 PARAM_EXPRESSION = "expression"
 PARAM_OUTPUT_DATA = "outputData"
+PARAM_TURN_REF = "turn_ref"
+PARAM_TURN_INPUT_REF = "turn_input_ref"
+PARAM_COLLECTION_NAME = "name"
+
+IOT_GET_COLLECTION_REF = "21500"
+IOT_TURN_COLLECTION_REF = "22000"
+IOT_TURN_COLLECTION_NAME_REF = "22001"
+IOT_COLLECTION_NAME_REF = "21551"
 PARAM_VALUE_TYPE = "value_type"
 PARAM_ACCESS_TYPE = "accessType"
 PARAM_ABILITY = "ability"
@@ -371,6 +383,7 @@ BUTTON_TYPE_REF = {
 #  Required capacity for various select types
 SELECT_TYPE_ABILITY = {
     "night_vision_mode": ["NVM"],
+    "collection_point": ["CollectionPoint"],
 }
 SELECT_TYPE_REF = {
     "night_vision_mode": [
@@ -402,6 +415,16 @@ SELECT_TYPE_REF = {
             "default": "0",
             "options": ["99", "0", "1", "2"],
             "value_type": "int",
+        }
+    ],
+    "collection_point": [
+        {
+            "ref": IOT_GET_COLLECTION_REF,
+            "turn_ref": IOT_TURN_COLLECTION_REF,
+            "turn_input_ref": IOT_TURN_COLLECTION_NAME_REF,
+            "ref_type": "services",
+            "default": PARAM_COLLECTION_POINT_PROMPT,
+            "options": [PARAM_COLLECTION_POINT_PROMPT],
         }
     ],
 }
