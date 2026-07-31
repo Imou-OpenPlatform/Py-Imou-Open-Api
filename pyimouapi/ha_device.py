@@ -168,6 +168,7 @@ class ImouHaDevice:
         self._texts = {}
         self._channel_id = None
         self._channel_name = None
+        self._is_ipc = False
         self._product_id = None
         self._parent_product_id = None
         self._parent_device_id = None
@@ -183,6 +184,10 @@ class ImouHaDevice:
     @property
     def channel_name(self):
         return self._channel_name
+
+    @property
+    def is_ipc(self) -> bool:
+        return self._is_ipc
 
     @property
     def manufacturer(self):
@@ -257,6 +262,9 @@ class ImouHaDevice:
 
     def set_channel_name(self, channel_name):
         self._channel_name = channel_name
+
+    def set_is_ipc(self, is_ipc: bool) -> None:
+        self._is_ipc = is_ipc
 
 
 class ImouHaDeviceManager:
@@ -730,6 +738,7 @@ class ImouHaDeviceManager:
             imou_ha_device.set_parent_product_id(device.parent_product_id)
         if device.parent_device_id is not None:
             imou_ha_device.set_parent_device_id(device.parent_device_id)
+        imou_ha_device.set_is_ipc(device.is_ipc)
         return imou_ha_device
 
     async def async_press_button(
@@ -764,13 +773,16 @@ class ImouHaDeviceManager:
                 content = build_siren_start_iot_content(input_ref)
             await self._async_press_button_by_ref(device, ref, content)
             return
-        if device.channel_id is None:
-            raise RequestFailedException(f"{button_type} requires channel")
-        channel_id = str(device.channel_id)
+        if device.is_ipc:
+            channels = None
+        else:
+            if device.channel_id is None:
+                raise RequestFailedException(f"{button_type} requires channel")
+            channels = [int(device.channel_id)]
         if button_type == PARAM_SIREN_START:
-            await self.delegate.async_siren_start(device.device_id, channel_id)
+            await self.delegate.async_siren_start(device.device_id, channels)
         elif button_type == PARAM_SIREN_STOP:
-            await self.delegate.async_siren_stop(device.device_id, channel_id)
+            await self.delegate.async_siren_stop(device.device_id, channels)
 
     async def async_set_text_value(
         self, device: ImouHaDevice, text_type: str, text_value: str

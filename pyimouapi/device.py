@@ -212,6 +212,10 @@ class ImouDevice:
         return self._parent_device_id
 
     @property
+    def channel_number(self) -> int:
+        return self._channel_number
+
+    @property
     def is_ipc(self) -> bool:
         return (
             self._channel_number is not None and self._channel_number == 1
@@ -669,18 +673,20 @@ class ImouDeviceManager:
             API_ENDPOINT_TURN_COLLECTION, params
         )
 
-    async def async_siren_start(self, device_id: str, channel_id: str) -> None:
-        params = {
-            PARAM_DEVICE_ID: device_id,
-            PARAM_CHANNEL_ID: channel_id,
-        }
+    async def async_siren_start(
+        self, device_id: str, channels: list[int] | None = None
+    ) -> None:
+        params: dict[str, Any] = {PARAM_DEVICE_ID: device_id}
+        if channels is not None:
+            params[PARAM_CHANNELS] = channels
         await self._imou_api_client.async_request_api(API_ENDPOINT_SIREN_START, params)
 
-    async def async_siren_stop(self, device_id: str, channel_id: str) -> None:
-        params = {
-            PARAM_DEVICE_ID: device_id,
-            PARAM_CHANNEL_ID: channel_id,
-        }
+    async def async_siren_stop(
+        self, device_id: str, channels: list[int] | None = None
+    ) -> None:
+        params: dict[str, Any] = {PARAM_DEVICE_ID: device_id}
+        if channels is not None:
+            params[PARAM_CHANNELS] = channels
         await self._imou_api_client.async_request_api(API_ENDPOINT_SIREN_STOP, params)
 
     async def _async_update_device_ability_refs(self, imou_device: ImouDevice) -> None:
