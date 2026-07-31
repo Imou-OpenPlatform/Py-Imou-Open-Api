@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from datetime import datetime
 from enum import Enum
 from typing import Any
 
@@ -81,6 +80,7 @@ from .const import (
 from .device import ImouDevice, ImouDeviceManager
 from .exceptions import RequestFailedException
 from .sensor import apply_sensor_state
+from .siren import build_siren_start_iot_content
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
@@ -744,22 +744,26 @@ class ImouHaDeviceManager:
                 BUTTON_TYPE_PARAM_VALUE[button_type],
                 duration,
             )
-        elif button_type in (
-            PARAM_SIREN_START,
-            PARAM_SIREN_STOP,
-        ) and not device.buttons[button_type].get(PARAM_REF):
-            await self._async_siren_paas(device, button_type)
-            return
-        if device.buttons[button_type].get(PARAM_REF):
+        elif button_type in (PARAM_SIREN_START, PARAM_SIREN_STOP):
+            await self._async_press_siren_button(device, button_type)
+        elif device.buttons[button_type].get(PARAM_REF):
             ref_id = device.buttons[button_type].get(PARAM_REF)
-            content: dict = {}
-            if input_ref := device.buttons[button_type].get(PARAM_INPUT_REF):
-                content = {
-                    input_ref: datetime.now().astimezone().isoformat(timespec="seconds")
-                }
-            await self._async_press_button_by_ref(device, ref_id, content)
+            await self._async_press_button_by_ref(device, ref_id)
 
-    async def _async_siren_paas(self, device: ImouHaDevice, button_type: str) -> None:
+    async def _async_press_siren_button(
+        self, device: ImouHaDevice, button_type: str
+    ) -> None:
+        button_state = device.buttons[button_type]
+        ref = button_state.get(PARAM_REF)
+        if ref:
+            content: dict[str, str] = {}
+            if button_type == PARAM_SIREN_START:
+                input_ref = button_state.get(PARAM_INPUT_REF)
+                if not input_ref:
+                    raise RequestFailedException("siren_start missing input ref")
+                content = build_siren_start_iot_content(input_ref)
+            await self._async_press_button_by_ref(device, ref, content)
+            return
         if device.channel_id is None:
             raise RequestFailedException(f"{button_type} requires channel")
         channel_id = str(device.channel_id)

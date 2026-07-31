@@ -112,12 +112,11 @@ PARAM_MULTI_FLAG = "multiFlag"
 PARAM_MOTION_DETECT = "motion_detect"
 PARAM_STORAGE_USED = "storage_used"
 PARAM_RESTART_DEVICE = "restart_device"
-PARAM_SIREN_START = "siren_start"
-PARAM_SIREN_STOP = "siren_stop"
-PARAM_INPUT_REF = "input_ref"
 PARAM_NIGHT_VISION_MODE = "night_vision_mode"
 PARAM_COLLECTION_POINT = "collection_point"
 PARAM_COLLECTION_POINT_PROMPT = "__select_collection_point__"
+PARAM_SIREN_START = "siren_start"
+PARAM_SIREN_STOP = "siren_stop"
 PARAM_PTZ = "ptz"
 PARAM_TEMPERATURE_CURRENT = "temperature_current"
 PARAM_HUMIDITY_CURRENT = "humidity_current"
@@ -139,6 +138,7 @@ PARAM_EXPRESSION = "expression"
 PARAM_OUTPUT_DATA = "outputData"
 PARAM_TURN_REF = "turn_ref"
 PARAM_TURN_INPUT_REF = "turn_input_ref"
+PARAM_INPUT_REF = "input_ref"
 PARAM_COLLECTION_NAME = "name"
 
 IOT_GET_COLLECTION_REF = "21500"
@@ -314,12 +314,12 @@ SWITCH_TYPE_REF = {
 #  Required capacity for various button types
 BUTTON_TYPE_ABILITY = {
     "restart_device": ["Reboot"],
+    "siren_start": ["Siren"],
+    "siren_stop": ["Siren"],
     "ptz_up": ["PT", "PTZ"],
     "ptz_down": ["PT", "PTZ"],
     "ptz_left": ["PT", "PTZ"],
     "ptz_right": ["PT", "PTZ"],
-    "siren_start": ["Siren"],
-    "siren_stop": ["Siren"],
 }
 BUTTON_TYPE_REF = {
     "restart_device": [
@@ -354,7 +354,10 @@ BUTTON_TYPE_REF = {
         },
     ],
     "siren_start": [
-        {"ref": IOT_SIREN_START_REF, "input_ref": IOT_SIREN_START_INPUT_REF},
+        {
+            "ref": IOT_SIREN_START_REF,
+            "input_ref": IOT_SIREN_START_INPUT_REF,
+        },
     ],
     "siren_stop": [
         {"ref": IOT_SIREN_STOP_REF},

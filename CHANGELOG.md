@@ -4,14 +4,6 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [1.3.4]
-
-### Added
-
-- Siren start/stop button support: PaaS `sirenStart`/`sirenStop` and IoT refs `25500`/`22200`
-- `ImouDeviceManager.async_siren_start()` / `async_siren_stop()`
-- IoT `siren_start` sends `clientLocalTime` via ref `25501` (ISO 8601)
-
 ## [1.3.3]
 
 ### Added
@@ -20,6 +12,9 @@ All notable changes to this project will be documented in this file.
 - `ImouDeviceManager.async_get_device_collection()` / `async_turn_device_collection()`
 - `pyimouapi.collection_point` — parse PaaS / IoT preset name lists; `build_collection_point_options()` for select UIs
 - `select.collection_point` on `ImouHaDevice` when the device has `CollectionPoint` ability or IoT refs `21500`/`22000` (placeholder current option; preset order preserved from API)
+- Siren start/stop button support: PaaS `sirenStart`/`sirenStop` and IoT refs `25500`/`22200`
+- `ImouDeviceManager.async_siren_start()` / `async_siren_stop()`
+- `pyimouapi.siren` — `client_local_time_iso()` and `build_siren_start_iot_content()` for IoT SirenStart
 
 ### Changed
 

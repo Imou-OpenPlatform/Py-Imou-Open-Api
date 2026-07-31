@@ -7,6 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pyimouapi.const import (
+    IOT_SIREN_START_INPUT_REF,
+    IOT_SIREN_START_REF,
+    IOT_SIREN_STOP_REF,
     PARAM_INPUT_REF,
     PARAM_REF,
     PARAM_SIREN_START,
@@ -15,6 +18,7 @@ from pyimouapi.const import (
 from pyimouapi.device import ImouDeviceManager
 from pyimouapi.exceptions import RequestFailedException
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
+from pyimouapi.siren import build_siren_start_iot_content, client_local_time_iso
 
 
 def _ha_device(*, product_id: str = "prod1") -> ImouHaDevice:
@@ -22,6 +26,25 @@ def _ha_device(*, product_id: str = "prod1") -> ImouHaDevice:
     device.set_channel_id("0")
     device.set_product_id(product_id)
     return device
+
+
+def test_client_local_time_iso() -> None:
+    with patch("pyimouapi.siren.datetime") as mock_dt:
+        aware = datetime(2026, 7, 31, 15, 8, tzinfo=UTC)
+        now_mock = MagicMock()
+        now_mock.astimezone.return_value = aware
+        mock_dt.now.return_value = now_mock
+        assert client_local_time_iso() == "2026-07-31T15:08:00+00:00"
+
+
+def test_build_siren_start_iot_content() -> None:
+    with patch(
+        "pyimouapi.siren.client_local_time_iso",
+        return_value="2026-07-31T15:08:00+00:00",
+    ):
+        assert build_siren_start_iot_content(IOT_SIREN_START_INPUT_REF) == {
+            IOT_SIREN_START_INPUT_REF: "2026-07-31T15:08:00+00:00",
+        }
 
 
 def test_configure_siren_buttons_by_ability() -> None:
@@ -43,14 +66,14 @@ def test_configure_siren_start_by_ref_includes_input_ref() -> None:
     """IoT SirenStart stores ref and input_ref."""
     device = _ha_device()
     ImouHaDeviceManager.configure_button_by_ref(
-        channel_ability_refs=["25500"],
+        channel_ability_refs=[IOT_SIREN_START_REF],
         is_ipc=True,
         device_ability_refs=[],
         imou_ha_device=device,
     )
     assert device.buttons[PARAM_SIREN_START] == {
-        PARAM_REF: "25500",
-        PARAM_INPUT_REF: "25501",
+        PARAM_REF: IOT_SIREN_START_REF,
+        PARAM_INPUT_REF: IOT_SIREN_START_INPUT_REF,
     }
 
 
@@ -58,12 +81,12 @@ def test_configure_siren_stop_by_ref() -> None:
     """IoT SirenStop stores ref only."""
     device = _ha_device()
     ImouHaDeviceManager.configure_button_by_ref(
-        channel_ability_refs=["22200"],
+        channel_ability_refs=[IOT_SIREN_STOP_REF],
         is_ipc=True,
         device_ability_refs=[],
         imou_ha_device=device,
     )
-    assert device.buttons[PARAM_SIREN_STOP] == {PARAM_REF: "22200"}
+    assert device.buttons[PARAM_SIREN_STOP] == {PARAM_REF: IOT_SIREN_STOP_REF}
 
 
 def test_ability_blocks_siren_ref_when_already_registered() -> None:
@@ -76,7 +99,7 @@ def test_ability_blocks_siren_ref_when_already_registered() -> None:
         imou_ha_device=device,
     )
     ImouHaDeviceManager.configure_button_by_ref(
-        channel_ability_refs=["25500", "22200"],
+        channel_ability_refs=[IOT_SIREN_START_REF, IOT_SIREN_STOP_REF],
         is_ipc=True,
         device_ability_refs=[],
         imou_ha_device=device,
@@ -117,13 +140,13 @@ async def test_async_siren_stop_calls_api() -> None:
 async def test_press_siren_start_iot_sends_client_local_time() -> None:
     device = _ha_device()
     device.buttons[PARAM_SIREN_START] = {
-        PARAM_REF: "25500",
-        PARAM_INPUT_REF: "25501",
+        PARAM_REF: IOT_SIREN_START_REF,
+        PARAM_INPUT_REF: IOT_SIREN_START_INPUT_REF,
     }
     delegate = MagicMock()
     delegate.async_iot_device_control = AsyncMock()
     manager = ImouHaDeviceManager(delegate)
-    with patch("pyimouapi.ha_device.datetime") as mock_dt:
+    with patch("pyimouapi.siren.datetime") as mock_dt:
         aware = datetime(2026, 7, 31, 15, 8, tzinfo=UTC)
         now_mock = MagicMock()
         now_mock.astimezone.return_value = aware
@@ -133,15 +156,15 @@ async def test_press_siren_start_iot_sends_client_local_time() -> None:
     delegate.async_iot_device_control.assert_awaited_once_with(
         "DEV001",
         "prod1",
-        "25500",
-        {"25501": "2026-07-31T15:08:00+00:00"},
+        IOT_SIREN_START_REF,
+        {IOT_SIREN_START_INPUT_REF: "2026-07-31T15:08:00+00:00"},
     )
 
 
 @pytest.mark.asyncio
 async def test_press_siren_stop_iot_empty_content() -> None:
     device = _ha_device()
-    device.buttons[PARAM_SIREN_STOP] = {PARAM_REF: "22200"}
+    device.buttons[PARAM_SIREN_STOP] = {PARAM_REF: IOT_SIREN_STOP_REF}
     delegate = MagicMock()
     delegate.async_iot_device_control = AsyncMock()
     manager = ImouHaDeviceManager(delegate)
@@ -149,7 +172,7 @@ async def test_press_siren_stop_iot_empty_content() -> None:
     await manager.async_press_button(device, PARAM_SIREN_STOP, 500)
 
     delegate.async_iot_device_control.assert_awaited_once_with(
-        "DEV001", "prod1", "22200", {}
+        "DEV001", "prod1", IOT_SIREN_STOP_REF, {}
     )
 
 
