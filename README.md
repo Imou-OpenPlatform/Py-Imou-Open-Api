@@ -11,8 +11,9 @@ Async Python client for the **Imou Open Platform** cloud APIs. Built on **aiohtt
 | Module | Role |
 |--------|------|
 | `pyimouapi.openapi` | `ImouOpenApiClient` — auth, signing, token lifecycle, HTTP calls |
-| `pyimouapi.device` | `ImouDeviceManager`, `ImouDevice`, `ImouChannel` — listing, PTZ, alarms, storage, and related endpoints |
-| `pyimouapi.ha_device` | `ImouHaDeviceManager`, `ImouHaDevice`, … — aggregated “device model” helpers for automation stacks |
+| `pyimouapi.device` | `ImouDeviceManager`, `ImouDevice`, `ImouChannel` — listing, PTZ, alarms, storage, collection points (`getCollection` / `turnCollection`), and related endpoints |
+| `pyimouapi.collection_point` | Parsing helpers for PaaS / IoT collection point (preset) name lists |
+| `pyimouapi.ha_device` | `ImouHaDeviceManager`, `ImouHaDevice`, … — aggregated “device model” helpers for automation stacks (including `select.collection_point` when the device exposes `CollectionPoint` or IoT refs `21500`/`22000`) |
 | `pyimouapi.exceptions` | `ImouException` and typed errors (connect, request, invalid credentials, …) |
 
 The top-level `pyimouapi` package re-exports common symbols. Import submodules directly when needed, for example `from pyimouapi.ha_device import ImouHaDeviceManager`.

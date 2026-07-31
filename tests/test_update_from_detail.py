@@ -1,6 +1,5 @@
 """Tests for applying detail properties to HA device entities."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -87,7 +86,8 @@ async def test_update_device_status_skips_detail_when_offline():
 
 
 @pytest.mark.asyncio
-async def test_switch_operation_by_ref_uses_single_property_query(monkeypatch):
+async def test_switch_operation_by_ref_updates_local_state_without_read():
+    """Switch ref writes set local state without a post-write property read."""
     device = _online_device()
     device.switches["relay"] = {PARAM_REF: "10001", PARAM_STATE: False}
 
@@ -98,11 +98,9 @@ async def test_switch_operation_by_ref_uses_single_property_query(monkeypatch):
     )
     delegate.async_get_iot_device_detail_info = AsyncMock()
 
-    monkeypatch.setattr(asyncio, "sleep", AsyncMock())
-
     manager = ImouHaDeviceManager(delegate)
     await manager._async_switch_operation_by_ref(device, "relay", True, "10001")
 
     delegate.async_get_iot_device_detail_info.assert_not_called()
-    delegate.async_get_iot_device_properties.assert_awaited_once()
+    delegate.async_get_iot_device_properties.assert_not_called()
     assert device.switches["relay"][PARAM_STATE] is True
