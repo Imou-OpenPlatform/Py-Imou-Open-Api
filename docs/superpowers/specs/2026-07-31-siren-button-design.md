@@ -182,7 +182,7 @@ HA button.press
 **不修改** `button.py` 实体注册逻辑（仍遍历 `device.buttons`）。
 **不修改** 写后 refresh 行为（保持 `async_request_refresh()`，与 mute 一致）。
 
-版本：pyimouapi 与 HA 集成同步 bump（如 `1.3.4`）。
+版本：pyimouapi 与 HA 集成同步为 **1.3.3**（收藏点与警笛同属该版本）。
 
 ---
 

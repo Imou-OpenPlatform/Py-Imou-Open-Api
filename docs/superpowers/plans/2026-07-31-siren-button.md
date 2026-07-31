@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- 版本 bump 至 **1.3.4**（`pyproject.toml`、`setup.py`、`pyimouapi/__init__.py`、`uv.lock`、HA `manifest.json` / `pyproject.toml`）
+- 版本 bump 至 **1.3.3**（`pyproject.toml`、`setup.py`、`pyimouapi/__init__.py`、`uv.lock`、HA `manifest.json` / `pyproject.toml`）
 - `clientLocalTime` 格式：`datetime.now().astimezone().isoformat(timespec="seconds")`
 - IoT ref：`siren_start` → `25500` + input `25501`；`siren_stop` → `22200`（空 content，**不得**与 mute ref `21600`/`2200` 混用）
 - PaaS 能力名：`Siren`；接口 `/openapi/sirenStart`、`/openapi/sirenStop`；params 含 `deviceId`、`channelId`
@@ -593,10 +593,10 @@ Expected: 全部 passed（含既有 52+ tests）
 
 - [ ] **Step 6: Bump 版本与 CHANGELOG**
 
-`1.3.3` → `1.3.4`：`pyproject.toml`、`setup.py`、`pyimouapi/__init__.py`，运行 `uv lock`，`CHANGELOG.md` 增加：
+`1.3.3` → `1.3.3`：`pyproject.toml`、`setup.py`、`pyimouapi/__init__.py`，运行 `uv lock`，`CHANGELOG.md` 增加：
 
 ```markdown
-## [1.3.4]
+## [1.3.3]
 
 - Siren start/stop button support: PaaS `sirenStart`/`sirenStop` and IoT refs `25500`/`22200`
 ```
@@ -606,7 +606,7 @@ Expected: 全部 passed（含既有 52+ tests）
 ```bash
 git add pyimouapi/ha_device.py tests/test_siren.py pyproject.toml setup.py pyimouapi/__init__.py uv.lock CHANGELOG.md
 git commit -m "$(cat <<'EOF'
-feat: wire PaaS siren start/stop button press (1.3.4)
+feat: wire PaaS siren start/stop button press (1.3.3)
 EOF
 )"
 ```
@@ -624,8 +624,8 @@ EOF
 - Modify: `pyproject.toml`, `uv.lock`, `CHANGELOG.md`
 
 **Interfaces:**
-- Consumes: pyimouapi 1.3.4（本地 path 依赖若存在则同步 lock）
-- Produces: HA 实体名/图标；`requirements: ["pyimouapi==1.3.4"]`
+- Consumes: pyimouapi 1.3.3（本地 path 依赖若存在则同步 lock）
+- Produces: HA 实体名/图标；`requirements: ["pyimouapi==1.3.3"]`
 
 - [ ] **Step 1: 更新 `strings.json` button 段**
 
@@ -668,9 +668,9 @@ EOF
 
 - [ ] **Step 5: Bump HA 版本**
 
-`manifest.json` 的 `version` 与 `requirements` 中 `pyimouapi==1.3.4`；`pyproject.toml` 依赖版本同步；`uv lock`。
+`manifest.json` 的 `version` 与 `requirements` 中 `pyimouapi==1.3.3`；`pyproject.toml` 依赖版本同步；`uv lock`。
 
-`CHANGELOG.md` 增加 1.3.4 条目：新增警笛开启/关闭 button。
+`CHANGELOG.md` 增加 1.3.3 条目：新增警笛开启/关闭 button。
 
 - [ ] **Step 6: 运行 HA 测试**
 
@@ -686,7 +686,7 @@ Expected: 全部 passed
 ```bash
 git add custom_components/imou_life/strings.json custom_components/imou_life/translations/en.json custom_components/imou_life/translations/zh-Hans.json custom_components/imou_life/icons.json custom_components/imou_life/manifest.json pyproject.toml uv.lock CHANGELOG.md
 git commit -m "$(cat <<'EOF'
-feat: add siren start/stop button translations (1.3.4)
+feat: add siren start/stop button translations (1.3.3)
 EOF
 )"
 ```
@@ -726,7 +726,7 @@ EOF
 | ability 优先于 ref | Task 1 测试 |
 | HA 翻译/图标 | Task 5 |
 | 不写后改 refresh | 不改 button.py（spec 约束） |
-| 版本 1.3.4 | Task 4, 5 |
+| 版本 1.3.3 | Task 4, 5 |
 | 全量测试通过 | Task 4 Step 5, Task 5 Step 6 |
 
 无 TBD / 占位步骤。
