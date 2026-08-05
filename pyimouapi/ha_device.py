@@ -819,6 +819,7 @@ class ImouHaDeviceManager:
                     await self.delegate.async_set_iot_device_properties(
                         device.device_id, None, device.product_id, {ref_id: value}
                     )
+                device.texts[text_type][PARAM_STATE] = str(text_value)
 
     async def async_switch_operation(
         self, device: ImouHaDevice, switch_type: str, enable: bool
@@ -1661,11 +1662,7 @@ class ImouHaDeviceManager:
         await self.delegate.async_iot_device_control(
             device_id, device.product_id, "28600", param
         )
-        # 等待1秒，查询倒计时
-        await asyncio.sleep(1)
-        await self._async_update_device_text_status_by_ref(
-            device, "count_down_switch", device.texts["count_down_switch"]
-        )
+        device.texts["count_down_switch"][PARAM_STATE] = str(text_value)
 
 
 class DeviceStatus(Enum):
