@@ -2,7 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.3.4]
+
+### Changed
+
+- Text writes update local entity state optimistically; countdown text no longer sleeps and re-queries after write
 
 ### Fixed
 
