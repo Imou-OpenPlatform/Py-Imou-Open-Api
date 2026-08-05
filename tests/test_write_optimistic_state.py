@@ -98,5 +98,6 @@ async def test_set_count_down_text_updates_local_state_without_read() -> None:
     await manager.async_set_text_value(device, "count_down_switch", "10")
 
     assert device.texts["count_down_switch"][PARAM_STATE] == "10"
+    manager._async_update_device_switch_status_by_ref.assert_awaited_once()
     delegate.async_iot_device_control.assert_awaited_once()
     delegate.async_get_iot_device_properties.assert_not_called()
