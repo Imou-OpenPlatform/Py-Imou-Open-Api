@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from pyimouapi.const import PARAM_MODE, PARAM_NIGHT_VISION_MODE
+from pyimouapi.const import PARAM_DEVICE_VOLUME, PARAM_MODE, PARAM_NIGHT_VISION_MODE
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 from pyimouapi.select_option import normalize_options, to_friendly, to_raw
-
-PARAM_DEVICE_VOLUME = "device_volume"
 
 
 @pytest.mark.parametrize(
@@ -97,13 +95,13 @@ def test_configure_select_by_ref_uses_friendly_defaults() -> None:
     )
     assert device.selects[PARAM_MODE]["options"] == ["home", "away", "disarm"]
     assert device.selects[PARAM_MODE]["current_option"] == "home"
-    assert device.selects["device_volume"]["options"] == [
+    assert device.selects[PARAM_DEVICE_VOLUME]["options"] == [
         "mute",
         "low",
         "medium",
         "high",
     ]
-    assert device.selects["device_volume"]["current_option"] == "low"
+    assert device.selects[PARAM_DEVICE_VOLUME]["current_option"] == "low"
     assert device.selects[PARAM_NIGHT_VISION_MODE]["options"] == [
         "intelligent",
         "fullcolor",
