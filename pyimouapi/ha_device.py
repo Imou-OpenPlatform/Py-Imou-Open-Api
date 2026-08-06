@@ -79,7 +79,7 @@ from .const import (
 )
 from .device import ImouDevice, ImouDeviceManager
 from .exceptions import RequestFailedException
-from .select_option import normalize_options, to_friendly
+from .select_option import normalize_options, to_friendly, to_raw
 from .sensor import apply_sensor_state
 from .siren import build_siren_start_iot_content
 
@@ -867,20 +867,22 @@ class ImouHaDeviceManager:
         if device.selects[select_type].get(PARAM_REF):
             ref_id = device.selects[select_type].get(PARAM_REF)
             value_type = device.selects[select_type].get(PARAM_VALUE_TYPE)
-            write_option = option
+            write_option = to_raw(select_type, option)
             # 兼容下音量15400值为-1的情况
-            if ref_id == "15400" and option == "99":
+            if ref_id == "15400" and write_option == "99":
                 write_option = "-1"
             await self._async_select_option_by_ref(
                 device, write_option, ref_id, value_type
             )
-            device.selects[select_type][PARAM_CURRENT_OPTION] = option
+            device.selects[select_type][PARAM_CURRENT_OPTION] = to_friendly(
+                select_type, option
+            )
         elif select_type == PARAM_NIGHT_VISION_MODE:
             await self.delegate.async_set_device_night_vision_mode(
                 device.device_id, device.channel_id, option
             )
-            device.selects[PARAM_NIGHT_VISION_MODE][PARAM_CURRENT_OPTION] = (
-                option.lower()
+            device.selects[PARAM_NIGHT_VISION_MODE][PARAM_CURRENT_OPTION] = to_friendly(
+                PARAM_NIGHT_VISION_MODE, option
             )
 
     async def _async_get_device_switch_status_by_ability(
