@@ -79,6 +79,7 @@ from .const import (
 )
 from .device import ImouDevice, ImouDeviceManager
 from .exceptions import RequestFailedException
+from .select_option import normalize_options, to_friendly
 from .sensor import apply_sensor_state
 from .siren import build_siren_start_iot_content
 
@@ -365,9 +366,9 @@ class ImouHaDeviceManager:
             device.binary_sensors[key][PARAM_STATE] = raw_value == 1
         elif kind == "select":
             value = str(raw_value) if isinstance(raw_value, int) else raw_value
-            device.selects[key][PARAM_CURRENT_OPTION] = value
-            if ref == "15400" and value == "-1":
-                device.selects[key][PARAM_CURRENT_OPTION] = "99"
+            if ref == "15400" and str(value) == "-1":
+                value = "99"
+            device.selects[key][PARAM_CURRENT_OPTION] = to_friendly(key, value)
         elif kind in ("sensor", "text"):
             if meta.get(PARAM_EXPRESSION) and isinstance(raw_value, dict | list):
                 state = self.get_expression_value(meta[PARAM_EXPRESSION], raw_value)
@@ -923,13 +924,14 @@ class ImouHaDeviceManager:
         if PARAM_MODE not in data or PARAM_MODES not in data:
             raise RequestFailedException("get_device_night_vision fail")
         if data[PARAM_MODE] is not None:
-            device.selects[PARAM_NIGHT_VISION_MODE][PARAM_CURRENT_OPTION] = data[
-                PARAM_MODE
-            ].lower()
+            device.selects[PARAM_NIGHT_VISION_MODE][PARAM_CURRENT_OPTION] = to_friendly(
+                PARAM_NIGHT_VISION_MODE, data[PARAM_MODE]
+            )
         if data[PARAM_MODES] is not None:
-            device.selects[PARAM_NIGHT_VISION_MODE][PARAM_OPTIONS] = [
-                item.lower() for item in data[PARAM_MODES]
-            ]
+            device.selects[PARAM_NIGHT_VISION_MODE][PARAM_OPTIONS] = normalize_options(
+                PARAM_NIGHT_VISION_MODE,
+                [item.lower() for item in data[PARAM_MODES]],
+            )
 
     @staticmethod
     def configure_device_by_ability(
