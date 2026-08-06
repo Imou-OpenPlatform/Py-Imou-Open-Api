@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Text writes update local entity state optimistically; countdown text no longer sleeps and re-queries after write
+- Select `current_option` / `options` for `mode`, `device_volume`, and `night_vision_mode` use stable friendly keys (`home`/`away`/`disarm`, `mute`/`low`/`medium`/`high`, `intelligent`/`fullcolor`/…); IoT numeric codes are mapped at the library boundary (breaking for consumers that compared numeric option strings)
 
 ### Fixed
 
