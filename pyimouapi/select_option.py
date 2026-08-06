@@ -7,13 +7,12 @@ from typing import Any
 
 from pyimouapi.const import (
     PARAM_COLLECTION_POINT,
+    PARAM_DEVICE_VOLUME,
     PARAM_MODE,
     PARAM_NIGHT_VISION_MODE,
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-PARAM_DEVICE_VOLUME = "device_volume"
 
 MAPPED_SELECT_TYPES = frozenset(
     {PARAM_MODE, PARAM_DEVICE_VOLUME, PARAM_NIGHT_VISION_MODE}
