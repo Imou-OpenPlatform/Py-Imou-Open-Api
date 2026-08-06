@@ -79,6 +79,7 @@ from .const import (
 )
 from .device import ImouDevice, ImouDeviceManager
 from .exceptions import RequestFailedException
+from .select_option import normalize_options, to_friendly, to_raw
 from .sensor import apply_sensor_state
 from .siren import build_siren_start_iot_content
 
@@ -358,16 +359,13 @@ class ImouHaDeviceManager:
         meta: dict[str, Any],
         raw_value: Any,
     ) -> None:
-        ref = meta[PARAM_REF]
         if kind == "switch":
             device.switches[key][PARAM_STATE] = raw_value == 1
         elif kind == "binary_sensor":
             device.binary_sensors[key][PARAM_STATE] = raw_value == 1
         elif kind == "select":
             value = str(raw_value) if isinstance(raw_value, int) else raw_value
-            device.selects[key][PARAM_CURRENT_OPTION] = value
-            if ref == "15400" and value == "-1":
-                device.selects[key][PARAM_CURRENT_OPTION] = "99"
+            device.selects[key][PARAM_CURRENT_OPTION] = to_friendly(key, value)
         elif kind in ("sensor", "text"):
             if meta.get(PARAM_EXPRESSION) and isinstance(raw_value, dict | list):
                 state = self.get_expression_value(meta[PARAM_EXPRESSION], raw_value)
@@ -866,9 +864,9 @@ class ImouHaDeviceManager:
         if device.selects[select_type].get(PARAM_REF):
             ref_id = device.selects[select_type].get(PARAM_REF)
             value_type = device.selects[select_type].get(PARAM_VALUE_TYPE)
-            write_option = option
+            write_option = to_raw(select_type, option)
             # 兼容下音量15400值为-1的情况
-            if ref_id == "15400" and option == "99":
+            if ref_id == "15400" and write_option == "99":
                 write_option = "-1"
             await self._async_select_option_by_ref(
                 device, write_option, ref_id, value_type
@@ -878,8 +876,8 @@ class ImouHaDeviceManager:
             await self.delegate.async_set_device_night_vision_mode(
                 device.device_id, device.channel_id, option
             )
-            device.selects[PARAM_NIGHT_VISION_MODE][PARAM_CURRENT_OPTION] = (
-                option.lower()
+            device.selects[PARAM_NIGHT_VISION_MODE][PARAM_CURRENT_OPTION] = to_friendly(
+                PARAM_NIGHT_VISION_MODE, option
             )
 
     async def _async_get_device_switch_status_by_ability(
@@ -923,13 +921,14 @@ class ImouHaDeviceManager:
         if PARAM_MODE not in data or PARAM_MODES not in data:
             raise RequestFailedException("get_device_night_vision fail")
         if data[PARAM_MODE] is not None:
-            device.selects[PARAM_NIGHT_VISION_MODE][PARAM_CURRENT_OPTION] = data[
-                PARAM_MODE
-            ].lower()
+            device.selects[PARAM_NIGHT_VISION_MODE][PARAM_CURRENT_OPTION] = to_friendly(
+                PARAM_NIGHT_VISION_MODE, data[PARAM_MODE]
+            )
         if data[PARAM_MODES] is not None:
-            device.selects[PARAM_NIGHT_VISION_MODE][PARAM_OPTIONS] = [
-                item.lower() for item in data[PARAM_MODES]
-            ]
+            device.selects[PARAM_NIGHT_VISION_MODE][PARAM_OPTIONS] = normalize_options(
+                PARAM_NIGHT_VISION_MODE,
+                [item.lower() for item in data[PARAM_MODES]],
+            )
 
     @staticmethod
     def configure_device_by_ability(
@@ -1337,34 +1336,6 @@ class ImouHaDeviceManager:
                 )
         except Exception as e:
             _LOGGER.error(f"_async_update_device_switch_status_by_ref fail:{e}")
-
-    async def _async_update_device_select_status_by_ref(
-        self, device: ImouHaDevice, select_type: str, ref: str
-    ):
-        try:
-            device_id = self._resolve_device_id(device)
-            data = await self.delegate.async_get_iot_device_properties(
-                device_id, device.channel_id, device.product_id, [ref]
-            )
-            if ref in data[PARAM_PROPERTIES]:
-                value = (
-                    str(data[PARAM_PROPERTIES][ref])
-                    if isinstance(data[PARAM_PROPERTIES][ref], int)
-                    else data[PARAM_PROPERTIES][ref]
-                )
-                device.selects[select_type][PARAM_CURRENT_OPTION] = value
-                if ref == "15400" and value == "-1":
-                    device.selects[select_type][PARAM_CURRENT_OPTION] = "99"
-            else:
-                self._debug_missing_property_ref(
-                    device,
-                    ref,
-                    source="getIotDeviceProperties",
-                    kind="select",
-                    key=select_type,
-                )
-        except Exception as e:
-            _LOGGER.error(f"Error while updating device select status: {e}")
 
     async def _async_update_device_sensor_status_by_ref(
         self,

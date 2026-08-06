@@ -113,6 +113,7 @@ PARAM_MOTION_DETECT = "motion_detect"
 PARAM_STORAGE_USED = "storage_used"
 PARAM_RESTART_DEVICE = "restart_device"
 PARAM_NIGHT_VISION_MODE = "night_vision_mode"
+PARAM_DEVICE_VOLUME = "device_volume"
 PARAM_COLLECTION_POINT = "collection_point"
 PARAM_COLLECTION_POINT_PROMPT = "select_collection_point"
 PARAM_SIREN_START = "siren_start"
@@ -408,31 +409,42 @@ SELECT_TYPE_REF = {
     "night_vision_mode": [
         {
             "ref": "17400",
-            "default": "0",
-            "options": ["0", "1", "2", "3"],
+            "default": "intelligent",
+            "options": ["intelligent", "fullcolor", "infrared", "off"],
             "value_type": "int",
         },
         {
             "ref": "139700",
-            "default": "0",
-            "options": ["0", "1", "2", "3", "4"],
+            "default": "intelligent",
+            "options": [
+                "intelligent",
+                "fullcolor",
+                "infrared",
+                "off",
+                "custom",
+            ],
             "value_type": "int",
         },
-        {"ref": "112400", "default": "2", "options": ["2", "3"], "value_type": "int"},
+        {
+            "ref": "112400",
+            "default": "infrared",
+            "options": ["infrared", "off"],
+            "value_type": "int",
+        },
     ],
     "mode": [
         {
             "ref": "15200",
-            "default": "0",
-            "options": ["0", "1", "2"],
+            "default": "home",
+            "options": ["home", "away", "disarm"],
             "value_type": "int",
         }
     ],
     "device_volume": [
         {
             "ref": "15400",
-            "default": "0",
-            "options": ["99", "0", "1", "2"],
+            "default": "low",
+            "options": ["mute", "low", "medium", "high"],
             "value_type": "int",
         }
     ],
