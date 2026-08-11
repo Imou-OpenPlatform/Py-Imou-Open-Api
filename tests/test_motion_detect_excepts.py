@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from pyimouapi.const import PARAM_MOTION_DETECT, PARAM_REF
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
@@ -51,3 +53,38 @@ def test_motion_detect_excepted_pid_with_only_14800_has_no_switch() -> None:
         imou_ha_device=device,
     )
     assert PARAM_MOTION_DETECT not in device.switches
+
+
+def test_excepts_skip_logs_debug_when_ref_would_match(caplog) -> None:
+    device = _ha_device(product_id=EXCEPT_PID)
+    with caplog.at_level(logging.DEBUG, logger="pyimouapi"):
+        ImouHaDeviceManager.configure_switch_by_ref(
+            channel_ability_refs=[REF_14800, REF_108800],
+            is_ipc=True,
+            device_ability_refs=[],
+            imou_ha_device=device,
+        )
+    assert any(
+        REF_14800 in r.message
+        and EXCEPT_PID in r.message
+        and "excepts" in r.message.lower()
+        for r in caplog.records
+        if r.levelno == logging.DEBUG
+    )
+
+
+def test_excepts_does_not_log_when_ref_not_in_ability_refs(caplog) -> None:
+    """Pid in excepts but 14800 absent from abilityRefs → no skip debug for 14800."""
+    device = _ha_device(product_id=EXCEPT_PID)
+    with caplog.at_level(logging.DEBUG, logger="pyimouapi"):
+        ImouHaDeviceManager.configure_switch_by_ref(
+            channel_ability_refs=[REF_108800],
+            is_ipc=True,
+            device_ability_refs=[],
+            imou_ha_device=device,
+        )
+    assert not any(
+        REF_14800 in r.message and "excepts" in r.message.lower()
+        for r in caplog.records
+        if r.levelno == logging.DEBUG
+    )

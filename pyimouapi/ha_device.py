@@ -1156,18 +1156,25 @@ class ImouHaDeviceManager:
         product_id: str,
         except_product_ids: list[str],
     ) -> bool:
-        return (
-            product_id not in except_product_ids
-            and ImouHaDeviceManager.entity_need_add_to_device(
-                ref_id,
-                channel_ability_refs,
-                device_ability_refs,
-                is_ipc,
-                channel_id,
-                entity_type,
-                exists_entities,
-            )
+        would_add = ImouHaDeviceManager.entity_need_add_to_device(
+            ref_id,
+            channel_ability_refs,
+            device_ability_refs,
+            is_ipc,
+            channel_id,
+            entity_type,
+            exists_entities,
         )
+        if product_id in except_product_ids:
+            if would_add:
+                _LOGGER.debug(
+                    "Skipping ref %s for entity %s on product_id=%s (listed in excepts)",
+                    ref_id,
+                    entity_type,
+                    product_id,
+                )
+            return False
+        return would_add
 
     @staticmethod
     def configure_switch_by_ref(
