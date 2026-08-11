@@ -238,6 +238,9 @@ SWITCH_TYPE_REF = {
         {
             "ref": "305000",
             "default": False,
+            "excepts": [
+                "FKX9UYL4",
+            ],
         },
         {
             "ref": "108800",
