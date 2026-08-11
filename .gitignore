@@ -69,11 +69,11 @@ instance/
 # Scrapy stuff:
 .scrapy
 
-# Sphinx documentation
-docs/*
-!docs/superpowers/
-!docs/superpowers/**
+# Sphinx / local planning docs / Superpowers (canonical copy lives in workspace .doc/)
+docs/
 docs/_build/
+.superpowers
+.superpowers/
 
 # PyBuilder
 .pybuilder/
