@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [1.3.4.1]
 
+### Added
+
+- `ImouDeviceManager.async_bind_device()` — OpenAPI `bindDevice` (device serial + verification code)
+
 ### Fixed
 
 - IoT `motion_detect`: skip advertised but unusable refs `14800` and `305000` for product_id `FKX9UYL4` (falls through to `108800`); log at debug when an `excepts` entry skips a matching ref

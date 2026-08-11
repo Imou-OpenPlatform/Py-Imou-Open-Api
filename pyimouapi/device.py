@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .const import (
+    API_ENDPOINT_BIND_DEVICE,
     API_ENDPOINT_BIND_DEVICE_LIVE,
     API_ENDPOINT_CONTROL_DEVICE_PTZ,
     API_ENDPOINT_DEVICE_SD_CARD_STATUS,
@@ -43,6 +44,7 @@ from .const import (
     PARAM_CHANNEL_NUM,
     PARAM_CHANNEL_STATUS,
     PARAM_CHANNELS,
+    PARAM_CODE,
     PARAM_COLLECTION_NAME,
     PARAM_CONTENT,
     PARAM_COUNT,
@@ -511,6 +513,11 @@ class ImouDeviceManager:
         await self._imou_api_client.async_request_api(
             API_ENDPOINT_RESTART_DEVICE, params
         )
+
+    async def async_bind_device(self, device_id: str, code: str) -> None:
+        """Bind device to the open-platform account (bindDevice)."""
+        params = {PARAM_DEVICE_ID: device_id, PARAM_CODE: code}
+        await self._imou_api_client.async_request_api(API_ENDPOINT_BIND_DEVICE, params)
 
     async def async_get_stream_url(
         self, device_id: str, channel_id: str
