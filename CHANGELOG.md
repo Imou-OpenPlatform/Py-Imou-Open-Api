@@ -2,17 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.3.4.1]
+## [1.3.5]
+
+Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so
+this is a drop-in replacement for 1.3.4.
+
+### Security
+
+- Debug logging no longer prints the request signature, `token`, or `accessToken`. Turning on debug logs used to write live credentials into the Home Assistant log, which is included verbatim in the diagnostics users attach to bug reports
 
 ### Added
 
 - `ImouDeviceManager.async_bind_device()` — OpenAPI `bindDevice` (device serial + verification code)
+- `ImouOpenApiClient.async_download()` and `ImouDeviceManager.async_download()` — snapshot downloads now go through the client's shared session instead of a throwaway one
+- `compose_iot_device_id()` — the one place that builds an accessory's composite device id
+- A `py.typed` marker, so consumers type check against the annotations shipped here
+
+### Changed
+
+- Concurrent callers asking for an `accessToken` are coalesced behind a lock into a single request, and a token expiring mid-flight is retried once rather than in a loop
+- Listing devices resolves every iot device's ability refs in one concurrent batch instead of one round trip after another
+- Service-backed sensors and texts refresh together, as do the switches, selects, and sensors of a single device. A camera carrying a dozen switches no longer spends a dozen sequential requests per poll
+- One HTTP session is shared across the client with a capped connection pool
+- Status read failures are logged instead of being gathered and silently dropped; cancellation is passed through rather than reported as a failure
+- A sleeping device is logged at debug, not info — battery cameras were writing an info line on every poll for as long as they slept
+- Log messages are left for the logger to format, so a disabled level costs nothing
+- Ref-based entity setup for all six platforms is driven by one table registry rather than six near-identical functions
 
 ### Fixed
 
 - IoT `motion_detect`: skip advertised but unusable refs `14800` and `305000` for product_id `FKX9UYL4` (falls through to `108800`); log at debug when an `excepts` entry skips a matching ref
-
-## [1.3.4]
+- Paging stops on a short page rather than on the `count` field. Read as an account total, `count` sent an account holding an exact multiple of the page size asking for pages forever
+- A connection is released when a response body fails to read, and when a snapshot download returns a non-200 status. Both used to strand the connection in the pool
+- A non-200 response is reported as a request failure carrying the status code. Parsing an error page as JSON used to surface a gateway error as a connection problem
+- A failed switch read no longer reads as the switch being on. The gathered exception was an object, and every object is truthy
+- Writing a switch that resolves to no abilities no longer raises `IndexError`
+- An accessory is addressed with its composite id only when both parent ids are known; a missing parent id used to raise `TypeError` and take down the whole device listing
+- Annotations the package promises its callers are correct, and the type checker runs in CI to keep them that way
 
 ### Changed
 
