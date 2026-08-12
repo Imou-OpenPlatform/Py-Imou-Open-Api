@@ -590,20 +590,23 @@ class ImouHaDeviceManager:
             if PARAM_REF in value:
                 continue
             else:
+                results = await asyncio.gather(
+                    *[
+                        self._async_get_device_switch_status_by_ability(
+                            device, ability_type
+                        )
+                        for ability_type in (
+                            value[PARAM_FUNCTION_TYPE]
+                            if isinstance(value[PARAM_FUNCTION_TYPE], list)
+                            else [value[PARAM_FUNCTION_TYPE]]
+                        )
+                    ],
+                    return_exceptions=True,
+                )
+                # Gathered exceptions arrive as objects, and every object is
+                # truthy, so a failed read would otherwise show as "on".
                 device.switches[switch_type][PARAM_STATE] = any(
-                    await asyncio.gather(
-                        *[
-                            self._async_get_device_switch_status_by_ability(
-                                device, ability_type
-                            )
-                            for ability_type in (
-                                value[PARAM_FUNCTION_TYPE]
-                                if isinstance(value[PARAM_FUNCTION_TYPE], list)
-                                else [value[PARAM_FUNCTION_TYPE]]
-                            )
-                        ],
-                        return_exceptions=True,
-                    )
+                    result is True for result in results
                 )
 
     async def _async_update_device_select_status(self, device: ImouHaDevice):
