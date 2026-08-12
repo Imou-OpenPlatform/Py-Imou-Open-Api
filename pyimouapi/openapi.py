@@ -44,6 +44,37 @@ _LOGGER: logging.Logger = logging.getLogger(__package__)
 
 CONNECTION_LIMIT = 10
 
+REDACTED = "***"
+
+
+def _redacted_request(body: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of a request body with its credentials masked.
+
+    ``sign`` is an MD5 over the app secret together with the ``time`` and
+    ``nonce`` printed beside it, so logging it in full is enough for a reader of
+    the log to attack the secret offline. The app id is left alone: it names the
+    account but cannot authenticate on its own.
+    """
+    system = {**body[PARAM_SYSTEM], PARAM_SIGN: REDACTED}
+    params = body[PARAM_PARAMS]
+    if PARAM_TOKEN in params:
+        params = {**params, PARAM_TOKEN: REDACTED}
+    return {**body, PARAM_SYSTEM: system, PARAM_PARAMS: params}
+
+
+def _redacted_response(body: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of a response body with any access token masked."""
+    result = body.get(PARAM_RESULT)
+    if not isinstance(result, dict):
+        return body
+    data = result.get(PARAM_DATA)
+    if not isinstance(data, dict) or PARAM_ACCESS_TOKEN not in data:
+        return body
+    return {
+        **body,
+        PARAM_RESULT: {**result, PARAM_DATA: {**data, PARAM_ACCESS_TOKEN: REDACTED}},
+    }
+
 
 class ImouOpenApiClient:
     """Async client for Imou Open Platform HTTP API."""
@@ -173,9 +204,13 @@ class ImouOpenApiClient:
                     "POST", url, json=body, headers=headers
                 )
                 response_body = json.loads(await response.text())
-                _LOGGER.debug(
-                    "url: %s request body: %s response: %s", url, body, response_body
-                )
+                if _LOGGER.isEnabledFor(logging.DEBUG):
+                    _LOGGER.debug(
+                        "url: %s request body: %s response: %s",
+                        url,
+                        _redacted_request(body),
+                        _redacted_response(response_body),
+                    )
         except Exception as exception:
             raise ConnectFailedException(f"connect failed,{exception}") from exception
         if response.status != 200:

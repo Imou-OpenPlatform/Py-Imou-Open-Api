@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 from typing import Any
 
 import pytest
@@ -335,6 +336,31 @@ async def test_session_caps_concurrent_connections() -> None:
         assert session.connector.limit == CONNECTION_LIMIT
     finally:
         await client.async_close()
+
+
+@pytest.mark.asyncio
+async def test_debug_log_keeps_credentials_out(
+    client: ImouOpenApiClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Debug logs end up in bug reports, so they must not carry credentials.
+
+    ``sign`` is an MD5 over the app secret and the ``time`` and ``nonce`` that
+    are logged next to it, so leaking it hands over everything needed to attack
+    the secret offline.
+    """
+    install_session(client, [token_result("tok-secret"), api_result(data={"ok": True})])
+
+    with caplog.at_level(logging.DEBUG, logger="pyimouapi"):
+        await client.async_request_api(ENDPOINT, {})
+
+    assert "tok-secret" not in caplog.text
+    assert "app_secret" not in caplog.text
+    signs = [body["system"]["sign"] for _, body in client._session.requests]
+    for sign in signs:
+        assert sign not in caplog.text
+    # Still useful for debugging: the endpoint and the outcome survive.
+    assert ENDPOINT in caplog.text
+    assert "'ok': True" in caplog.text
 
 
 @pytest.mark.asyncio
