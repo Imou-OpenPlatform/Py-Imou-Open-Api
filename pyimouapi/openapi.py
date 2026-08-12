@@ -52,6 +52,7 @@ class ImouOpenApiClient:
         self._api_url = api_url
         self._access_token: str | None = None
         self._session: aiohttp.ClientSession | None = None
+        self._token_lock = asyncio.Lock()
 
     async def _async_get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -68,7 +69,33 @@ class ImouOpenApiClient:
 
     async def async_get_token(self) -> None:
         """Fetch and store accessToken."""
-        response = await self.async_request_api(API_ENDPOINT_ACCESS_TOKEN, {})
+        async with self._token_lock:
+            await self._async_fetch_token()
+
+    def _has_usable_token(self, stale_token: str | None) -> bool:
+        """Return True when a token is held and it is not the rejected one."""
+        return self._access_token is not None and self._access_token != stale_token
+
+    async def _async_ensure_token(self, stale_token: str | None = None) -> None:
+        """Fetch an accessToken unless a usable one is already held.
+
+        Concurrent callers coalesce into a single request: every waiter re-checks
+        after acquiring the lock and returns early once someone else has
+        refreshed. ``stale_token`` is the token the caller saw rejected, so a
+        refresh only happens while that same token is still the current one.
+        """
+        if self._has_usable_token(stale_token):
+            return
+        async with self._token_lock:
+            if self._has_usable_token(stale_token):
+                return
+            await self._async_fetch_token()
+
+    async def _async_fetch_token(self) -> None:
+        """Request accessToken and apply any regional host redirect."""
+        response = await self._async_request_api(
+            API_ENDPOINT_ACCESS_TOKEN, {}, refresh_on_expiry=False
+        )
         self._access_token = response[PARAM_ACCESS_TOKEN]
         if PARAM_CURRENT_DOMAIN in response:
             raw = response[PARAM_CURRENT_DOMAIN]
@@ -82,11 +109,20 @@ class ImouOpenApiClient:
         self, endpoint: str, params: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """POST to an API endpoint; returns the result data object."""
+        return await self._async_request_api(endpoint, params, refresh_on_expiry=True)
+
+    async def _async_request_api(
+        self,
+        endpoint: str,
+        params: dict[str, Any] | None,
+        *,
+        refresh_on_expiry: bool,
+    ) -> dict[str, Any]:
         payload = dict(params) if params else {}
-        if self._access_token is None and endpoint != API_ENDPOINT_ACCESS_TOKEN:
-            await self.async_get_token()
         if endpoint != API_ENDPOINT_ACCESS_TOKEN:
+            await self._async_ensure_token()
             payload[PARAM_TOKEN] = self._access_token
+        token_used = payload.get(PARAM_TOKEN)
         timestamp = round(time.time())
         nonce = secrets.token_urlsafe()
         sign = hashlib.md5(
@@ -128,9 +164,11 @@ class ImouOpenApiClient:
             msg = result_code + ":" + result_message
             if result_code in (ERROR_CODE_INVALID_SIGN, ERROR_CODE_INVALID_APP):
                 raise InvalidAppIdOrSecretException(msg)
-            if result_code == ERROR_CODE_TOKEN_OVERDUE:
-                await self.async_get_token()
-                return await self.async_request_api(endpoint, params)
+            if result_code == ERROR_CODE_TOKEN_OVERDUE and refresh_on_expiry:
+                await self._async_ensure_token(stale_token=token_used)
+                return await self._async_request_api(
+                    endpoint, params, refresh_on_expiry=False
+                )
             raise RequestFailedException(msg)
         response_data = response_body[PARAM_RESULT].get(PARAM_DATA, {})
         return response_data
