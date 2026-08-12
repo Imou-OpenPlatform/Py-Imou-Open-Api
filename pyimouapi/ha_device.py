@@ -80,7 +80,7 @@ from .const import (
     TEXT_TYPE_REF,
 )
 from .device import ImouDevice, ImouDeviceManager, compose_iot_device_id
-from .exceptions import RequestFailedException
+from .exceptions import InvalidAppIdOrSecretException, RequestFailedException
 from .select_option import normalize_options, to_friendly, to_raw
 from .sensor import apply_sensor_state
 from .siren import build_siren_start_iot_content
@@ -395,6 +395,14 @@ class ImouHaDevice:
 
 
 class ImouHaDeviceManager:
+    """Builds Home Assistant devices from the account and keeps them current.
+
+    A read that fails is logged and skipped so that one unhappy entity cannot
+    stop a poll. Refused credentials are the exception to that: they are not
+    one entity's problem, every later call will fail the same way, and the
+    caller has to be told so it can ask the user to sign in again.
+    """
+
     def __init__(self, device_manager: ImouDeviceManager):
         self._delegate = device_manager
 
@@ -582,6 +590,8 @@ class ImouHaDeviceManager:
                     len(entities),
                 )
                 await self._async_update_properties_from_detail(device, detail)
+            except InvalidAppIdOrSecretException:
+                raise
             except Exception as e:
                 _LOGGER.error("async_get_iot_device_detail_info failed: %s", e)
 
@@ -603,7 +613,9 @@ class ImouHaDeviceManager:
     ) -> None:
         """Run status reads together, letting one failure not hide the rest."""
         for result in await asyncio.gather(*coroutines, return_exceptions=True):
-            if isinstance(result, asyncio.CancelledError):
+            if isinstance(
+                result, asyncio.CancelledError | InvalidAppIdOrSecretException
+            ):
                 raise result
             if isinstance(result, BaseException):
                 _LOGGER.warning(
@@ -639,6 +651,9 @@ class ImouHaDeviceManager:
             ],
             return_exceptions=True,
         )
+        for result in results:
+            if isinstance(result, InvalidAppIdOrSecretException):
+                raise result
         # Gathered exceptions arrive as objects, and every object is
         # truthy, so a failed read would otherwise show as "on".
         device.switches[switch_type][PARAM_STATE] = any(
@@ -680,6 +695,8 @@ class ImouHaDeviceManager:
                     device.device_id, str(device.channel_id)
                 )
                 names = parse_paas_collection_names(data)
+        except InvalidAppIdOrSecretException:
+            raise
         except Exception as err:
             _LOGGER.warning(
                 "Failed to fetch collection points for %s: %s",
@@ -757,6 +774,8 @@ class ImouHaDeviceManager:
                             self.get_device_status(channel[PARAM_ONLINE]),
                         )
                         break
+        except InvalidAppIdOrSecretException:
+            raise
         except Exception as e:
             _LOGGER.error("_async_update_device_status error:  %s", e)
 
@@ -1075,6 +1094,8 @@ class ImouHaDeviceManager:
                 device.device_id, device.channel_id, ability_type
             )
             return data[PARAM_STATUS] == PARAM_ON
+        except InvalidAppIdOrSecretException:
+            raise
         except Exception as e:
             _LOGGER.warning("_async_get_device_switch_status_by_ability fail:%s", e)
             return False
@@ -1092,6 +1113,8 @@ class ImouHaDeviceManager:
         if select_type == PARAM_NIGHT_VISION_MODE:
             try:
                 await self._async_update_device_night_vision_mode(device)
+            except InvalidAppIdOrSecretException:
+                raise
             except Exception as e:
                 _LOGGER.warning("_async_update_device_select_status_by_type fail:%s", e)
                 device.selects[PARAM_NIGHT_VISION_MODE] = {
@@ -1428,6 +1451,8 @@ class ImouHaDeviceManager:
                     kind="switch",
                     key=switch_type,
                 )
+        except InvalidAppIdOrSecretException:
+            raise
         except Exception as e:
             _LOGGER.error("_async_update_device_switch_status_by_ref fail:%s", e)
 
@@ -1445,6 +1470,8 @@ class ImouHaDeviceManager:
             if state is None:
                 return
             apply_sensor_state(device.sensors, sensor_type, state)
+        except InvalidAppIdOrSecretException:
+            raise
         except Exception as e:
             _LOGGER.error("_async_update_device_sensor_status_by_ref fail:%s", e)
 
@@ -1582,6 +1609,8 @@ class ImouHaDeviceManager:
                     kind="binary_sensor",
                     key=binary_sensor_type,
                 )
+        except InvalidAppIdOrSecretException:
+            raise
         except Exception as e:
             _LOGGER.warning(
                 "_async_update_device_binary_sensor_status_by_ref fail:%s", e
@@ -1651,6 +1680,8 @@ class ImouHaDeviceManager:
             device.texts[text_type][PARAM_STATE] = (
                 str(state) if isinstance(state, int) else state
             )
+        except InvalidAppIdOrSecretException:
+            raise
         except Exception as e:
             _LOGGER.error("_async_update_device_text_status_by_ref fail:%s", e)
 
