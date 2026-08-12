@@ -17,7 +17,7 @@ from pyimouapi.exceptions import (
     InvalidAppIdOrSecretException,
     RequestFailedException,
 )
-from pyimouapi.openapi import ImouOpenApiClient
+from pyimouapi.openapi import CONNECTION_LIMIT, ImouOpenApiClient
 
 ENDPOINT = "/openapi/deviceBaseList"
 
@@ -49,16 +49,44 @@ class FakeResponse:
         return json.dumps(self._payload)
 
 
+class FakeBinaryResponse:
+    """Minimal aiohttp response stand-in for binary downloads."""
+
+    def __init__(self, status: int, payload: bytes) -> None:
+        """Initialize the response."""
+        self.status = status
+        self._payload = payload
+
+    async def read(self) -> bytes:
+        """Return the body."""
+        return self._payload
+
+
 class FakeSession:
     """Records requests and replays queued responses."""
 
-    def __init__(self, responses: list[Any], *, delay: float = 0) -> None:
+    def __init__(
+        self,
+        responses: list[Any],
+        *,
+        delay: float = 0,
+        download_status: int = 200,
+        download_payload: bytes = b"jpeg-bytes",
+    ) -> None:
         """Initialize with a queue of responses or exceptions to raise."""
         self._responses = list(responses)
         self._delay = delay
+        self._download_status = download_status
+        self._download_payload = download_payload
         self.closed = False
         self.requests: list[tuple[str, dict[str, Any]]] = []
+        self.downloads: list[str] = []
         self.close_count = 0
+
+    async def get(self, url: str, *, timeout: Any = None) -> FakeBinaryResponse:
+        """Return the configured binary payload."""
+        self.downloads.append(url)
+        return FakeBinaryResponse(self._download_status, self._download_payload)
 
     async def request(
         self, method: str, url: str, *, json: dict[str, Any], headers: dict[str, str]
@@ -87,10 +115,10 @@ def client() -> ImouOpenApiClient:
 
 
 def install_session(
-    client: ImouOpenApiClient, responses: list[Any], *, delay: float = 0
+    client: ImouOpenApiClient, responses: list[Any], **kwargs: Any
 ) -> FakeSession:
     """Attach a fake session so no real HTTP is attempted."""
-    session = FakeSession(responses, delay=delay)
+    session = FakeSession(responses, **kwargs)
     client._session = session
     return session
 
@@ -241,6 +269,45 @@ async def test_current_domain_updates_api_host(client: ImouOpenApiClient) -> Non
     await client.async_get_token()
 
     assert client._api_url == "openapi-eu.example.com"
+
+
+@pytest.mark.asyncio
+async def test_download_uses_the_shared_session(client: ImouOpenApiClient) -> None:
+    """Snapshots reuse the API session instead of building one per download."""
+    session = install_session(client, [])
+
+    assert await client.async_download("https://cdn.example.com/snap.jpg") == (
+        b"jpeg-bytes"
+    )
+    await client.async_download("https://cdn.example.com/snap2.jpg")
+
+    assert session.downloads == [
+        "https://cdn.example.com/snap.jpg",
+        "https://cdn.example.com/snap2.jpg",
+    ]
+    assert await client._async_get_session() is session
+
+
+@pytest.mark.asyncio
+async def test_download_raises_on_error_status(client: ImouOpenApiClient) -> None:
+    """A non-200 download surfaces as RequestFailedException."""
+    install_session(client, [], download_status=404)
+
+    with pytest.raises(RequestFailedException, match="404"):
+        await client.async_download("https://cdn.example.com/missing.jpg")
+
+
+@pytest.mark.asyncio
+async def test_session_caps_concurrent_connections() -> None:
+    """Batched polls must not open one socket per device."""
+    client = ImouOpenApiClient("app_id", "app_secret", "api.example.com")
+
+    session = await client._async_get_session()
+    try:
+        assert session.connector is not None
+        assert session.connector.limit == CONNECTION_LIMIT
+    finally:
+        await client.async_close()
 
 
 @pytest.mark.asyncio

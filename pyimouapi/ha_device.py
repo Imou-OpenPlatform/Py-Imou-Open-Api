@@ -3,7 +3,6 @@ import logging
 from enum import Enum
 from typing import Any
 
-import aiohttp
 from simpleeval import SimpleEval
 
 from .collection_point import (
@@ -657,14 +656,7 @@ class ImouHaDeviceManager:
             _LOGGER.debug(f"wait {wait_seconds} seconds to download a picture")
             await asyncio.sleep(wait_seconds)
         try:
-            timeout = aiohttp.ClientTimeout(total=120)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                response = await session.get(data[PARAM_URL])
-                if response.status != 200:
-                    raise RequestFailedException(
-                        f"request failed,status code {response.status}"
-                    )
-                return await response.read()
+            return await self.delegate.async_download(data[PARAM_URL])
         except Exception as exception:
             _LOGGER.error("error get_device_image %s", exception)
             return None

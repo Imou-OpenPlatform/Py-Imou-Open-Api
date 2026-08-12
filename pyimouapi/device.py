@@ -273,6 +273,10 @@ class ImouDeviceManager:
         """Close the underlying Open API HTTP session."""
         await self._imou_api_client.async_close()
 
+    async def async_download(self, url: str) -> bytes:
+        """GET a binary payload over the shared Open API session."""
+        return await self._imou_api_client.async_download(url)
+
     async def _async_lock_for_product(self, product_id: str) -> asyncio.Lock:
         async with self._event_map_locks_guard:
             lock = self._event_map_locks.get(product_id)

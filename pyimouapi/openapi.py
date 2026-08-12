@@ -42,6 +42,8 @@ from .exceptions import (
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
+CONNECTION_LIMIT = 10
+
 
 class ImouOpenApiClient:
     """Async client for Imou Open Platform HTTP API."""
@@ -58,8 +60,21 @@ class ImouOpenApiClient:
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(
                 headers={"Client-Type": "HomeAssistant"},
+                # Requests are issued in batches per poll; cap them so a large
+                # account cannot open a connection per device at once.
+                connector=aiohttp.TCPConnector(limit=CONNECTION_LIMIT),
             )
         return self._session
+
+    async def async_download(self, url: str, timeout: int = 120) -> bytes:
+        """GET a binary payload such as a device snapshot."""
+        session = await self._async_get_session()
+        response = await session.get(url, timeout=aiohttp.ClientTimeout(total=timeout))
+        if response.status != 200:
+            raise RequestFailedException(
+                f"request failed,status code {response.status}"
+            )
+        return await response.read()
 
     async def async_close(self) -> None:
         """Close the HTTP session (call when done with the client)."""
