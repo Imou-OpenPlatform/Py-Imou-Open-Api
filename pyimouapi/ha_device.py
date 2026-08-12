@@ -557,7 +557,9 @@ class ImouHaDeviceManager:
         # The device status is updated first, and if it's not online, the other entity status isn't updated
         await self._async_update_status(device)
         if device.sensors[PARAM_STATUS][PARAM_STATE] == DeviceStatus.OFFLINE.value:
-            _LOGGER.info("device %s is offline,stop updating", device.device_name)
+            # Logged every poll for as long as the device stays offline, which is
+            # routine for battery cameras that sleep.
+            _LOGGER.debug("device %s is offline,stop updating", device.device_name)
             return
 
         if device.product_id is not None:
