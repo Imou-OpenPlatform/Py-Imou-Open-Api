@@ -1,7 +1,8 @@
 import asyncio
 import logging
+from collections.abc import Callable
 from enum import Enum
-from typing import Any
+from typing import Any, NamedTuple
 
 from simpleeval import SimpleEval
 
@@ -143,6 +144,130 @@ PRODUCT_MODEL_ILLEGAL_LIST = [
     "Q3YSZ54R",
     "BDHCWWPX",
 ]
+
+
+def _add_switch_from_ref(
+    entities: dict[str, Any], switch_type: str, ref: dict[str, Any]
+) -> None:
+    entities[switch_type] = {
+        PARAM_STATE: ref[PARAM_DEFAULT],
+        PARAM_REF: ref[PARAM_REF],
+    }
+
+
+def _add_button_from_ref(
+    entities: dict[str, Any], button_type: str, ref: dict[str, Any]
+) -> None:
+    button_entry = {PARAM_REF: ref[PARAM_REF]}
+    if ref.get(PARAM_INPUT_REF):
+        button_entry[PARAM_INPUT_REF] = ref[PARAM_INPUT_REF]
+    entities[button_type] = button_entry
+
+
+def _add_select_from_ref(
+    entities: dict[str, Any], select_type: str, ref: dict[str, Any]
+) -> None:
+    select_entry = {
+        PARAM_REF: ref[PARAM_REF],
+        PARAM_OPTIONS: ref[PARAM_OPTIONS],
+        PARAM_CURRENT_OPTION: ref[PARAM_DEFAULT],
+        PARAM_VALUE_TYPE: ref.get(PARAM_VALUE_TYPE, "str"),
+    }
+    if ref.get(PARAM_TURN_REF):
+        select_entry[PARAM_TURN_REF] = ref[PARAM_TURN_REF]
+        select_entry[PARAM_TURN_INPUT_REF] = ref.get(PARAM_TURN_INPUT_REF)
+        select_entry[PARAM_REF_TYPE] = ref.get(PARAM_REF_TYPE, PARAM_PROPERTIES)
+    entities[select_type] = select_entry
+
+
+def _add_sensor_from_ref(
+    entities: dict[str, Any], sensor_type: str, ref: dict[str, Any]
+) -> None:
+    entities[sensor_type] = {
+        PARAM_REF: ref[PARAM_REF],
+        PARAM_REF_TYPE: ref.get(PARAM_REF_TYPE),
+        PARAM_EXPRESSION: ref.get(PARAM_EXPRESSION),
+    }
+    apply_sensor_state(entities, sensor_type, ref[PARAM_DEFAULT])
+
+
+def _add_binary_sensor_from_ref(
+    entities: dict[str, Any], binary_sensor_type: str, ref: dict[str, Any]
+) -> None:
+    entities[binary_sensor_type] = {
+        PARAM_REF: ref[PARAM_REF],
+        PARAM_STATE: ref[PARAM_DEFAULT],
+    }
+
+
+def _add_text_from_ref(
+    entities: dict[str, Any], text_type: str, ref: dict[str, Any]
+) -> None:
+    entities[text_type] = {
+        PARAM_REF: ref[PARAM_REF],
+        PARAM_STATE: ref[PARAM_DEFAULT],
+        PARAM_REF_TYPE: ref.get(PARAM_REF_TYPE),
+        PARAM_VALUE_TYPE: ref.get(PARAM_VALUE_TYPE, "str"),
+        PARAM_EXPRESSION: ref.get(PARAM_EXPRESSION),
+    }
+
+
+class _RefEntityTable(NamedTuple):
+    """How one platform's ref table becomes entities on a device."""
+
+    refs: dict[str, list[dict[str, Any]]]
+    # Name of the ImouHaDevice attribute holding that platform's entities.
+    attribute: str
+    add: Callable[[dict[str, Any], str, dict[str, Any]], None]
+
+
+_SWITCH_REF_TABLE = _RefEntityTable(SWITCH_TYPE_REF, "switches", _add_switch_from_ref)
+_BUTTON_REF_TABLE = _RefEntityTable(BUTTON_TYPE_REF, "buttons", _add_button_from_ref)
+_SELECT_REF_TABLE = _RefEntityTable(SELECT_TYPE_REF, "selects", _add_select_from_ref)
+_SENSOR_REF_TABLE = _RefEntityTable(SENSOR_TYPE_REF, "sensors", _add_sensor_from_ref)
+_BINARY_SENSOR_REF_TABLE = _RefEntityTable(
+    BINARY_SENSOR_TYPE_REF, "binary_sensors", _add_binary_sensor_from_ref
+)
+_TEXT_REF_TABLE = _RefEntityTable(TEXT_TYPE_REF, "texts", _add_text_from_ref)
+
+_REF_ENTITY_TABLES = (
+    _SWITCH_REF_TABLE,
+    _BUTTON_REF_TABLE,
+    _SELECT_REF_TABLE,
+    _SENSOR_REF_TABLE,
+    _BINARY_SENSOR_REF_TABLE,
+    _TEXT_REF_TABLE,
+)
+
+
+def _configure_by_ref(
+    table: _RefEntityTable,
+    channel_ability_refs: list[str],
+    is_ipc: bool,
+    device_ability_refs: list[str],
+    imou_ha_device: "ImouHaDevice",
+) -> None:
+    """Add one entity per type, built from the first ref the device exposes.
+
+    Refs later in a list are fallbacks for firmware that reports a different id
+    for the same feature, so the loop stops once a type has been configured.
+    """
+    entities = getattr(imou_ha_device, table.attribute)
+    for entity_type, ref_list in table.refs.items():
+        for ref in ref_list:
+            if ImouHaDeviceManager.entity_need_add_to_device_by_ref(
+                ref[PARAM_REF],
+                channel_ability_refs,
+                device_ability_refs,
+                is_ipc,
+                imou_ha_device.channel_id,
+                entity_type,
+                entities,
+                imou_ha_device.product_id,
+                ref.get(PARAM_EXCEPTS, []),
+            ):
+                table.add(entities, entity_type, ref)
+                break
 
 
 class ImouHaDevice:
@@ -1088,42 +1213,14 @@ class ImouHaDeviceManager:
         device_ability_refs: list[str],
         imou_ha_device: ImouHaDevice,
     ):
-        self.configure_switch_by_ref(
-            channel_ability_refs,
-            is_ipc,
-            device_ability_refs,
-            imou_ha_device,
-        )
-        self.configure_button_by_ref(
-            channel_ability_refs,
-            is_ipc,
-            device_ability_refs,
-            imou_ha_device,
-        )
-        self.configure_select_by_ref(
-            channel_ability_refs,
-            is_ipc,
-            device_ability_refs,
-            imou_ha_device,
-        )
-        self.configure_sensor_by_ref(
-            channel_ability_refs,
-            is_ipc,
-            device_ability_refs,
-            imou_ha_device,
-        )
-        self.configure_binary_sensor_by_ref(
-            channel_ability_refs,
-            is_ipc,
-            device_ability_refs,
-            imou_ha_device,
-        )
-        self.configure_text_by_ref(
-            channel_ability_refs,
-            is_ipc,
-            device_ability_refs,
-            imou_ha_device,
-        )
+        for table in _REF_ENTITY_TABLES:
+            _configure_by_ref(
+                table,
+                channel_ability_refs,
+                is_ipc,
+                device_ability_refs,
+                imou_ha_device,
+            )
 
     @staticmethod
     def entity_need_add_to_device(
@@ -1185,24 +1282,13 @@ class ImouHaDeviceManager:
         device_ability_refs: list[str],
         imou_ha_device: ImouHaDevice,
     ):
-        for switch_type, ref_list in SWITCH_TYPE_REF.items():
-            for ref in ref_list:
-                if ImouHaDeviceManager.entity_need_add_to_device_by_ref(
-                    ref[PARAM_REF],
-                    channel_ability_refs,
-                    device_ability_refs,
-                    is_ipc,
-                    imou_ha_device.channel_id,
-                    switch_type,
-                    imou_ha_device.switches,
-                    imou_ha_device.product_id,
-                    ref.get(PARAM_EXCEPTS, []),
-                ):
-                    imou_ha_device.switches[switch_type] = {
-                        PARAM_STATE: ref[PARAM_DEFAULT],
-                        PARAM_REF: ref[PARAM_REF],
-                    }
-                    break
+        _configure_by_ref(
+            _SWITCH_REF_TABLE,
+            channel_ability_refs,
+            is_ipc,
+            device_ability_refs,
+            imou_ha_device,
+        )
 
     @staticmethod
     def configure_button_by_ref(
@@ -1211,24 +1297,13 @@ class ImouHaDeviceManager:
         device_ability_refs: list[str],
         imou_ha_device: ImouHaDevice,
     ):
-        for button_type, ref_list in BUTTON_TYPE_REF.items():
-            for ref in ref_list:
-                if ImouHaDeviceManager.entity_need_add_to_device_by_ref(
-                    ref[PARAM_REF],
-                    channel_ability_refs,
-                    device_ability_refs,
-                    is_ipc,
-                    imou_ha_device.channel_id,
-                    button_type,
-                    imou_ha_device.buttons,
-                    imou_ha_device.product_id,
-                    ref.get(PARAM_EXCEPTS, []),
-                ):
-                    button_entry = {PARAM_REF: ref[PARAM_REF]}
-                    if ref.get(PARAM_INPUT_REF):
-                        button_entry[PARAM_INPUT_REF] = ref[PARAM_INPUT_REF]
-                    imou_ha_device.buttons[button_type] = button_entry
-                    break
+        _configure_by_ref(
+            _BUTTON_REF_TABLE,
+            channel_ability_refs,
+            is_ipc,
+            device_ability_refs,
+            imou_ha_device,
+        )
 
     @staticmethod
     def configure_select_by_ref(
@@ -1237,35 +1312,13 @@ class ImouHaDeviceManager:
         device_ability_refs: list[str],
         imou_ha_device: ImouHaDevice,
     ):
-        for select_type, ref_list in SELECT_TYPE_REF.items():
-            for ref in ref_list:
-                if ImouHaDeviceManager.entity_need_add_to_device_by_ref(
-                    ref[PARAM_REF],
-                    channel_ability_refs,
-                    device_ability_refs,
-                    is_ipc,
-                    imou_ha_device.channel_id,
-                    select_type,
-                    imou_ha_device.selects,
-                    imou_ha_device.product_id,
-                    ref.get(PARAM_EXCEPTS, []),
-                ):
-                    select_entry = {
-                        PARAM_REF: ref[PARAM_REF],
-                        PARAM_OPTIONS: ref[PARAM_OPTIONS],
-                        PARAM_CURRENT_OPTION: ref[PARAM_DEFAULT],
-                        PARAM_VALUE_TYPE: ref.get(PARAM_VALUE_TYPE, "str"),
-                    }
-                    if ref.get(PARAM_TURN_REF):
-                        select_entry[PARAM_TURN_REF] = ref[PARAM_TURN_REF]
-                        select_entry[PARAM_TURN_INPUT_REF] = ref.get(
-                            PARAM_TURN_INPUT_REF
-                        )
-                        select_entry[PARAM_REF_TYPE] = ref.get(
-                            PARAM_REF_TYPE, PARAM_PROPERTIES
-                        )
-                    imou_ha_device.selects[select_type] = select_entry
-                    break
+        _configure_by_ref(
+            _SELECT_REF_TABLE,
+            channel_ability_refs,
+            is_ipc,
+            device_ability_refs,
+            imou_ha_device,
+        )
 
     @staticmethod
     def configure_sensor_by_ref(
@@ -1274,28 +1327,13 @@ class ImouHaDeviceManager:
         device_ability_refs: list[str],
         imou_ha_device: ImouHaDevice,
     ):
-        for sensor_type, ref_list in SENSOR_TYPE_REF.items():
-            for ref in ref_list:
-                if ImouHaDeviceManager.entity_need_add_to_device_by_ref(
-                    ref[PARAM_REF],
-                    channel_ability_refs,
-                    device_ability_refs,
-                    is_ipc,
-                    imou_ha_device.channel_id,
-                    sensor_type,
-                    imou_ha_device.sensors,
-                    imou_ha_device.product_id,
-                    ref.get(PARAM_EXCEPTS, []),
-                ):
-                    imou_ha_device.sensors[sensor_type] = {
-                        PARAM_REF: ref[PARAM_REF],
-                        PARAM_REF_TYPE: ref.get(PARAM_REF_TYPE),
-                        PARAM_EXPRESSION: ref.get(PARAM_EXPRESSION),
-                    }
-                    apply_sensor_state(
-                        imou_ha_device.sensors, sensor_type, ref[PARAM_DEFAULT]
-                    )
-                    break
+        _configure_by_ref(
+            _SENSOR_REF_TABLE,
+            channel_ability_refs,
+            is_ipc,
+            device_ability_refs,
+            imou_ha_device,
+        )
 
     @staticmethod
     def configure_binary_sensor_by_ref(
@@ -1304,24 +1342,13 @@ class ImouHaDeviceManager:
         device_ability_refs: list[str],
         imou_ha_device: ImouHaDevice,
     ):
-        for binary_sensor_type, ref_list in BINARY_SENSOR_TYPE_REF.items():
-            for ref in ref_list:
-                if ImouHaDeviceManager.entity_need_add_to_device_by_ref(
-                    ref[PARAM_REF],
-                    channel_ability_refs,
-                    device_ability_refs,
-                    is_ipc,
-                    imou_ha_device.channel_id,
-                    binary_sensor_type,
-                    imou_ha_device.binary_sensors,
-                    imou_ha_device.product_id,
-                    ref.get(PARAM_EXCEPTS, []),
-                ):
-                    imou_ha_device.binary_sensors[binary_sensor_type] = {
-                        PARAM_REF: ref[PARAM_REF],
-                        PARAM_STATE: ref[PARAM_DEFAULT],
-                    }
-                    break
+        _configure_by_ref(
+            _BINARY_SENSOR_REF_TABLE,
+            channel_ability_refs,
+            is_ipc,
+            device_ability_refs,
+            imou_ha_device,
+        )
 
     async def _async_update_device_switch_status_by_ref(
         self, device: ImouHaDevice, switch_type: str, ref: str
@@ -1554,27 +1581,13 @@ class ImouHaDeviceManager:
         device_ability_refs: list[str],
         imou_ha_device: ImouHaDevice,
     ):
-        for text_type, ref_list in TEXT_TYPE_REF.items():
-            for ref in ref_list:
-                if ImouHaDeviceManager.entity_need_add_to_device_by_ref(
-                    ref[PARAM_REF],
-                    channel_ability_refs,
-                    device_ability_refs,
-                    is_ipc,
-                    imou_ha_device.channel_id,
-                    text_type,
-                    imou_ha_device.texts,
-                    imou_ha_device.product_id,
-                    ref.get(PARAM_EXCEPTS, []),
-                ):
-                    imou_ha_device.texts[text_type] = {
-                        PARAM_REF: ref[PARAM_REF],
-                        PARAM_STATE: ref[PARAM_DEFAULT],
-                        PARAM_REF_TYPE: ref.get(PARAM_REF_TYPE),
-                        PARAM_VALUE_TYPE: ref.get(PARAM_VALUE_TYPE, "str"),
-                        PARAM_EXPRESSION: ref.get(PARAM_EXPRESSION),
-                    }
-                    break
+        _configure_by_ref(
+            _TEXT_REF_TABLE,
+            channel_ability_refs,
+            is_ipc,
+            device_ability_refs,
+            imou_ha_device,
+        )
 
     async def _async_update_device_text_status(self, device: ImouHaDevice):
         for text_type, value in device.texts.items():
