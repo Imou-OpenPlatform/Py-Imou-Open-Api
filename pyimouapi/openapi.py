@@ -94,8 +94,12 @@ class ImouOpenApiClient:
             self._session = aiohttp.ClientSession(
                 headers={"Client-Type": "HomeAssistant"},
                 # Requests are issued in batches per poll; cap them so a large
-                # account cannot open a connection per device at once.
-                connector=aiohttp.TCPConnector(limit=CONNECTION_LIMIT),
+                # account cannot open a connection per device at once. The cap
+                # is per host, not total: snapshots come from storage rather
+                # than the API host, and a handful of slow downloads holding
+                # every slot in one shared pool would queue API calls until
+                # they hit their own deadline and report a connection failure.
+                connector=aiohttp.TCPConnector(limit_per_host=CONNECTION_LIMIT),
             )
         return self._session
 

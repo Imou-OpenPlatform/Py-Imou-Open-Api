@@ -1,6 +1,7 @@
 """Tests for ImouDeviceManager.async_get_devices ability-ref fetching."""
 
 import asyncio
+import logging
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -95,16 +96,35 @@ async def test_non_iot_devices_skip_detail_requests() -> None:
 
 
 @pytest.mark.asyncio
-async def test_detail_failure_still_propagates() -> None:
-    """A failing detail call must not be swallowed by the concurrent fetch."""
+async def test_one_failing_detail_does_not_cost_the_whole_account(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An accessory that will not answer must not hide every other device.
+
+    The detail call fails for an accessory that is offline, rate limited, or
+    answering 5xx. Raising here left Home Assistant with no devices at all for
+    as long as that one device stayed unhappy.
+    """
     devices = [make_device(f"dev{i}", f"prod{i}") for i in range(3)]
     manager, _ = make_manager({1: {PARAM_COUNT: 3, PARAM_DEVICE_LIST: devices}})
-    manager.async_get_iot_device_detail_info = AsyncMock(
-        side_effect=RuntimeError("detail boom")
-    )
 
-    with pytest.raises(RuntimeError, match="detail boom"):
-        await manager.async_get_devices()
+    async def detail(device_id: str, product_id: str) -> dict:
+        if device_id == "dev1":
+            raise RuntimeError("detail boom")
+        return {PARAM_ABILITY_REFS: "1,2,3"}
+
+    manager.async_get_iot_device_detail_info = detail
+
+    with caplog.at_level(logging.WARNING):
+        result = await manager.async_get_devices()
+
+    assert [device.device_id for device in result] == ["dev0", "dev1", "dev2"]
+    assert result[0].device_ability_refs == "1,2,3"
+    assert result[2].device_ability_refs == "1,2,3"
+    # The one that failed keeps its placeholder and is retried next listing.
+    assert result[1].device_ability_refs == "unknown"
+    assert "dev1" in caplog.text
+    assert "detail boom" in caplog.text
 
 
 @pytest.mark.asyncio

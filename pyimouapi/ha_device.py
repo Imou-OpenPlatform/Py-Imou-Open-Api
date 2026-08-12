@@ -549,7 +549,6 @@ class ImouHaDeviceManager:
 
         Each one costs its own iotDeviceControl call because the API has no batch
         form for service reads, so issue them concurrently instead of serially.
-        Every update swallows its own errors, so gather cannot fail here.
         """
         updates = [
             self._async_update_device_sensor_status_by_ref(device, sensor_type, value)
@@ -561,8 +560,7 @@ class ImouHaDeviceManager:
             for text_type, value in device.texts.items()
             if self._reads_through_service(value)
         )
-        if updates:
-            await asyncio.gather(*updates)
+        await self._async_gather_reads(updates, device, "service-backed entities")
 
     async def async_update_device_status(self, device: ImouHaDevice) -> None:
         """Update device status, with the updater calling every time the coordinator is updated"""

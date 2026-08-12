@@ -378,13 +378,18 @@ async def test_failed_download_releases_its_connection(
 
 @pytest.mark.asyncio
 async def test_session_caps_concurrent_connections() -> None:
-    """Batched polls must not open one socket per device."""
+    """Batched polls must not open one socket per device against a host.
+
+    The cap is per host rather than total, so snapshots downloaded from
+    storage cannot hold every slot and leave API calls queueing.
+    """
     client = ImouOpenApiClient("app_id", "app_secret", "api.example.com")
 
     session = await client._async_get_session()
     try:
         assert session.connector is not None
-        assert session.connector.limit == CONNECTION_LIMIT
+        assert session.connector.limit_per_host == CONNECTION_LIMIT
+        assert session.connector.limit > CONNECTION_LIMIT
     finally:
         await client.async_close()
 

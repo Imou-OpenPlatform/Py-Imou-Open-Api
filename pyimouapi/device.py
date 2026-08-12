@@ -398,17 +398,30 @@ class ImouDeviceManager:
         # Each iot device costs one getIotDeviceDetailInfo call; issue them together
         # so listing N devices is one round trip instead of N serial ones
         if iot_devices:
-            await asyncio.gather(
+            # One accessory that is offline, rate limited, or answering 5xx must
+            # not cost the caller its whole account. That device keeps its
+            # "unknown" refs and comes back with the next listing.
+            results = await asyncio.gather(
                 *(
                     self._async_update_device_ability_refs(iot_device)
                     for iot_device in iot_devices
-                )
+                ),
+                return_exceptions=True,
             )
+            for iot_device, result in zip(iot_devices, results, strict=True):
+                if isinstance(result, asyncio.CancelledError):
+                    raise result
+                if isinstance(result, BaseException):
+                    _LOGGER.warning(
+                        "Could not read ability refs for device %s: %s",
+                        iot_device.device_id,
+                        result,
+                    )
         # A full page may have more behind it. This counts what actually arrived
         # rather than trusting `count`, which stops the paging either way: were
         # that field the account total instead of this page's size, an account
         # holding an exact multiple of page_size would page on forever.
-        if len(device_list) == page_size:
+        if len(device_list) >= page_size:
             devices.extend(await self.async_get_devices(page + 1, page_size))
         return devices
 
