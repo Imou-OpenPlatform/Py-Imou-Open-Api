@@ -970,9 +970,12 @@ class ImouHaDeviceManager:
                 ],
                 return_exceptions=True,
             )
-            # Request all failed, consider this operation a failure
-            if all(isinstance(result_item, Exception) for result_item in result):
-                raise result[0]
+            failures = [item for item in result if isinstance(item, BaseException)]
+            # Nothing got through, so the device never took the new state; report
+            # the first error instead. Guarded on there being one, since all() is
+            # true for an empty ability list and would index into nothing.
+            if failures and len(failures) == len(result):
+                raise failures[0]
         device.switches[switch_type][PARAM_STATE] = enable
 
     async def async_select_option(

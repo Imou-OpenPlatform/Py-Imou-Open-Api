@@ -8,10 +8,12 @@ from pyimouapi.const import PARAM_FUNCTION_TYPE, PARAM_STATE
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
 
-def build_device(function_type: Any) -> ImouHaDevice:
+def build_device(
+    function_type: Any, switch_type: str = "motion_detect"
+) -> ImouHaDevice:
     """Return a device with one ability-backed switch, reported as on."""
     device = ImouHaDevice("dev0", "Cam", "Imou", "Cam", "1.0")
-    device.switches["motion_detect"] = {
+    device.switches[switch_type] = {
         PARAM_FUNCTION_TYPE: function_type,
         PARAM_STATE: True,
     }
@@ -52,6 +54,36 @@ async def test_any_enabled_ability_turns_the_switch_on() -> None:
     await manager._async_update_device_switch_status(device)
 
     assert device.switches["motion_detect"][PARAM_STATE] is True
+
+
+@pytest.mark.asyncio
+async def test_every_write_failing_surfaces_the_first_error() -> None:
+    """When no ability accepted the write, the caller must hear about it."""
+    manager = ImouHaDeviceManager(MagicMock())
+    device = build_device(["closeCamera"], switch_type="close_camera")
+
+    async def boom(_device: ImouHaDevice, _ability: str, _enable: bool) -> None:
+        raise RuntimeError("write rejected")
+
+    manager._async_set_device_switch_status_by_ability = boom
+
+    with pytest.raises(RuntimeError, match="write rejected"):
+        await manager.async_switch_operation(device, "close_camera", False)
+
+
+@pytest.mark.asyncio
+async def test_a_switch_with_no_abilities_does_not_crash() -> None:
+    """An empty ability list has nothing to fail, so nothing is raised.
+
+    all() is true for an empty sequence, so asking for the first failure would
+    have raised IndexError at whoever pressed the switch.
+    """
+    manager = ImouHaDeviceManager(MagicMock())
+    device = build_device([], switch_type="close_camera")
+
+    await manager.async_switch_operation(device, "close_camera", True)
+
+    assert device.switches["close_camera"][PARAM_STATE] is True
 
 
 @pytest.mark.asyncio
