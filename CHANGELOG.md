@@ -7,6 +7,13 @@ All notable changes to this project will be documented in this file.
 Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so
 this is a drop-in replacement for 1.3.4.
 
+### Breaking
+
+- The `motion_detect` switch is no longer offered for product_id `FKX9UYL4`. That model advertises refs `14800` and `305000` but cannot serve them, so the entity never worked; consumers that had one will see it disappear
+- `async_get_device_image()` raises the reason a snapshot failed instead of logging it and returning `None`, so a caller can put it in front of a user
+- A 5xx response raises `ConnectFailedException` rather than `RequestFailedException`. Callers separating "could not reach the service" from "the request was refused" get the former for gateway and outage responses
+- Writing a switch that resolves to no ability raises instead of reporting the write as done
+
 ### Security
 
 - Debug logging no longer prints the request signature, `token`, or `accessToken`. Turning on debug logs used to write live credentials into the Home Assistant log, which is included verbatim in the diagnostics users attach to bug reports
@@ -38,7 +45,10 @@ this is a drop-in replacement for 1.3.4.
 - A failed switch read no longer reads as the switch being on. The gathered exception was an object, and every object is truthy
 - Writing a switch that resolves to no abilities no longer raises `IndexError`
 - An accessory is addressed with its composite id only when both parent ids are known; a missing parent id used to raise `TypeError` and take down the whole device listing
-- Annotations the package promises its callers are correct, and the type checker runs in CI to keep them that way
+- The connection cap is per host rather than total. Snapshots are fetched from storage and allowed a far longer budget, so a few of them held every slot in the shared pool while API calls queued past their own deadline and were reported as connection failures
+- Listing an account survives one accessory that cannot be read. That device keeps its placeholder refs and is retried by the next listing, instead of costing the caller every other device for as long as it stays unhappy
+- Downloads report a network failure as `ConnectFailedException` instead of letting a raw `aiohttp` error escape
+- Annotations the package promises its callers are correct, and the type checker runs in CI to keep them that way. The `delegate` property had no return type, which hid fourteen real mismatches from the checker
 
 ### Changed
 
