@@ -286,19 +286,19 @@ class ImouHaDevice:
         self._manufacturer = manufacturer
         self._model = model
         self._swversion = swversion
-        self._switches = {}
+        self._switches: dict[str, dict[str, Any]] = {}
         self._sensors: dict[str, dict[str, Any]] = {}
         apply_sensor_state(self._sensors, PARAM_STATUS, DeviceStatus.OFFLINE.value)
-        self._binary_sensors = {}
-        self._selects = {}
-        self._buttons = {}
-        self._texts = {}
+        self._binary_sensors: dict[str, dict[str, Any]] = {}
+        self._selects: dict[str, dict[str, Any]] = {}
+        self._buttons: dict[str, dict[str, Any]] = {}
+        self._texts: dict[str, dict[str, Any]] = {}
         self._channel_id = None
         self._channel_name = None
         self._is_ipc = False
-        self._product_id = None
-        self._parent_product_id = None
-        self._parent_device_id = None
+        self._product_id: str | None = None
+        self._parent_product_id: str | None = None
+        self._parent_device_id: str | None = None
 
     @property
     def device_id(self):
@@ -353,15 +353,15 @@ class ImouHaDevice:
         return self._texts
 
     @property
-    def product_id(self) -> str:
+    def product_id(self) -> str | None:
         return self._product_id
 
     @property
-    def parent_product_id(self) -> str:
+    def parent_product_id(self) -> str | None:
         return self._parent_product_id
 
     @property
-    def parent_device_id(self) -> str:
+    def parent_device_id(self) -> str | None:
         return self._parent_device_id
 
     @property
@@ -923,6 +923,7 @@ class ImouHaDeviceManager:
             else:
                 value_type = device.texts[text_type].get(PARAM_VALUE_TYPE)
                 device_id = self._resolve_device_id(device)
+                value: int | str
                 if value_type == "int":
                     try:
                         value = int(text_value)
@@ -1225,7 +1226,7 @@ class ImouHaDeviceManager:
         is_ipc: bool,
         channel_id: str,
         entity_type: str,
-        exists_entities: dict[str, any],
+        exists_entities: dict[str, Any],
     ) -> bool:
         return (
             (channel_id is None and ability_or_ref in device_abilities_or_refs)
@@ -1246,7 +1247,7 @@ class ImouHaDeviceManager:
         is_ipc: bool,
         channel_id: str,
         entity_type: str,
-        exists_entities: dict[str, any],
+        exists_entities: dict[str, Any],
         product_id: str,
         except_product_ids: list[str],
     ) -> bool:
@@ -1372,7 +1373,7 @@ class ImouHaDeviceManager:
         self,
         device: ImouHaDevice,
         sensor_type: str,
-        value: dict[str, any],
+        value: dict[str, Any],
     ):
         try:
             device_id = self._resolve_device_id(device)
@@ -1435,6 +1436,7 @@ class ImouHaDeviceManager:
         self, device: ImouHaDevice, option: str, ref: str, value_type: str
     ):
         device_id = self._resolve_device_id(device)
+        value: int | str
         if value_type == "int" and (
             ref != "15400" or device.product_id not in PRODUCT_MODEL_ILLEGAL_LIST
         ):
@@ -1569,7 +1571,7 @@ class ImouHaDeviceManager:
         self,
         device: ImouHaDevice,
         text_type: str,
-        value: dict[str, any],
+        value: dict[str, Any],
     ):
         try:
             device_id = self._resolve_device_id(device)

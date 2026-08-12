@@ -176,10 +176,10 @@ class ImouDevice:
         self._device_model = device_model
         self._device_version = "unknown"
         self._channel_number = 0
-        self._channels = []
-        self._product_id = None
-        self._parent_product_id = None
-        self._parent_device_id = None
+        self._channels: list[ImouChannel] = []
+        self._product_id: str | None = None
+        self._parent_product_id: str | None = None
+        self._parent_device_id: str | None = None
         self._is_multi = False
         self._is_ipc = False
         self._access_type = "PaaS"
