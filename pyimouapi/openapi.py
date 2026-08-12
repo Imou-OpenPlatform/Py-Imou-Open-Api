@@ -69,12 +69,16 @@ class ImouOpenApiClient:
     async def async_download(self, url: str, timeout: int = 120) -> bytes:
         """GET a binary payload such as a device snapshot."""
         session = await self._async_get_session()
-        response = await session.get(url, timeout=aiohttp.ClientTimeout(total=timeout))
-        if response.status != 200:
-            raise RequestFailedException(
-                f"request failed,status code {response.status}"
-            )
-        return await response.read()
+        # Released via the context manager: an error status returns early, and the
+        # pool is capped, so a held connection would stall later calls.
+        async with session.get(
+            url, timeout=aiohttp.ClientTimeout(total=timeout)
+        ) as response:
+            if response.status != 200:
+                raise RequestFailedException(
+                    f"request failed,status code {response.status}"
+                )
+            return await response.read()
 
     async def async_close(self) -> None:
         """Close the HTTP session (call when done with the client)."""

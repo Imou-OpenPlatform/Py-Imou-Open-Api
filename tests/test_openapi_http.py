@@ -56,6 +56,15 @@ class FakeBinaryResponse:
         """Initialize the response."""
         self.status = status
         self._payload = payload
+        self.released = False
+
+    async def __aenter__(self) -> "FakeBinaryResponse":
+        """Enter the response context, as aiohttp's request context manager does."""
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        """Return the connection to the pool."""
+        self.released = True
 
     async def read(self) -> bytes:
         """Return the body."""
@@ -81,12 +90,16 @@ class FakeSession:
         self.closed = False
         self.requests: list[tuple[str, dict[str, Any]]] = []
         self.downloads: list[str] = []
+        self.last_download: FakeBinaryResponse | None = None
         self.close_count = 0
 
-    async def get(self, url: str, *, timeout: Any = None) -> FakeBinaryResponse:
-        """Return the configured binary payload."""
+    def get(self, url: str, *, timeout: Any = None) -> FakeBinaryResponse:
+        """Return the configured binary payload as a response context manager."""
         self.downloads.append(url)
-        return FakeBinaryResponse(self._download_status, self._download_payload)
+        self.last_download = FakeBinaryResponse(
+            self._download_status, self._download_payload
+        )
+        return self.last_download
 
     async def request(
         self, method: str, url: str, *, json: dict[str, Any], headers: dict[str, str]
@@ -295,6 +308,20 @@ async def test_download_raises_on_error_status(client: ImouOpenApiClient) -> Non
 
     with pytest.raises(RequestFailedException, match="404"):
         await client.async_download("https://cdn.example.com/missing.jpg")
+
+
+@pytest.mark.asyncio
+async def test_failed_download_releases_its_connection(
+    client: ImouOpenApiClient,
+) -> None:
+    """The pool is capped, so expired snapshot URLs must not hold connections."""
+    session = install_session(client, [], download_status=403)
+
+    for _ in range(CONNECTION_LIMIT + 1):
+        with pytest.raises(RequestFailedException):
+            await client.async_download("https://cdn.example.com/expired.jpg")
+        assert session.last_download is not None
+        assert session.last_download.released is True
 
 
 @pytest.mark.asyncio
