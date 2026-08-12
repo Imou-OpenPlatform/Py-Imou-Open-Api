@@ -79,7 +79,7 @@ from .const import (
     SWITCH_TYPE_REF,
     TEXT_TYPE_REF,
 )
-from .device import ImouDevice, ImouDeviceManager
+from .device import ImouDevice, ImouDeviceManager, compose_iot_device_id
 from .exceptions import RequestFailedException
 from .select_option import normalize_options, to_friendly, to_raw
 from .sensor import apply_sensor_state
@@ -408,12 +408,9 @@ class ImouHaDeviceManager:
 
     @staticmethod
     def _resolve_device_id(device: ImouHaDevice) -> str:
-        device_id = device.device_id
-        if device.parent_product_id is not None:
-            device_id = (
-                f"{device_id}_{device.parent_device_id}_{device.parent_product_id}"
-            )
-        return device_id
+        return compose_iot_device_id(
+            device.device_id, device.parent_device_id, device.parent_product_id
+        )
 
     @staticmethod
     def _lookup_property(
@@ -699,11 +696,7 @@ class ImouHaDeviceManager:
 
     async def _async_update_status(self, device: ImouHaDevice):
         try:
-            device_id = device.device_id
-            if device.parent_device_id is not None:
-                device_id = (
-                    f"{device_id}_{device.parent_device_id}_{device.parent_product_id}"
-                )
+            device_id = self._resolve_device_id(device)
             data = await self.delegate.async_get_device_online_status(device_id)
             if device.channel_id is None and device.product_id is not None:
                 apply_sensor_state(
@@ -929,16 +922,7 @@ class ImouHaDeviceManager:
                 await self._async_set_count_down_switch_time(device, text_value)
             else:
                 value_type = device.texts[text_type].get(PARAM_VALUE_TYPE)
-                device_id = device.device_id
-                # 如果是配件，需要拼接设备id
-                if device.parent_product_id is not None:
-                    device_id = (
-                        device_id
-                        + "_"
-                        + device.parent_device_id
-                        + "_"
-                        + device.parent_product_id
-                    )
+                device_id = self._resolve_device_id(device)
                 if value_type == "int":
                     try:
                         value = int(text_value)
@@ -1391,16 +1375,7 @@ class ImouHaDeviceManager:
         value: dict[str, any],
     ):
         try:
-            device_id = device.device_id
-            # 如果是配件，需要拼接设备id
-            if device.parent_product_id is not None:
-                device_id = (
-                    device_id
-                    + "_"
-                    + device.parent_device_id
-                    + "_"
-                    + device.parent_product_id
-                )
+            device_id = self._resolve_device_id(device)
             state = await self._get_state_from_properties_or_services(
                 device, device_id, value, kind="sensor", key=sensor_type
             )
@@ -1459,16 +1434,7 @@ class ImouHaDeviceManager:
     async def _async_select_option_by_ref(
         self, device: ImouHaDevice, option: str, ref: str, value_type: str
     ):
-        device_id = device.device_id
-        # 如果是配件，需要拼接设备id
-        if device.parent_product_id is not None:
-            device_id = (
-                device_id
-                + "_"
-                + device.parent_device_id
-                + "_"
-                + device.parent_product_id
-            )
+        device_id = self._resolve_device_id(device)
         if value_type == "int" and (
             ref != "15400" or device.product_id not in PRODUCT_MODEL_ILLEGAL_LIST
         ):
@@ -1486,15 +1452,7 @@ class ImouHaDeviceManager:
     async def _async_switch_operation_by_ref(
         self, device: ImouHaDevice, switch_type: str, enable: bool, ref: str
     ):
-        device_id = device.device_id
-        if device.parent_product_id is not None:
-            device_id = (
-                device_id
-                + "_"
-                + device.parent_device_id
-                + "_"
-                + device.parent_product_id
-            )
+        device_id = self._resolve_device_id(device)
         await self.delegate.async_set_iot_device_properties(
             device_id, device.channel_id, device.product_id, {ref: 1 if enable else 0}
         )
@@ -1614,16 +1572,7 @@ class ImouHaDeviceManager:
         value: dict[str, any],
     ):
         try:
-            device_id = device.device_id
-            # 如果是配件，需要拼接设备id
-            if device.parent_product_id is not None:
-                device_id = (
-                    device_id
-                    + "_"
-                    + device.parent_device_id
-                    + "_"
-                    + device.parent_product_id
-                )
+            device_id = self._resolve_device_id(device)
             state = await self._get_state_from_properties_or_services(
                 device, device_id, value, kind="text", key=text_type
             )
@@ -1638,16 +1587,7 @@ class ImouHaDeviceManager:
     async def _async_set_count_down_switch_time(
         self, device: ImouHaDevice, text_value: str
     ):
-        device_id = device.device_id
-        # 如果是配件，需要拼接设备id
-        if device.parent_product_id is not None:
-            device_id = (
-                device_id
-                + "_"
-                + device.parent_device_id
-                + "_"
-                + device.parent_product_id
-            )
+        device_id = self._resolve_device_id(device)
         # 首先查询当前开关状态
         switch_type = "switch"
         await self._async_update_device_switch_status_by_ref(

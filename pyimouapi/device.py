@@ -96,6 +96,22 @@ def _parse_event_ref_map(data: dict[str, Any] | None) -> dict[str, str]:
     return mapping
 
 
+def compose_iot_device_id(
+    device_id: str,
+    parent_device_id: str | None,
+    parent_product_id: str | None,
+) -> str:
+    """Return the id an iot device is addressed by.
+
+    An accessory paired to a gateway is reached through both of its parent's
+    ids. The API sends the pair or neither, so half of it identifies nothing and
+    the device is addressed on its own instead.
+    """
+    if parent_device_id and parent_product_id:
+        return f"{device_id}_{parent_device_id}_{parent_product_id}"
+    return device_id
+
+
 @dataclass(frozen=True)
 class ImouDeviceSummary:
     device_id: str
@@ -716,15 +732,11 @@ class ImouDeviceManager:
         await self._imou_api_client.async_request_api(API_ENDPOINT_SIREN_STOP, params)
 
     async def _async_update_device_ability_refs(self, imou_device: ImouDevice) -> None:
-        device_id = imou_device.device_id
-        if imou_device.parent_product_id is not None:
-            device_id = (
-                imou_device.device_id
-                + "_"
-                + imou_device.parent_device_id
-                + "_"
-                + imou_device.parent_product_id
-            )
+        device_id = compose_iot_device_id(
+            imou_device.device_id,
+            imou_device.parent_device_id,
+            imou_device.parent_product_id,
+        )
         device_detail = await self.async_get_iot_device_detail_info(
             device_id,
             imou_device.product_id,
