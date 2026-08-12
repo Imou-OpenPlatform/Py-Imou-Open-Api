@@ -56,6 +56,7 @@ class FakeResponse:
         self._delay = delay
         self._error = error
         self._text_error = text_error
+        self.raw_text: str | None = None
         self.released = False
 
     async def __aenter__(self) -> "FakeResponse":
@@ -75,10 +76,19 @@ class FakeResponse:
         self.released = True
 
     async def text(self) -> str:
-        """Return the JSON body."""
+        """Return the JSON body, or the raw text the server actually sent."""
         if self._text_error is not None:
             raise self._text_error
+        if self.raw_text is not None:
+            return self.raw_text
         return json.dumps(self._payload)
+
+    @classmethod
+    def raw(cls, status: int, text: str) -> "FakeResponse":
+        """Build a response whose body is not the JSON envelope, like a 502 page."""
+        response = cls({}, status)
+        response.raw_text = text
+        return response
 
 
 class FakeBinaryResponse:
@@ -144,13 +154,16 @@ class FakeSession:
         if not self._responses:
             raise AssertionError(f"unexpected request to {url}")
         result = self._responses.pop(0)
-        failed = isinstance(result, Exception)
-        response = FakeResponse(
-            {} if failed else result,
-            delay=self._delay,
-            error=result if failed else None,
-            text_error=self._text_error,
-        )
+        if isinstance(result, FakeResponse):
+            response = result
+        else:
+            failed = isinstance(result, Exception)
+            response = FakeResponse(
+                {} if failed else result,
+                delay=self._delay,
+                error=result if failed else None,
+                text_error=self._text_error,
+            )
         self.issued.append(response)
         return response
 
@@ -374,6 +387,30 @@ async def test_session_caps_concurrent_connections() -> None:
         assert session.connector.limit == CONNECTION_LIMIT
     finally:
         await client.async_close()
+
+
+@pytest.mark.asyncio
+async def test_error_status_reports_the_status_code(client: ImouOpenApiClient) -> None:
+    """A gateway error page must name the status, not look like a parse failure.
+
+    The connection plainly succeeded, so reporting it as a connection failure
+    sends whoever reads the log looking in the wrong place.
+    """
+    install_session(client, [FakeResponse.raw(502, "<html>Bad Gateway</html>")])
+
+    with pytest.raises(RequestFailedException, match="502"):
+        await client.async_get_token()
+
+
+@pytest.mark.asyncio
+async def test_unparseable_success_body_is_a_request_failure(
+    client: ImouOpenApiClient,
+) -> None:
+    """A 200 carrying something other than the JSON envelope is the server's fault."""
+    install_session(client, [FakeResponse.raw(200, "not json at all")])
+
+    with pytest.raises(RequestFailedException, match="malformed"):
+        await client.async_get_token()
 
 
 @pytest.mark.asyncio

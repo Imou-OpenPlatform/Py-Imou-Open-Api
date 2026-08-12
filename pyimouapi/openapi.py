@@ -207,18 +207,26 @@ class ImouOpenApiClient:
                     "POST", url, json=body, headers=headers
                 ) as response:
                     status = response.status
-                    response_body = json.loads(await response.text())
-                    if _LOGGER.isEnabledFor(logging.DEBUG):
-                        _LOGGER.debug(
-                            "url: %s request body: %s response: %s",
-                            url,
-                            _redacted_request(body),
-                            _redacted_response(response_body),
-                        )
+                    text = await response.text()
         except Exception as exception:
             raise ConnectFailedException(f"connect failed,{exception}") from exception
+        # Anything below here reached the server and got an answer back, so it is
+        # the request that failed rather than the connection.
         if status != 200:
             raise RequestFailedException(f"request failed,status code {status}")
+        try:
+            response_body = json.loads(text)
+        except ValueError as exception:
+            raise RequestFailedException(
+                f"malformed response,{exception}"
+            ) from exception
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            _LOGGER.debug(
+                "url: %s request body: %s response: %s",
+                url,
+                _redacted_request(body),
+                _redacted_response(response_body),
+            )
         result_code = response_body[PARAM_RESULT][PARAM_CODE]
         result_message = response_body[PARAM_RESULT][PARAM_MSG]
         if result_code != ERROR_CODE_SUCCESS:
