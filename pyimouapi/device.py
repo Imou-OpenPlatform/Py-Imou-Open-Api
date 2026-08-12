@@ -47,7 +47,6 @@ from .const import (
     PARAM_CODE,
     PARAM_COLLECTION_NAME,
     PARAM_CONTENT,
-    PARAM_COUNT,
     PARAM_DEVICE_ABILITY,
     PARAM_DEVICE_ID,
     PARAM_DEVICE_LIST,
@@ -329,11 +328,12 @@ class ImouDeviceManager:
         data = await self._imou_api_client.async_request_api(
             API_ENDPOINT_LIST_DEVICE_DETAILS, params
         )
-        if data[PARAM_COUNT] == 0:
+        device_list = data.get(PARAM_DEVICE_LIST) or []
+        if not device_list:
             return []
         devices = []
         iot_devices = []
-        for device in data[PARAM_DEVICE_LIST]:
+        for device in device_list:
             device_id = device[PARAM_DEVICE_ID]
             device_name = device[PARAM_DEVICE_NAME]
             device_status = device[PARAM_DEVICE_STATUS]
@@ -388,8 +388,11 @@ class ImouDeviceManager:
                     for iot_device in iot_devices
                 )
             )
-        # If the return quantity is equal to the requested quantity, continue to request the next page
-        if data[PARAM_COUNT] == page_size:
+        # A full page may have more behind it. This counts what actually arrived
+        # rather than trusting `count`, which stops the paging either way: were
+        # that field the account total instead of this page's size, an account
+        # holding an exact multiple of page_size would page on forever.
+        if len(device_list) == page_size:
             devices.extend(await self.async_get_devices(page + 1, page_size))
         return devices
 
@@ -403,10 +406,11 @@ class ImouDeviceManager:
         data = await self._imou_api_client.async_request_api(
             API_ENDPOINT_LIST_DEVICE_DETAILS, params
         )
-        if data[PARAM_COUNT] == 0:
+        device_list = data.get(PARAM_DEVICE_LIST) or []
+        if not device_list:
             return []
         summaries: list[ImouDeviceSummary] = []
-        for device in data[PARAM_DEVICE_LIST]:
+        for device in device_list:
             device_id = device.get(PARAM_DEVICE_ID)
             if not device_id:
                 continue
@@ -421,7 +425,8 @@ class ImouDeviceManager:
                     status=status,
                 )
             )
-        if data[PARAM_COUNT] >= page_size:
+        # Counts what arrived rather than trusting `count`; see async_get_devices.
+        if len(device_list) >= page_size:
             summaries.extend(await self.async_get_device_summaries(page + 1, page_size))
         return summaries
 

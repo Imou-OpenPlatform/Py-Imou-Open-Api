@@ -108,6 +108,29 @@ async def test_detail_failure_still_propagates() -> None:
 
 
 @pytest.mark.asyncio
+async def test_pagination_stops_on_a_short_page_whatever_count_means() -> None:
+    """Paging must end when a page runs out, not when a count field says so.
+
+    ``count`` is read as the number of entries on this page, but the API may
+    well mean the total across all pages. Under that reading an account holding
+    exactly one full page would ask for page after page forever, so the decision
+    is based on what actually came back.
+    """
+    page1 = [make_device(f"dev{i}", f"prod{i}") for i in range(10)]
+    manager, _ = make_manager(
+        {
+            # count repeats the account total on every page, as a total would.
+            1: {PARAM_COUNT: 10, PARAM_DEVICE_LIST: page1},
+            2: {PARAM_COUNT: 10, PARAM_DEVICE_LIST: []},
+        }
+    )
+
+    result = await manager.async_get_devices()
+
+    assert len(result) == 10
+
+
+@pytest.mark.asyncio
 async def test_pagination_fetches_details_for_every_page() -> None:
     """Ability refs are resolved for devices found on later pages too."""
     page1 = [make_device(f"dev{i}", f"prod{i}") for i in range(10)]

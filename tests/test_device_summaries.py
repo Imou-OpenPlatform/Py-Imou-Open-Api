@@ -64,6 +64,35 @@ async def test_get_device_summaries_single_page():
 
 
 @pytest.mark.asyncio
+async def test_get_device_summaries_stop_on_a_short_page():
+    """Paging ends when a page runs out, whatever `count` turns out to mean.
+
+    This picker feeds the config flow's device list, so an account large enough
+    to page would have hung device selection if `count` reports the account
+    total rather than the size of the page in hand.
+    """
+    page1_devices = [
+        _make_device(f"dev{i}", f"Device {i}", "IPC", "1") for i in range(50)
+    ]
+
+    async def mock_request(endpoint, params):
+        if params[PARAM_PAGE] == 1:
+            return {PARAM_COUNT: 50, PARAM_DEVICE_LIST: page1_devices}
+        if params[PARAM_PAGE] == 2:
+            # A total would keep reporting 50 here, with nothing left to hand out.
+            return {PARAM_COUNT: 50, PARAM_DEVICE_LIST: []}
+        raise AssertionError(f"Unexpected page: {params[PARAM_PAGE]}")
+
+    client = MagicMock()
+    client.async_request_api = AsyncMock(side_effect=mock_request)
+    manager = ImouDeviceManager(client)
+
+    summaries = await manager.async_get_device_summaries()
+
+    assert len(summaries) == 50
+
+
+@pytest.mark.asyncio
 async def test_get_device_summaries_pagination():
     page1_devices = [
         _make_device(f"dev{i}", f"Device {i}", "IPC", "1") for i in range(50)
