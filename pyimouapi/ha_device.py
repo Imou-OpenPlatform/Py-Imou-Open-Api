@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 from collections.abc import Callable
@@ -245,7 +247,7 @@ def _configure_by_ref(
     channel_ability_refs: list[str],
     is_ipc: bool,
     device_ability_refs: list[str],
-    imou_ha_device: "ImouHaDevice",
+    imou_ha_device: ImouHaDevice,
 ) -> None:
     """Add one entity per type, built from the first ref the device exposes.
 
