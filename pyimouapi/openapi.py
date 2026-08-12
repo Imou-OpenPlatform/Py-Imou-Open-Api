@@ -200,23 +200,25 @@ class ImouOpenApiClient:
         session = await self._async_get_session()
         try:
             async with asyncio.timeout(30):
-                response = await session.request(
+                # Released by the context manager: the pool is capped, so a body
+                # that dies mid-read must not strand its connection and starve
+                # every poll that follows.
+                async with session.request(
                     "POST", url, json=body, headers=headers
-                )
-                response_body = json.loads(await response.text())
-                if _LOGGER.isEnabledFor(logging.DEBUG):
-                    _LOGGER.debug(
-                        "url: %s request body: %s response: %s",
-                        url,
-                        _redacted_request(body),
-                        _redacted_response(response_body),
-                    )
+                ) as response:
+                    status = response.status
+                    response_body = json.loads(await response.text())
+                    if _LOGGER.isEnabledFor(logging.DEBUG):
+                        _LOGGER.debug(
+                            "url: %s request body: %s response: %s",
+                            url,
+                            _redacted_request(body),
+                            _redacted_response(response_body),
+                        )
         except Exception as exception:
             raise ConnectFailedException(f"connect failed,{exception}") from exception
-        if response.status != 200:
-            raise RequestFailedException(
-                f"request failed,status code {response.status}"
-            )
+        if status != 200:
+            raise RequestFailedException(f"request failed,status code {status}")
         result_code = response_body[PARAM_RESULT][PARAM_CODE]
         result_message = response_body[PARAM_RESULT][PARAM_MSG]
         if result_code != ERROR_CODE_SUCCESS:

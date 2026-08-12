@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+from collections.abc import Generator
 from typing import Any
 
 import pytest
@@ -38,15 +39,45 @@ def token_result(token: str = "tok-1") -> dict[str, Any]:
 
 
 class FakeResponse:
-    """Minimal aiohttp response stand-in."""
+    """Minimal aiohttp response stand-in, released by its context manager."""
 
-    def __init__(self, payload: dict[str, Any], status: int = 200) -> None:
+    def __init__(
+        self,
+        payload: dict[str, Any],
+        status: int = 200,
+        *,
+        delay: float = 0,
+        error: Exception | None = None,
+        text_error: Exception | None = None,
+    ) -> None:
         """Initialize the response."""
         self.status = status
         self._payload = payload
+        self._delay = delay
+        self._error = error
+        self._text_error = text_error
+        self.released = False
+
+    async def __aenter__(self) -> "FakeResponse":
+        """Issue the request, as aiohttp's request context manager does."""
+        if self._delay:
+            await asyncio.sleep(self._delay)
+        if self._error is not None:
+            raise self._error
+        return self
+
+    def __await__(self) -> Generator[Any, None, "FakeResponse"]:
+        """Support bare ``await``, which aiohttp allows and which leaks."""
+        return self.__aenter__().__await__()
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        """Return the connection to the pool."""
+        self.released = True
 
     async def text(self) -> str:
         """Return the JSON body."""
+        if self._text_error is not None:
+            raise self._text_error
         return json.dumps(self._payload)
 
 
@@ -82,14 +113,17 @@ class FakeSession:
         delay: float = 0,
         download_status: int = 200,
         download_payload: bytes = b"jpeg-bytes",
+        text_error: Exception | None = None,
     ) -> None:
         """Initialize with a queue of responses or exceptions to raise."""
         self._responses = list(responses)
         self._delay = delay
         self._download_status = download_status
         self._download_payload = download_payload
+        self._text_error = text_error
         self.closed = False
         self.requests: list[tuple[str, dict[str, Any]]] = []
+        self.issued: list[FakeResponse] = []
         self.downloads: list[str] = []
         self.last_download: FakeBinaryResponse | None = None
         self.close_count = 0
@@ -102,19 +136,23 @@ class FakeSession:
         )
         return self.last_download
 
-    async def request(
+    def request(
         self, method: str, url: str, *, json: dict[str, Any], headers: dict[str, str]
     ) -> FakeResponse:
-        """Return the next queued response."""
+        """Return the next queued response as a request context manager."""
         self.requests.append((url, json))
-        if self._delay:
-            await asyncio.sleep(self._delay)
         if not self._responses:
             raise AssertionError(f"unexpected request to {url}")
         result = self._responses.pop(0)
-        if isinstance(result, Exception):
-            raise result
-        return FakeResponse(result)
+        failed = isinstance(result, Exception)
+        response = FakeResponse(
+            {} if failed else result,
+            delay=self._delay,
+            error=result if failed else None,
+            text_error=self._text_error,
+        )
+        self.issued.append(response)
+        return response
 
     async def close(self) -> None:
         """Mark the session closed."""
@@ -336,6 +374,29 @@ async def test_session_caps_concurrent_connections() -> None:
         assert session.connector.limit == CONNECTION_LIMIT
     finally:
         await client.async_close()
+
+
+@pytest.mark.asyncio
+async def test_request_releases_its_connection_when_the_body_fails(
+    client: ImouOpenApiClient,
+) -> None:
+    """A read that dies mid-body must not keep a connection checked out.
+
+    The pool is capped, so connections stranded by a flaky network would leave
+    every later poll waiting on a socket that is never coming back.
+    """
+    session = install_session(
+        client,
+        [token_result()] * (CONNECTION_LIMIT + 1),
+        text_error=OSError("connection reset by peer"),
+    )
+
+    for _ in range(CONNECTION_LIMIT + 1):
+        with pytest.raises(ConnectFailedException):
+            await client.async_get_token()
+
+    assert len(session.issued) == CONNECTION_LIMIT + 1
+    assert all(response.released for response in session.issued)
 
 
 @pytest.mark.asyncio
