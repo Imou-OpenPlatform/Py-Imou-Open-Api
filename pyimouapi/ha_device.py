@@ -293,23 +293,23 @@ class ImouHaDevice:
         self._selects: dict[str, dict[str, Any]] = {}
         self._buttons: dict[str, dict[str, Any]] = {}
         self._texts: dict[str, dict[str, Any]] = {}
-        self._channel_id = None
-        self._channel_name = None
+        self._channel_id: str | None = None
+        self._channel_name: str | None = None
         self._is_ipc = False
         self._product_id: str | None = None
         self._parent_product_id: str | None = None
         self._parent_device_id: str | None = None
 
     @property
-    def device_id(self):
+    def device_id(self) -> str:
         return self._device_id
 
     @property
-    def channel_id(self):
+    def channel_id(self) -> str | None:
         return self._channel_id
 
     @property
-    def channel_name(self):
+    def channel_name(self) -> str | None:
         return self._channel_name
 
     @property
@@ -317,39 +317,39 @@ class ImouHaDevice:
         return self._is_ipc
 
     @property
-    def manufacturer(self):
+    def manufacturer(self) -> str:
         return self._manufacturer
 
     @property
-    def model(self):
+    def model(self) -> str:
         return self._model
 
     @property
-    def swversion(self):
+    def swversion(self) -> str:
         return self._swversion
 
     @property
-    def switches(self):
+    def switches(self) -> dict[str, dict[str, Any]]:
         return self._switches
 
     @property
-    def sensors(self):
+    def sensors(self) -> dict[str, dict[str, Any]]:
         return self._sensors
 
     @property
-    def binary_sensors(self):
+    def binary_sensors(self) -> dict[str, dict[str, Any]]:
         return self._binary_sensors
 
     @property
-    def selects(self):
+    def selects(self) -> dict[str, dict[str, Any]]:
         return self._selects
 
     @property
-    def buttons(self):
+    def buttons(self) -> dict[str, dict[str, Any]]:
         return self._buttons
 
     @property
-    def texts(self):
+    def texts(self) -> dict[str, dict[str, Any]]:
         return self._texts
 
     @property
@@ -377,17 +377,17 @@ class ImouHaDevice:
     def set_parent_device_id(self, parent_device_id: str) -> None:
         self._parent_device_id = parent_device_id
 
-    def __str__(self):
+    def __str__(self) -> str:
         return (
             f"device_id: {self._device_id}, product_id:{self._product_id},parent_device_id:{self._parent_product_id},device_name: {self._device_name}, manufacturer: {self._manufacturer}, "
             f"model: {self._model}, swversion: {self._swversion},selects:{self._selects},sensors:{self._sensors},"
             f"switches:{self._switches},binary_sensors:{self.binary_sensors},buttons:{self._buttons},texts:{self.texts}"
         )
 
-    def set_channel_id(self, channel_id):
+    def set_channel_id(self, channel_id: str) -> None:
         self._channel_id = channel_id
 
-    def set_channel_name(self, channel_name):
+    def set_channel_name(self, channel_name: str) -> None:
         self._channel_name = channel_name
 
     def set_is_ipc(self, is_ipc: bool) -> None:
@@ -399,7 +399,7 @@ class ImouHaDeviceManager:
         self._delegate = device_manager
 
     @property
-    def delegate(self):
+    def delegate(self) -> ImouDeviceManager:
         return self._delegate
 
     async def async_close(self) -> None:
@@ -501,9 +501,22 @@ class ImouHaDeviceManager:
                     str(state) if isinstance(state, int) else state
                 )
 
+    @staticmethod
+    def _require_product_id(device: ImouHaDevice) -> str:
+        """Return the product id an iot call is keyed on, or say why there is none.
+
+        Callers reach these paths only for devices that carry one, so this
+        turns a would-be request with a null key into a named failure.
+        """
+        if device.product_id is None:
+            raise RequestFailedException(
+                f"device {device.device_id} has no product_id for an iot request"
+            )
+        return device.product_id
+
     async def _async_fetch_device_detail(self, device: ImouHaDevice) -> dict[str, Any]:
         return await self.delegate.async_get_iot_device_detail_info(
-            self._resolve_device_id(device), device.product_id
+            self._resolve_device_id(device), self._require_product_id(device)
         )
 
     async def _async_update_properties_from_detail(
@@ -551,7 +564,7 @@ class ImouHaDeviceManager:
         if updates:
             await asyncio.gather(*updates)
 
-    async def async_update_device_status(self, device: ImouHaDevice):
+    async def async_update_device_status(self, device: ImouHaDevice) -> None:
         """Update device status, with the updater calling every time the coordinator is updated"""
         # The device status is updated first, and if it's not online, the other entity status isn't updated
         await self._async_update_status(device)
@@ -865,8 +878,8 @@ class ImouHaDeviceManager:
                     imou_ha_device,
                 )
                 devices.append(imou_ha_device)
-        for device in devices:
-            _LOGGER.debug("device is  %s", device)
+        for ha_device in devices:
+            _LOGGER.debug("device is  %s", ha_device)
         return devices
 
     @staticmethod
@@ -914,8 +927,7 @@ class ImouHaDeviceManager:
             )
         elif button_type in (PARAM_SIREN_START, PARAM_SIREN_STOP):
             await self._async_press_siren_button(device, button_type)
-        elif device.buttons[button_type].get(PARAM_REF):
-            ref_id = device.buttons[button_type].get(PARAM_REF)
+        elif ref_id := device.buttons[button_type].get(PARAM_REF):
             await self._async_press_button_by_ref(device, ref_id)
 
     async def _async_press_siren_button(
@@ -964,19 +976,24 @@ class ImouHaDeviceManager:
                 else:
                     value = text_value
                 await self.delegate.async_set_iot_device_properties(
-                    device_id, device.channel_id, device.product_id, {ref_id: value}
+                    device_id,
+                    device.channel_id,
+                    self._require_product_id(device),
+                    {ref_id: value},
                 )
                 if device.channel_id is not None and device.channel_id == "0":
                     await self.delegate.async_set_iot_device_properties(
-                        device.device_id, None, device.product_id, {ref_id: value}
+                        device.device_id,
+                        None,
+                        self._require_product_id(device),
+                        {ref_id: value},
                     )
                 device.texts[text_type][PARAM_STATE] = str(text_value)
 
     async def async_switch_operation(
         self, device: ImouHaDevice, switch_type: str, enable: bool
     ):
-        if device.switches[switch_type].get(PARAM_REF):
-            ref_id = device.switches[switch_type].get(PARAM_REF)
+        if ref_id := device.switches[switch_type].get(PARAM_REF):
             await self._async_switch_operation_by_ref(
                 device, switch_type, enable, ref_id
             )
@@ -1017,9 +1034,8 @@ class ImouHaDeviceManager:
         if select_type == PARAM_COLLECTION_POINT:
             await self._async_select_collection_point_option(device, option)
             return
-        if device.selects[select_type].get(PARAM_REF):
-            ref_id = device.selects[select_type].get(PARAM_REF)
-            value_type = device.selects[select_type].get(PARAM_VALUE_TYPE)
+        if ref_id := device.selects[select_type].get(PARAM_REF):
+            value_type = device.selects[select_type].get(PARAM_VALUE_TYPE, "str")
             write_option = to_raw(select_type, option)
             # 兼容下音量15400值为-1的情况
             if ref_id == "15400" and write_option == "99":
@@ -1385,7 +1401,7 @@ class ImouHaDeviceManager:
         try:
             device_id = self._resolve_device_id(device)
             data = await self.delegate.async_get_iot_device_properties(
-                device_id, device.channel_id, device.product_id, [ref]
+                device_id, device.channel_id, self._require_product_id(device), [ref]
             )
             if ref in data[PARAM_PROPERTIES]:
                 device.switches[switch_type][PARAM_STATE] = (
@@ -1430,13 +1446,13 @@ class ImouHaDeviceManager:
     ):
         if value.get(PARAM_REF_TYPE, PARAM_PROPERTIES) == PARAM_SERVICES:
             result = await self.delegate.async_iot_device_control(
-                device_id, device.product_id, value[PARAM_REF], {}
+                device_id, self._require_product_id(device), value[PARAM_REF], {}
             )
             data = result[PARAM_CONTENT][PARAM_OUTPUT_DATA]
         else:
             ref = value[PARAM_REF]
             result = await self.delegate.async_get_iot_device_properties(
-                device_id, device.channel_id, device.product_id, [ref]
+                device_id, device.channel_id, self._require_product_id(device), [ref]
             )
             properties = result.get(PARAM_PROPERTIES) or {}
             if ref not in properties:
@@ -1462,7 +1478,7 @@ class ImouHaDeviceManager:
             content = {}
         device_id = self._resolve_device_id(device)
         await self.delegate.async_iot_device_control(
-            device_id, device.product_id, ref, content
+            device_id, self._require_product_id(device), ref, content
         )
 
     async def _async_select_option_by_ref(
@@ -1477,11 +1493,11 @@ class ImouHaDeviceManager:
         else:
             value = option
         await self.delegate.async_set_iot_device_properties(
-            device_id, device.channel_id, device.product_id, {ref: value}
+            device_id, device.channel_id, self._require_product_id(device), {ref: value}
         )
         if device.channel_id is not None and device.channel_id == "0":
             await self.delegate.async_set_iot_device_properties(
-                device.device_id, None, device.product_id, {ref: value}
+                device.device_id, None, self._require_product_id(device), {ref: value}
             )
 
     async def _async_switch_operation_by_ref(
@@ -1489,11 +1505,17 @@ class ImouHaDeviceManager:
     ):
         device_id = self._resolve_device_id(device)
         await self.delegate.async_set_iot_device_properties(
-            device_id, device.channel_id, device.product_id, {ref: 1 if enable else 0}
+            device_id,
+            device.channel_id,
+            self._require_product_id(device),
+            {ref: 1 if enable else 0},
         )
         if device.channel_id is not None and device.channel_id == "0":
             await self.delegate.async_set_iot_device_properties(
-                device.device_id, None, device.product_id, {ref: 1 if enable else 0}
+                device.device_id,
+                None,
+                self._require_product_id(device),
+                {ref: 1 if enable else 0},
             )
         device.switches[switch_type][PARAM_STATE] = enable
 
@@ -1533,7 +1555,7 @@ class ImouHaDeviceManager:
         try:
             device_id = self._resolve_device_id(device)
             data = await self.delegate.async_get_iot_device_properties(
-                device_id, device.channel_id, device.product_id, [ref]
+                device_id, device.channel_id, self._require_product_id(device), [ref]
             )
             if ref in data[PARAM_PROPERTIES]:
                 device.binary_sensors[binary_sensor_type][PARAM_STATE] = (
@@ -1639,7 +1661,7 @@ class ImouHaDeviceManager:
             # 如果是关的，则倒计时打开
             param["28603"] = 1
         await self.delegate.async_iot_device_control(
-            device_id, device.product_id, "28600", param
+            device_id, self._require_product_id(device), "28600", param
         )
         device.texts["count_down_switch"][PARAM_STATE] = str(text_value)
 

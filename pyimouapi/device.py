@@ -447,7 +447,7 @@ class ImouDeviceManager:
         return summaries
 
     async def async_control_device_ptz(
-        self, device_id: str, channel_id: str, operation: int, duration: int
+        self, device_id: str, channel_id: str | None, operation: int, duration: int
     ) -> None:
         """control ptz"""
         params = {
@@ -461,7 +461,7 @@ class ImouDeviceManager:
         )
 
     async def async_modify_device_alarm_status(
-        self, device_id: str, channel_id: str, enabled: bool
+        self, device_id: str, channel_id: str | None, enabled: bool
     ) -> None:
         """SET DEVICE ALARM STATUS"""
         params = {
@@ -474,7 +474,7 @@ class ImouDeviceManager:
         )
 
     async def async_get_device_status(
-        self, device_id: str, channel_id: str, enable_type: str
+        self, device_id: str, channel_id: str | None, enable_type: str
     ) -> dict[str, Any]:
         """obtain device capability switch status"""
         params = {
@@ -496,7 +496,7 @@ class ImouDeviceManager:
         )
 
     async def async_set_device_status(
-        self, device_id: str, channel_id: str, enable_type: str, enable: bool
+        self, device_id: str, channel_id: str | None, enable_type: str, enable: bool
     ) -> None:
         params = {
             PARAM_DEVICE_ID: device_id,
@@ -509,7 +509,7 @@ class ImouDeviceManager:
         )
 
     async def async_get_device_night_vision_mode(
-        self, device_id: str, channel_id: str
+        self, device_id: str, channel_id: str | None
     ) -> dict[str, Any]:
         """obtain device night vision mode"""
         params = {
@@ -521,7 +521,7 @@ class ImouDeviceManager:
         )
 
     async def async_set_device_night_vision_mode(
-        self, device_id: str, channel_id: str, night_vision_mode: str
+        self, device_id: str, channel_id: str | None, night_vision_mode: str
     ) -> None:
         """set device night vision mode"""
         if night_vision_mode in NIGHT_VISION_MODE_MAP:
@@ -555,7 +555,7 @@ class ImouDeviceManager:
         await self._imou_api_client.async_request_api(API_ENDPOINT_BIND_DEVICE, params)
 
     async def async_get_stream_url(
-        self, device_id: str, channel_id: str
+        self, device_id: str, channel_id: str | None
     ) -> dict[str, Any]:
         """obtain the hls stream address of the device"""
         params = {PARAM_DEVICE_ID: device_id, PARAM_CHANNEL_ID: channel_id}
@@ -564,7 +564,7 @@ class ImouDeviceManager:
         )
 
     async def async_get_device_snap(
-        self, device_id: str, channel_id: str
+        self, device_id: str, channel_id: str | None
     ) -> dict[str, Any]:
         params = {PARAM_DEVICE_ID: device_id, PARAM_CHANNEL_ID: channel_id}
         return await self._imou_api_client.async_request_api(
@@ -572,7 +572,7 @@ class ImouDeviceManager:
         )
 
     async def async_create_stream_url(
-        self, device_id: str, channel_id: str, stream_id: int = 0
+        self, device_id: str, channel_id: str | None, stream_id: int = 0
     ) -> dict[str, Any]:
         """create device hls stream address"""
         params = {
