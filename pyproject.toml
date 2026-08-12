@@ -22,6 +22,9 @@ Homepage = "https://github.com/Imou-OpenPlatform/Py-Imou-Open-Api"
 where = ["."]
 include = ["pyimouapi*"]
 
+[tool.setuptools.package-data]
+pyimouapi = ["py.typed"]
+
 [dependency-groups]
 dev = [
   "pytest>=8.0",

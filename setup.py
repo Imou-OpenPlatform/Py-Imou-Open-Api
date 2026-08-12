@@ -6,6 +6,8 @@ setup(
     name="pyimouapi",
     version="1.3.4.1",
     packages=find_packages(),
+    package_data={"pyimouapi": ["py.typed"]},
+    zip_safe=False,
     python_requires=">=3.11",
     install_requires=[
         "aiohttp>=3.11.9,<4.0",
