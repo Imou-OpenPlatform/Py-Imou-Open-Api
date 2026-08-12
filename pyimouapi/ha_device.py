@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from enum import Enum
 from typing import Any, NamedTuple
 
@@ -574,51 +574,79 @@ class ImouHaDeviceManager:
             except Exception as e:
                 _LOGGER.error("async_get_iot_device_detail_info failed: %s", e)
 
-        await asyncio.gather(
-            self._async_update_services_entities(device),
-            self._async_update_device_switch_status(device),
-            self._async_update_device_select_status(device),
-            self._async_update_device_sensor_status(device),
-            return_exceptions=True,
+        await self._async_gather_reads(
+            [
+                self._async_update_services_entities(device),
+                self._async_update_device_switch_status(device),
+                self._async_update_device_select_status(device),
+                self._async_update_device_sensor_status(device),
+            ],
+            device,
+            "entities",
         )
         _LOGGER.debug("update_device_status finish: %s", device)
 
+    @staticmethod
+    async def _async_gather_reads(
+        coroutines: list[Coroutine[Any, Any, Any]], device: ImouHaDevice, what: str
+    ) -> None:
+        """Run status reads together, letting one failure not hide the rest."""
+        for result in await asyncio.gather(*coroutines, return_exceptions=True):
+            if isinstance(result, asyncio.CancelledError):
+                raise result
+            if isinstance(result, BaseException):
+                _LOGGER.warning(
+                    "Failed to update %s for %s: %s", what, device.device_name, result
+                )
+
     async def _async_update_device_switch_status(self, device: ImouHaDevice):
         """UPDATE SWITCH STATUS"""
-        for switch_type, value in device.switches.items():
-            if PARAM_REF in value:
-                continue
-            else:
-                results = await asyncio.gather(
-                    *[
-                        self._async_get_device_switch_status_by_ability(
-                            device, ability_type
-                        )
-                        for ability_type in (
-                            value[PARAM_FUNCTION_TYPE]
-                            if isinstance(value[PARAM_FUNCTION_TYPE], list)
-                            else [value[PARAM_FUNCTION_TYPE]]
-                        )
-                    ],
-                    return_exceptions=True,
+        # A device can carry a dozen switches, and reading them one after
+        # another is most of what a poll spends its time on.
+        await self._async_gather_reads(
+            [
+                self._async_update_one_switch_by_ability(device, switch_type, value)
+                for switch_type, value in device.switches.items()
+                if PARAM_REF not in value
+            ],
+            device,
+            "switches",
+        )
+
+    async def _async_update_one_switch_by_ability(
+        self, device: ImouHaDevice, switch_type: str, value: dict[str, Any]
+    ) -> None:
+        """Read every ability backing one switch and combine them into its state."""
+        results = await asyncio.gather(
+            *[
+                self._async_get_device_switch_status_by_ability(device, ability_type)
+                for ability_type in (
+                    value[PARAM_FUNCTION_TYPE]
+                    if isinstance(value[PARAM_FUNCTION_TYPE], list)
+                    else [value[PARAM_FUNCTION_TYPE]]
                 )
-                # Gathered exceptions arrive as objects, and every object is
-                # truthy, so a failed read would otherwise show as "on".
-                device.switches[switch_type][PARAM_STATE] = any(
-                    result is True for result in results
-                )
+            ],
+            return_exceptions=True,
+        )
+        # Gathered exceptions arrive as objects, and every object is
+        # truthy, so a failed read would otherwise show as "on".
+        device.switches[switch_type][PARAM_STATE] = any(
+            result is True for result in results
+        )
 
     async def _async_update_device_select_status(self, device: ImouHaDevice):
         """UPDATE SELECT STATUS"""
+        coroutines: list[Coroutine[Any, Any, Any]] = []
         for select_type, value in device.selects.items():
             if select_type == PARAM_COLLECTION_POINT:
-                await self._async_update_device_collection_points(device)
+                coroutines.append(self._async_update_device_collection_points(device))
             elif PARAM_REF in value:
                 continue
             else:
-                await self._async_update_device_select_status_by_type(
-                    device, select_type
+                coroutines.append(
+                    self._async_update_device_select_status_by_type(device, select_type)
                 )
+        await self._async_gather_reads(coroutines, device, "selects")
 
     async def _async_update_device_collection_points(self, device: ImouHaDevice):
         """Refresh collection point preset names."""
@@ -686,13 +714,15 @@ class ImouHaDeviceManager:
 
     async def _async_update_device_sensor_status(self, device: ImouHaDevice):
         """UPDATE SENSOR STATUS"""
+        coroutines: list[Coroutine[Any, Any, Any]] = []
         for sensor_type, value in device.sensors.items():
             if PARAM_REF in value:
                 continue
             elif sensor_type == PARAM_STORAGE_USED:
-                await self._async_update_device_storage(device)
+                coroutines.append(self._async_update_device_storage(device))
             elif sensor_type == PARAM_BATTERY:
-                await self._async_update_device_battery(device)
+                coroutines.append(self._async_update_device_battery(device))
+        await self._async_gather_reads(coroutines, device, "sensors")
 
     async def _async_update_status(self, device: ImouHaDevice):
         try:
