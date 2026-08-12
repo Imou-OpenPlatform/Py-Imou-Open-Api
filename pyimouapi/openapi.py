@@ -66,8 +66,13 @@ class ImouOpenApiClient:
             )
         return self._session
 
-    async def async_download(self, url: str, timeout: int = 120) -> bytes:
-        """GET a binary payload such as a device snapshot."""
+    async def async_download(self, url: str, timeout: int = 120) -> bytes:  # noqa: ASYNC109
+        """GET a binary payload such as a device snapshot.
+
+        The timeout is handed to aiohttp rather than wrapped in asyncio.timeout so
+        it covers connecting and reading as one budget, which is what a caller
+        downloading a snapshot over a slow link actually wants to bound.
+        """
         session = await self._async_get_session()
         # Released via the context manager: an error status returns early, and the
         # pool is capped, so a held connection would stall later calls.

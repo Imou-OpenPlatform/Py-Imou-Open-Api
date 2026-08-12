@@ -49,6 +49,10 @@ extend-exclude = [
 [tool.ruff.lint]
 select = [
   "E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "RUF",
+  # This library runs inside the Home Assistant event loop: ASYNC catches work
+  # that would block it, and G/LOG keep polling logs from formatting messages
+  # that a disabled log level throws away.
+  "ASYNC", "G", "LOG",
 ]
 ignore = ["N818"]
 

@@ -557,7 +557,7 @@ class ImouHaDeviceManager:
         # The device status is updated first, and if it's not online, the other entity status isn't updated
         await self._async_update_status(device)
         if device.sensors[PARAM_STATUS][PARAM_STATE] == DeviceStatus.OFFLINE.value:
-            _LOGGER.info(f"device {device.device_name} is offline,stop updating")
+            _LOGGER.info("device %s is offline,stop updating", device.device_name)
             return
 
         if device.product_id is not None:
@@ -571,7 +571,7 @@ class ImouHaDeviceManager:
                 )
                 await self._async_update_properties_from_detail(device, detail)
             except Exception as e:
-                _LOGGER.error(f"async_get_iot_device_detail_info failed: {e}")
+                _LOGGER.error("async_get_iot_device_detail_info failed: %s", e)
 
         await asyncio.gather(
             self._async_update_services_entities(device),
@@ -580,7 +580,7 @@ class ImouHaDeviceManager:
             self._async_update_device_sensor_status(device),
             return_exceptions=True,
         )
-        _LOGGER.debug(f"update_device_status finish: {device.__str__()}")
+        _LOGGER.debug("update_device_status finish: %s", device)
 
     async def _async_update_device_switch_status(self, device: ImouHaDevice):
         """UPDATE SWITCH STATUS"""
@@ -717,7 +717,7 @@ class ImouHaDeviceManager:
                         )
                         break
         except Exception as e:
-            _LOGGER.error(f"_async_update_device_status error:  {e}")
+            _LOGGER.error("_async_update_device_status error:  %s", e)
 
     async def _async_update_device_storage(self, device: ImouHaDevice):
         try:
@@ -730,7 +730,7 @@ class ImouHaDeviceManager:
             else:
                 apply_sensor_state(device.sensors, PARAM_STORAGE_USED, "e2")
         except RequestFailedException as exception:
-            _LOGGER.error(f"_async_update_device_storage error:  {exception}")
+            _LOGGER.error("_async_update_device_storage error:  %s", exception)
             if ERROR_CODE_NO_STORAGE_MEDIUM in exception.message:
                 apply_sensor_state(device.sensors, PARAM_STORAGE_USED, "e1")
             else:
@@ -778,7 +778,7 @@ class ImouHaDeviceManager:
             device.device_id, device.channel_id
         )
         if PARAM_URL in data:
-            _LOGGER.debug(f"wait {wait_seconds} seconds to download a picture")
+            _LOGGER.debug("wait %s seconds to download a picture", wait_seconds)
             await asyncio.sleep(wait_seconds)
         try:
             return await self.delegate.async_download(data[PARAM_URL])
@@ -800,7 +800,9 @@ class ImouHaDeviceManager:
                     imou_ha_device.set_channel_name(channel.channel_name)
                     if device.product_id is not None:
                         _LOGGER.debug(
-                            f"channels and product_id is not none, device_id:{device.device_id},product_id:{device.product_id}"
+                            "channels and product_id is not none, device_id:%s,product_id:%s",
+                            device.device_id,
+                            device.product_id,
                         )
                         await self._async_configure_device_by_ref(
                             channel.channel_ability_refs.split(","),
@@ -810,7 +812,7 @@ class ImouHaDeviceManager:
                         )
                     else:
                         _LOGGER.debug(
-                            f"channels is not none, device_id:{device.device_id}"
+                            "channels is not none, device_id:%s", device.device_id
                         )
                         self.configure_device_by_ability(
                             channel.channel_ability.split(","),
@@ -821,7 +823,9 @@ class ImouHaDeviceManager:
                     devices.append(imou_ha_device)
             elif device.product_id is not None:
                 _LOGGER.debug(
-                    f"channels is none, device_id:{device.device_id},product_id:{device.product_id}"
+                    "channels is none, device_id:%s,product_id:%s",
+                    device.device_id,
+                    device.product_id,
                 )
                 imou_ha_device = self.build_device(device)
                 await self._async_configure_device_by_ref(
@@ -832,7 +836,7 @@ class ImouHaDeviceManager:
                 )
                 devices.append(imou_ha_device)
         for device in devices:
-            _LOGGER.debug(f"device is  {device.__str__()}")
+            _LOGGER.debug("device is  %s", device)
         return devices
 
     @staticmethod
@@ -1018,7 +1022,7 @@ class ImouHaDeviceManager:
             )
             return data[PARAM_STATUS] == PARAM_ON
         except Exception as e:
-            _LOGGER.warning(f"_async_get_device_switch_status_by_ability fail:{e}")
+            _LOGGER.warning("_async_get_device_switch_status_by_ability fail:%s", e)
             return False
 
     async def _async_set_device_switch_status_by_ability(
@@ -1035,7 +1039,7 @@ class ImouHaDeviceManager:
             try:
                 await self._async_update_device_night_vision_mode(device)
             except Exception as e:
-                _LOGGER.warning(f"_async_update_device_select_status_by_type fail:{e}")
+                _LOGGER.warning("_async_update_device_select_status_by_type fail:%s", e)
                 device.selects[PARAM_NIGHT_VISION_MODE] = {
                     PARAM_CURRENT_OPTION: "",
                     PARAM_OPTIONS: [],
@@ -1093,7 +1097,7 @@ class ImouHaDeviceManager:
             case "3":
                 return DeviceStatus.UPGRADING.value
             case _:
-                _LOGGER.warning(f"Unknown device status: {origin_value}")
+                _LOGGER.warning("Unknown device status: %s", origin_value)
                 return DeviceStatus.OFFLINE.value
 
     @staticmethod
@@ -1201,7 +1205,7 @@ class ImouHaDeviceManager:
                     stream[PARAM_HLS].startswith(protocol + ":")
                     and (0 if resolution == PARAM_HD else 1) == stream[PARAM_STREAM_ID]
                 ):
-                    _LOGGER.debug(f"get_device_stream {stream[PARAM_HLS]}")
+                    _LOGGER.debug("get_device_stream %s", stream[PARAM_HLS])
                     return stream[PARAM_HLS]
             return data[PARAM_STREAMS][0][PARAM_HLS]
         return ""
@@ -1371,7 +1375,7 @@ class ImouHaDeviceManager:
                     key=switch_type,
                 )
         except Exception as e:
-            _LOGGER.error(f"_async_update_device_switch_status_by_ref fail:{e}")
+            _LOGGER.error("_async_update_device_switch_status_by_ref fail:%s", e)
 
     async def _async_update_device_sensor_status_by_ref(
         self,
@@ -1397,7 +1401,7 @@ class ImouHaDeviceManager:
                 return
             apply_sensor_state(device.sensors, sensor_type, state)
         except Exception as e:
-            _LOGGER.error(f"_async_update_device_sensor_status_by_ref fail:{e}")
+            _LOGGER.error("_async_update_device_sensor_status_by_ref fail:%s", e)
 
     async def _get_state_from_properties_or_services(
         self,
@@ -1545,7 +1549,7 @@ class ImouHaDeviceManager:
                 )
         except Exception as e:
             _LOGGER.warning(
-                f"_async_update_device_binary_sensor_status_by_ref fail:{e}"
+                "_async_update_device_binary_sensor_status_by_ref fail:%s", e
             )
 
     async def _async_update_device_battery(self, device, retry: bool = False):
@@ -1568,10 +1572,10 @@ class ImouHaDeviceManager:
                     await self.delegate.async_wake_up_device(device.device_id)
                     await self._async_update_device_battery(device, True)
                 except RequestFailedException as e:
-                    _LOGGER.error(f"_async_update_device_battery error:  {e}")
+                    _LOGGER.error("_async_update_device_battery error:  %s", e)
                     apply_sensor_state(device.sensors, PARAM_BATTERY, "0")
             else:
-                _LOGGER.error(f"_async_update_device_battery error:  {exception}")
+                _LOGGER.error("_async_update_device_battery error:  %s", exception)
                 apply_sensor_state(device.sensors, PARAM_BATTERY, "0")
 
     @staticmethod
@@ -1622,7 +1626,7 @@ class ImouHaDeviceManager:
                 str(state) if isinstance(state, int) else state
             )
         except Exception as e:
-            _LOGGER.error(f"_async_update_device_text_status_by_ref fail:{e}")
+            _LOGGER.error("_async_update_device_text_status_by_ref fail:%s", e)
 
     async def _async_set_count_down_switch_time(
         self, device: ImouHaDevice, text_value: str
