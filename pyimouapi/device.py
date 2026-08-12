@@ -732,6 +732,10 @@ class ImouDeviceManager:
         await self._imou_api_client.async_request_api(API_ENDPOINT_SIREN_STOP, params)
 
     async def _async_update_device_ability_refs(self, imou_device: ImouDevice) -> None:
+        # Only iot devices carry a product id, and it is what the detail call
+        # is keyed on, so there is nothing to ask about without one.
+        if imou_device.product_id is None:
+            return
         device_id = compose_iot_device_id(
             imou_device.device_id,
             imou_device.parent_device_id,
@@ -744,8 +748,8 @@ class ImouDeviceManager:
         imou_device.set_device_ability_refs(
             device_detail.get(PARAM_ABILITY_REFS, "unknown")
         )
-        if device_detail.get(PARAM_CHANNELS) and imou_device.channels:
-            channels_detail = device_detail.get(PARAM_CHANNELS)
+        channels_detail = device_detail.get(PARAM_CHANNELS)
+        if channels_detail and imou_device.channels:
             channel_detail_map = {
                 str(channel_detail.get(PARAM_CHANNEL_ID)): channel_detail.get(
                     PARAM_ABILITY_REFS, "unknown"

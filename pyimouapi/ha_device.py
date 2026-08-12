@@ -1209,7 +1209,7 @@ class ImouHaDeviceManager:
         for switch_type, ability_list in SWITCH_TYPE_ABILITY.items():
             for ability in ability_list:
                 if ImouHaDeviceManager.entity_need_add_to_device(
-                    ability.get(PARAM_ABILITY),
+                    ability[PARAM_ABILITY],
                     channel_abilities,
                     device_abilities,
                     is_ipc,
@@ -1257,7 +1257,7 @@ class ImouHaDeviceManager:
         channel_abilities_or_refs: list[str],
         device_abilities_or_refs: list[str],
         is_ipc: bool,
-        channel_id: str,
+        channel_id: str | None,
         entity_type: str,
         exists_entities: dict[str, Any],
     ) -> bool:
@@ -1278,10 +1278,10 @@ class ImouHaDeviceManager:
         channel_ability_refs: list[str],
         device_ability_refs: list[str],
         is_ipc: bool,
-        channel_id: str,
+        channel_id: str | None,
         entity_type: str,
         exists_entities: dict[str, Any],
-        product_id: str,
+        product_id: str | None,
         except_product_ids: list[str],
     ) -> bool:
         would_add = ImouHaDeviceManager.entity_need_add_to_device(
