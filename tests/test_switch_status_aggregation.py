@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from pyimouapi.const import PARAM_FUNCTION_TYPE, PARAM_STATE
+from pyimouapi.exceptions import RequestFailedException
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
 
@@ -72,17 +73,21 @@ async def test_every_write_failing_surfaces_the_first_error() -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_switch_with_no_abilities_does_not_crash() -> None:
-    """An empty ability list has nothing to fail, so nothing is raised.
+async def test_a_switch_with_no_abilities_says_so() -> None:
+    """An empty ability list means no request went out, so nothing flipped.
 
-    all() is true for an empty sequence, so asking for the first failure would
-    have raised IndexError at whoever pressed the switch.
+    Two earlier readings of this were both wrong. all() is true for an empty
+    sequence, so asking for the first failure raised IndexError at whoever
+    pressed the switch; guarding that then fell through to recording the switch
+    as flipped, a state the device was never told about.
     """
     manager = ImouHaDeviceManager(MagicMock())
     device = build_device([], switch_type="close_camera")
 
-    await manager.async_switch_operation(device, "close_camera", True)
+    with pytest.raises(RequestFailedException, match="close_camera"):
+        await manager.async_switch_operation(device, "close_camera", False)
 
+    # Still reading as it was, because the device was never asked to change.
     assert device.switches["close_camera"][PARAM_STATE] is True
 
 

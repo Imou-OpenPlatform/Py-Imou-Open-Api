@@ -38,6 +38,7 @@ from .const import (
 )
 from .exceptions import (
     ConnectFailedException,
+    ImouException,
     InvalidAppIdOrSecretException,
     RequestFailedException,
 )
@@ -111,16 +112,23 @@ class ImouOpenApiClient:
         downloading a snapshot over a slow link actually wants to bound.
         """
         session = await self._async_get_session()
-        # Released via the context manager: an error status returns early, and the
-        # pool is capped, so a held connection would stall later calls.
-        async with session.get(
-            url, timeout=aiohttp.ClientTimeout(total=timeout)
-        ) as response:
-            if response.status != 200:
-                raise RequestFailedException(
-                    f"request failed,status code {response.status}"
-                )
-            return await response.read()
+        try:
+            # Released via the context manager: an error status returns early, and
+            # the pool is capped, so a held connection would stall later calls.
+            async with session.get(
+                url, timeout=aiohttp.ClientTimeout(total=timeout)
+            ) as response:
+                if response.status != 200:
+                    raise RequestFailedException(
+                        f"request failed,status code {response.status}"
+                    )
+                return await response.read()
+        except ImouException:
+            raise
+        except Exception as exception:
+            # Reaching storage is its own network hop; report it the way a failed
+            # API call is reported so callers have one family to catch.
+            raise ConnectFailedException(f"connect failed,{exception}") from exception
 
     async def async_close(self) -> None:
         """Close the HTTP session (call when done with the client)."""
@@ -216,8 +224,12 @@ class ImouOpenApiClient:
                     text = await response.text()
         except Exception as exception:
             raise ConnectFailedException(f"connect failed,{exception}") from exception
-        # Anything below here reached the server and got an answer back, so it is
-        # the request that failed rather than the connection.
+        # A 5xx is the far side being unable to serve, which reads to a user as
+        # not getting through; a 4xx is this request being refused. Parsing the
+        # body first used to report either as a connection failure, because an
+        # error page is not JSON.
+        if status >= 500:
+            raise ConnectFailedException(f"connect failed,status code {status}")
         if status != 200:
             raise RequestFailedException(f"request failed,status code {status}")
         try:

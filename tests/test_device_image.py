@@ -31,11 +31,31 @@ async def test_image_is_downloaded_over_the_shared_session() -> None:
 
 
 @pytest.mark.asyncio
-async def test_failed_download_returns_none() -> None:
-    """A failing download is logged and yields no image, as before."""
+async def test_a_failed_download_reaches_the_caller() -> None:
+    """The reason must survive to whoever can show it to a user.
+
+    Swallowing it returned no image, which Home Assistant reports as "Unable to
+    get image" with nothing to act on, and left the integration's translated
+    camera error unreachable.
+    """
     delegate = MagicMock()
     delegate.async_get_device_snap = AsyncMock(return_value={PARAM_URL: SNAP_URL})
     delegate.async_download = AsyncMock(side_effect=RequestFailedException("boom"))
     manager = ImouHaDeviceManager(delegate)
 
-    assert await manager.async_get_device_image(device(), 0) is None
+    with pytest.raises(RequestFailedException, match="boom"):
+        await manager.async_get_device_image(device(), 0)
+
+
+@pytest.mark.asyncio
+async def test_a_snapshot_without_a_url_says_so() -> None:
+    """A snap answer carrying no url used to surface as a bare KeyError."""
+    delegate = MagicMock()
+    delegate.async_get_device_snap = AsyncMock(return_value={})
+    delegate.async_download = AsyncMock()
+    manager = ImouHaDeviceManager(delegate)
+
+    with pytest.raises(RequestFailedException, match="without a url"):
+        await manager.async_get_device_image(device(), 0)
+
+    delegate.async_download.assert_not_awaited()

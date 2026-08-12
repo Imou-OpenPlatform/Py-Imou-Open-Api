@@ -395,15 +395,28 @@ async def test_session_caps_concurrent_connections() -> None:
 
 
 @pytest.mark.asyncio
-async def test_error_status_reports_the_status_code(client: ImouOpenApiClient) -> None:
-    """A gateway error page must name the status, not look like a parse failure.
+async def test_a_gateway_error_reads_as_not_getting_through(
+    client: ImouOpenApiClient,
+) -> None:
+    """A 5xx names its status and tells the user the far side is unwell.
 
-    The connection plainly succeeded, so reporting it as a connection failure
-    sends whoever reads the log looking in the wrong place.
+    Parsing the body first reported this as a JSON failure, which sends whoever
+    reads the log looking in the wrong place. Calling it a request failure would
+    be little better: nothing is wrong with the request, and the user's next
+    step is to wait rather than to check their settings.
     """
     install_session(client, [FakeResponse.raw(502, "<html>Bad Gateway</html>")])
 
-    with pytest.raises(RequestFailedException, match="502"):
+    with pytest.raises(ConnectFailedException, match="502"):
+        await client.async_get_token()
+
+
+@pytest.mark.asyncio
+async def test_a_refused_request_names_its_status(client: ImouOpenApiClient) -> None:
+    """A 4xx is this request being turned away, not a connection problem."""
+    install_session(client, [FakeResponse.raw(403, "<html>Forbidden</html>")])
+
+    with pytest.raises(RequestFailedException, match="403"):
         await client.async_get_token()
 
 

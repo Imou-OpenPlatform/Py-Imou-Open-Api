@@ -814,18 +814,26 @@ class ImouHaDeviceManager:
         )
         return await self.async_get_stream_url(data, resolution, protocol)
 
-    async def async_get_device_image(self, device: ImouHaDevice, wait_seconds: int):
+    async def async_get_device_image(
+        self, device: ImouHaDevice, wait_seconds: int
+    ) -> bytes:
+        """Ask the device for a fresh snapshot and fetch it.
+
+        Failures are raised rather than logged and turned into no image. The
+        caller cannot show one either way, and Home Assistant puts an ImouException
+        in front of the user in their own language, where a bare None became
+        "Unable to get image" with nothing to act on.
+        """
         data = await self.delegate.async_get_device_snap(
             device.device_id, device.channel_id
         )
-        if PARAM_URL in data:
-            _LOGGER.debug("wait %s seconds to download a picture", wait_seconds)
-            await asyncio.sleep(wait_seconds)
-        try:
-            return await self.delegate.async_download(data[PARAM_URL])
-        except Exception as exception:
-            _LOGGER.error("error get_device_image %s", exception)
-            return None
+        if PARAM_URL not in data:
+            raise RequestFailedException(
+                f"device {device.device_id} answered a snapshot request without a url"
+            )
+        _LOGGER.debug("wait %s seconds to download a picture", wait_seconds)
+        await asyncio.sleep(wait_seconds)
+        return await self.delegate.async_download(data[PARAM_URL])
 
     async def async_get_devices(self) -> list[ImouHaDevice]:
         """
@@ -1015,11 +1023,18 @@ class ImouHaDeviceManager:
                 ],
                 return_exceptions=True,
             )
+            if not result:
+                # No ability to write means no request went out, so reporting
+                # the switch as flipped below would be a state the device never
+                # took. Today's tables always name one; this keeps a future
+                # empty entry from lying rather than failing.
+                raise RequestFailedException(
+                    f"{switch_type} on {device.device_id} has no ability to write"
+                )
             failures = [item for item in result if isinstance(item, BaseException)]
             # Nothing got through, so the device never took the new state; report
-            # the first error instead. Guarded on there being one, since all() is
-            # true for an empty ability list and would index into nothing.
-            if failures and len(failures) == len(result):
+            # the first error instead.
+            if len(failures) == len(result):
                 raise failures[0]
         device.switches[switch_type][PARAM_STATE] = enable
 
