@@ -400,23 +400,33 @@ class ImouHaDeviceManager:
                 continue
             self._apply_property_value(device, kind, key, meta, raw)
 
+    @staticmethod
+    def _reads_through_service(value: dict[str, Any]) -> bool:
+        """Return True when the entity reads its state through an iot service."""
+        return (
+            PARAM_REF in value
+            and value.get(PARAM_REF_TYPE, PARAM_PROPERTIES) == PARAM_SERVICES
+        )
+
     async def _async_update_services_entities(self, device: ImouHaDevice) -> None:
-        for sensor_type, value in device.sensors.items():
-            if (
-                PARAM_REF in value
-                and value.get(PARAM_REF_TYPE, PARAM_PROPERTIES) == PARAM_SERVICES
-            ):
-                await self._async_update_device_sensor_status_by_ref(
-                    device, sensor_type, value
-                )
-        for text_type, value in device.texts.items():
-            if (
-                PARAM_REF in value
-                and value.get(PARAM_REF_TYPE, PARAM_PROPERTIES) == PARAM_SERVICES
-            ):
-                await self._async_update_device_text_status_by_ref(
-                    device, text_type, value
-                )
+        """Refresh entities that read state through an iot service.
+
+        Each one costs its own iotDeviceControl call because the API has no batch
+        form for service reads, so issue them concurrently instead of serially.
+        Every update swallows its own errors, so gather cannot fail here.
+        """
+        updates = [
+            self._async_update_device_sensor_status_by_ref(device, sensor_type, value)
+            for sensor_type, value in device.sensors.items()
+            if self._reads_through_service(value)
+        ]
+        updates.extend(
+            self._async_update_device_text_status_by_ref(device, text_type, value)
+            for text_type, value in device.texts.items()
+            if self._reads_through_service(value)
+        )
+        if updates:
+            await asyncio.gather(*updates)
 
     async def async_update_device_status(self, device: ImouHaDevice):
         """Update device status, with the updater calling every time the coordinator is updated"""
