@@ -328,6 +328,7 @@ class ImouDeviceManager:
         if data[PARAM_COUNT] == 0:
             return []
         devices = []
+        iot_devices = []
         for device in data[PARAM_DEVICE_LIST]:
             device_id = device[PARAM_DEVICE_ID]
             device_name = device[PARAM_DEVICE_NAME]
@@ -372,8 +373,17 @@ class ImouDeviceManager:
             # that needs to be registered based on this field
             if PARAM_PRODUCT_ID in device:
                 imou_device.set_product_id(device[PARAM_PRODUCT_ID])
-                await self._async_update_device_ability_refs(imou_device)
+                iot_devices.append(imou_device)
             devices.append(imou_device)
+        # Each iot device costs one getIotDeviceDetailInfo call; issue them together
+        # so listing N devices is one round trip instead of N serial ones
+        if iot_devices:
+            await asyncio.gather(
+                *(
+                    self._async_update_device_ability_refs(iot_device)
+                    for iot_device in iot_devices
+                )
+            )
         # If the return quantity is equal to the requested quantity, continue to request the next page
         if data[PARAM_COUNT] == page_size:
             devices.extend(await self.async_get_devices(page + 1, page_size))
