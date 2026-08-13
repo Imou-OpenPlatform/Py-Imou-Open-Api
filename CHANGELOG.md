@@ -39,7 +39,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 #### Fixed
 
-- IoT `motion_detect`: skip advertised but unusable refs `14800` and `305000` for product_id `FKX9UYL4` (falls through to `108800`); log at debug when an `excepts` entry skips a matching ref
+- IoT `motion_detect`: skip advertised but unusable refs `14800` and `305000` for product_id `FKX9UYL4` / IPC-K7C (falls through to `108800`); writing `14800` returned `40999` ([Imou-Home-Assistant#77](https://github.com/Imou-OpenPlatform/Imou-Home-Assistant/issues/77)); log at debug when an `excepts` entry skips a matching ref
 - Paging stops on a short page rather than on the `count` field. Read as an account total, `count` sent an account holding an exact multiple of the page size asking for pages forever
 - A connection is released when a response body fails to read, and when a snapshot download returns a non-200 status. Both used to strand the connection in the pool
 - A non-200 response is reported as a request failure carrying the status code. Parsing an error page as JSON used to surface a gateway error as a connection problem
@@ -167,7 +167,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 #### 修复
 
-- IoT `motion_detect`：对 `FKX9UYL4` 跳过宣称但不可用的 refs `14800`/`305000`（回落到 `108800`）；`excepts` 跳过匹配 ref 时以 debug 记录
+- IoT `motion_detect`：对 `FKX9UYL4`（IPC-K7C）跳过宣称但不可用的 refs `14800`/`305000`（回落到 `108800`）；写 `14800` 会返回 `40999`（[Imou-Home-Assistant#77](https://github.com/Imou-OpenPlatform/Imou-Home-Assistant/issues/77)）；`excepts` 跳过匹配 ref 时以 debug 记录
 - 分页在短页时结束，而不再依赖 `count` 字段。若把 `count` 当账号总数，页大小刚好整除时会一直请求下一页
 - 响应体读取失败或抓图非 200 时会释放连接；此前都会把连接卡在池里
 - 非 200 响应按带状态码的请求失败上报。原先把错误页当 JSON 解析，会把网关错误表现成连接问题
