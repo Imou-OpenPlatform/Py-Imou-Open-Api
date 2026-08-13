@@ -1,3 +1,5 @@
+from typing import Any
+
 # API Endpoints
 API_ENDPOINT_ACCESS_TOKEN = "/openapi/accessToken"
 API_ENDPOINT_LIST_DEVICE_DETAILS = "/openapi/listDeviceDetailsByPage"
@@ -10,6 +12,7 @@ API_ENDPOINT_GET_DEVICE_NIGHT_VISION_MODE = "/openapi/getNightVisionMode"
 API_ENDPOINT_SET_DEVICE_NIGHT_VISION_MODE = "/openapi/setNightVisionMode"
 API_ENDPOINT_DEVICE_STORAGE = "/openapi/deviceStorage"
 API_ENDPOINT_RESTART_DEVICE = "/openapi/restartDevice"
+API_ENDPOINT_BIND_DEVICE = "/openapi/bindDevice"
 API_ENDPOINT_BIND_DEVICE_LIVE = "/openapi/bindDeviceLive"
 API_ENDPOINT_GET_DEVICE_ONLINE = "/openapi/deviceOnline"
 API_ENDPOINT_GET_DEVICE_LIVE_INFO = "/openapi/getLiveStreamInfo"
@@ -155,7 +158,7 @@ PARAM_ABILITY = "ability"
 PARAM_FUNCTION_TYPE = "function_type"
 
 # Required capacity for various switch types
-SWITCH_TYPE_ABILITY = {
+SWITCH_TYPE_ABILITY: dict[str, list[dict[str, Any]]] = {
     "motion_detect": [
         {
             "ability": "MobileDetect",
@@ -226,15 +229,21 @@ SWITCH_TYPE_ABILITY = {
     ],
 }
 
-SWITCH_TYPE_REF = {
+SWITCH_TYPE_REF: dict[str, list[dict[str, Any]]] = {
     "motion_detect": [
         {
             "ref": "14800",
             "default": False,
+            "excepts": [
+                "FKX9UYL4",
+            ],
         },
         {
             "ref": "305000",
             "default": False,
+            "excepts": [
+                "FKX9UYL4",
+            ],
         },
         {
             "ref": "108800",
@@ -313,7 +322,7 @@ SWITCH_TYPE_REF = {
     ],
 }
 #  Required capacity for various button types
-BUTTON_TYPE_ABILITY = {
+BUTTON_TYPE_ABILITY: dict[str, list[str]] = {
     "restart_device": ["Reboot"],
     "siren_start": ["Siren"],
     "siren_stop": ["Siren"],
@@ -322,7 +331,7 @@ BUTTON_TYPE_ABILITY = {
     "ptz_left": ["PT", "PTZ"],
     "ptz_right": ["PT", "PTZ"],
 }
-BUTTON_TYPE_REF = {
+BUTTON_TYPE_REF: dict[str, list[dict[str, Any]]] = {
     "restart_device": [
         {"ref": "2300"},
         {"ref": "21200"},
@@ -401,11 +410,11 @@ BUTTON_TYPE_REF = {
     ],
 }
 #  Required capacity for various select types
-SELECT_TYPE_ABILITY = {
+SELECT_TYPE_ABILITY: dict[str, list[str]] = {
     "night_vision_mode": ["NVM"],
     "collection_point": ["CollectionPoint"],
 }
-SELECT_TYPE_REF = {
+SELECT_TYPE_REF: dict[str, list[dict[str, Any]]] = {
     "night_vision_mode": [
         {
             "ref": "17400",
@@ -460,11 +469,11 @@ SELECT_TYPE_REF = {
     ],
 }
 #  Required capacity for various sensor types
-SENSOR_TYPE_ABILITY = {
+SENSOR_TYPE_ABILITY: dict[str, list[str]] = {
     "storage_used": ["LocalStorage", "LocalStorageEnable"],
     "battery": ["Electric"],
 }
-SENSOR_TYPE_REF = {
+SENSOR_TYPE_REF: dict[str, list[dict[str, Any]]] = {
     "storage_used": [
         {
             "ref": "14600",
@@ -536,10 +545,12 @@ SENSOR_TYPE_REF = {
     ],
 }
 
-BINARY_SENSOR_TYPE_ABILITY = {}
-BINARY_SENSOR_TYPE_REF = {"door_contact_status": [{"ref": "16300", "default": False}]}
+BINARY_SENSOR_TYPE_ABILITY: dict[str, list[str]] = {}
+BINARY_SENSOR_TYPE_REF: dict[str, list[dict[str, Any]]] = {
+    "door_contact_status": [{"ref": "16300", "default": False}]
+}
 
-TEXT_TYPE_REF = {
+TEXT_TYPE_REF: dict[str, list[dict[str, Any]]] = {
     "count_down_switch": [
         {
             "ref": "28800",

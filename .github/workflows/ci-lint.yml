@@ -44,6 +44,19 @@ jobs:
           fi
       - run: uv run ruff format --check pyimouapi tests
 
+  mypy:
+    name: Types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --dev
+      # py.typed tells Home Assistant and other downstreams to trust these
+      # annotations, so a wrong one is a bug shipped to them.
+      - run: uv run mypy
+
   spell:
     name: Spell
     runs-on: ubuntu-latest

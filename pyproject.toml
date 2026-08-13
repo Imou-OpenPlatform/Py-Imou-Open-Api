@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyimouapi"
-version = "1.3.4"
+version = "1.3.5"
 description = "A package for imou open api"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -22,12 +22,16 @@ Homepage = "https://github.com/Imou-OpenPlatform/Py-Imou-Open-Api"
 where = ["."]
 include = ["pyimouapi*"]
 
+[tool.setuptools.package-data]
+pyimouapi = ["py.typed"]
+
 [dependency-groups]
 dev = [
   "pytest>=8.0",
   "pytest-asyncio>=0.24",
   "pytest-timeout>=2.3",
   "ruff>=0.8.3",
+  "mypy>=1.13",
   "codespell>=2.3.0",
   "yamllint>=1.35.0",
   "pre-commit>=4.0.0",
@@ -46,6 +50,10 @@ extend-exclude = [
 [tool.ruff.lint]
 select = [
   "E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "RUF",
+  # This library runs inside the Home Assistant event loop: ASYNC catches work
+  # that would block it, and G/LOG keep polling logs from formatting messages
+  # that a disabled log level throws away.
+  "ASYNC", "G", "LOG",
 ]
 ignore = ["N818"]
 
@@ -57,6 +65,13 @@ ignore = ["N818"]
 
 [tool.ruff.format]
 quote-style = "double"
+
+[tool.mypy]
+# py.typed tells downstreams to trust these annotations, so they are checked.
+python_version = "3.11"
+files = ["pyimouapi"]
+# simpleeval ships no stubs.
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -1,0 +1,745 @@
+{
+  "by_ability": {
+    "binary_sensor": {
+      "all_abilities": {},
+      "per_entry": {}
+    },
+    "button": {
+      "all_abilities": {
+        "ptz_down": {},
+        "ptz_left": {},
+        "ptz_right": {},
+        "ptz_up": {},
+        "restart_device": {},
+        "siren_start": {},
+        "siren_stop": {}
+      },
+      "per_entry": {
+        "ptz_down@PT": {},
+        "ptz_down@PTZ": {},
+        "ptz_left@PT": {},
+        "ptz_left@PTZ": {},
+        "ptz_right@PT": {},
+        "ptz_right@PTZ": {},
+        "ptz_up@PT": {},
+        "ptz_up@PTZ": {},
+        "restart_device@Reboot": {},
+        "siren_start@Siren": {},
+        "siren_stop@Siren": {}
+      }
+    },
+    "select": {
+      "all_abilities": {
+        "collection_point": {
+          "current_option": "select_collection_point",
+          "options": [
+            "select_collection_point"
+          ]
+        },
+        "night_vision_mode": {
+          "current_option": "",
+          "options": []
+        }
+      },
+      "per_entry": {
+        "collection_point@CollectionPoint": {
+          "current_option": "select_collection_point",
+          "options": [
+            "select_collection_point"
+          ]
+        },
+        "night_vision_mode@NVM": {
+          "current_option": "",
+          "options": []
+        }
+      }
+    },
+    "sensor": {
+      "all_abilities": {
+        "battery": {
+          "state": 0,
+          "state_variant": "numeric"
+        },
+        "status": {
+          "state": "offline",
+          "state_variant": "enum"
+        },
+        "storage_used": {
+          "state": 0,
+          "state_variant": "numeric"
+        }
+      },
+      "per_entry": {
+        "battery@Electric": {
+          "state": 0,
+          "state_variant": "numeric"
+        },
+        "storage_used@LocalStorage": {
+          "state": 0,
+          "state_variant": "numeric"
+        },
+        "storage_used@LocalStorageEnable": {
+          "state": 0,
+          "state_variant": "numeric"
+        }
+      }
+    },
+    "switch": {
+      "all_abilities": {
+        "ab_alarm_sound": {
+          "function_type": "abAlarmSound",
+          "state": false
+        },
+        "audio_encode_control": {
+          "function_type": "audioEncodeControl",
+          "state": false
+        },
+        "close_camera": {
+          "function_type": "closeCamera",
+          "state": false
+        },
+        "header_detect": {
+          "function_type": "headerDetect",
+          "state": false
+        },
+        "motion_detect": {
+          "function_type": [
+            "mobileDetect",
+            "motionDetect"
+          ],
+          "state": false
+        },
+        "white_light": {
+          "function_type": "whiteLight",
+          "state": false
+        }
+      },
+      "per_entry": {
+        "ab_alarm_sound@AbAlarmSound": {
+          "function_type": "abAlarmSound",
+          "state": false
+        },
+        "audio_encode_control@AudioEncodeControl": {
+          "function_type": "audioEncodeControl",
+          "state": false
+        },
+        "audio_encode_control@AudioEncodeControlV2": {
+          "function_type": "audioEncodeControl",
+          "state": false
+        },
+        "close_camera@CloseCamera": {
+          "function_type": "closeCamera",
+          "state": false
+        },
+        "header_detect@AiHuman": {
+          "function_type": "aiHuman",
+          "state": false
+        },
+        "header_detect@HeaderDetect": {
+          "function_type": "headerDetect",
+          "state": false
+        },
+        "header_detect@SMDH": {
+          "function_type": "smdHuman",
+          "state": false
+        },
+        "motion_detect@AlarmMD": {
+          "function_type": [
+            "mobileDetect",
+            "motionDetect"
+          ],
+          "state": false
+        },
+        "motion_detect@CRMD": {
+          "function_type": "crEnabled",
+          "state": false
+        },
+        "motion_detect@MobileDetect": {
+          "function_type": [
+            "mobileDetect",
+            "motionDetect"
+          ],
+          "state": false
+        },
+        "white_light@ChnWhiteLight": {
+          "function_type": "whiteLight",
+          "state": false
+        },
+        "white_light@WhiteLight": {
+          "function_type": "whiteLight",
+          "state": false
+        }
+      }
+    }
+  },
+  "by_ref": {
+    "binary_sensor": {
+      "all_refs": {
+        "door_contact_status": {
+          "ref": "16300",
+          "state": false
+        }
+      },
+      "per_entry": {
+        "door_contact_status@16300": {
+          "ref": "16300",
+          "state": false
+        }
+      }
+    },
+    "button": {
+      "all_refs": {
+        "mute": {
+          "ref": "21600"
+        },
+        "ptz_down": {
+          "ref": "22100"
+        },
+        "ptz_left": {
+          "ref": "22100"
+        },
+        "ptz_right": {
+          "ref": "22100"
+        },
+        "ptz_up": {
+          "ref": "22100"
+        },
+        "restart_device": {
+          "ref": "2300"
+        },
+        "siren_start": {
+          "input_ref": "25501",
+          "ref": "25500"
+        },
+        "siren_stop": {
+          "ref": "22200"
+        }
+      },
+      "per_entry": {
+        "mute@21600": {
+          "ref": "21600"
+        },
+        "mute@2200": {
+          "ref": "2200"
+        },
+        "ptz_down@22100": {
+          "ref": "22100"
+        },
+        "ptz_down@24200": {
+          "ref": "24200"
+        },
+        "ptz_down@24300": {
+          "ref": "24300"
+        },
+        "ptz_down@24400": {
+          "ref": "24400"
+        },
+        "ptz_down@24500": {
+          "ref": "24500"
+        },
+        "ptz_down@88700": {
+          "ref": "88700"
+        },
+        "ptz_down@88800": {
+          "ref": "88800"
+        },
+        "ptz_left@22100": {
+          "ref": "22100"
+        },
+        "ptz_left@24200": {
+          "ref": "24200"
+        },
+        "ptz_left@24300": {
+          "ref": "24300"
+        },
+        "ptz_left@24400": {
+          "ref": "24400"
+        },
+        "ptz_left@24500": {
+          "ref": "24500"
+        },
+        "ptz_left@88700": {
+          "ref": "88700"
+        },
+        "ptz_left@88800": {
+          "ref": "88800"
+        },
+        "ptz_right@22100": {
+          "ref": "22100"
+        },
+        "ptz_right@24200": {
+          "ref": "24200"
+        },
+        "ptz_right@24300": {
+          "ref": "24300"
+        },
+        "ptz_right@24400": {
+          "ref": "24400"
+        },
+        "ptz_right@24500": {
+          "ref": "24500"
+        },
+        "ptz_right@88700": {
+          "ref": "88700"
+        },
+        "ptz_right@88800": {
+          "ref": "88800"
+        },
+        "ptz_up@22100": {
+          "ref": "22100"
+        },
+        "ptz_up@24200": {
+          "ref": "24200"
+        },
+        "ptz_up@24300": {
+          "ref": "24300"
+        },
+        "ptz_up@24400": {
+          "ref": "24400"
+        },
+        "ptz_up@24500": {
+          "ref": "24500"
+        },
+        "ptz_up@88700": {
+          "ref": "88700"
+        },
+        "ptz_up@88800": {
+          "ref": "88800"
+        },
+        "restart_device@21200": {
+          "ref": "21200"
+        },
+        "restart_device@2300": {
+          "ref": "2300"
+        },
+        "restart_device@90600": {
+          "ref": "90600"
+        },
+        "siren_start@25500": {
+          "input_ref": "25501",
+          "ref": "25500"
+        },
+        "siren_stop@22200": {
+          "ref": "22200"
+        }
+      }
+    },
+    "select": {
+      "all_refs": {
+        "collection_point": {
+          "current_option": "select_collection_point",
+          "options": [
+            "select_collection_point"
+          ],
+          "ref": "21500",
+          "ref_type": "services",
+          "turn_input_ref": "22001",
+          "turn_ref": "22000",
+          "value_type": "str"
+        },
+        "device_volume": {
+          "current_option": "low",
+          "options": [
+            "mute",
+            "low",
+            "medium",
+            "high"
+          ],
+          "ref": "15400",
+          "value_type": "int"
+        },
+        "mode": {
+          "current_option": "home",
+          "options": [
+            "home",
+            "away",
+            "disarm"
+          ],
+          "ref": "15200",
+          "value_type": "int"
+        },
+        "night_vision_mode": {
+          "current_option": "intelligent",
+          "options": [
+            "intelligent",
+            "fullcolor",
+            "infrared",
+            "off"
+          ],
+          "ref": "17400",
+          "value_type": "int"
+        }
+      },
+      "per_entry": {
+        "collection_point@21500": {
+          "current_option": "select_collection_point",
+          "options": [
+            "select_collection_point"
+          ],
+          "ref": "21500",
+          "ref_type": "services",
+          "turn_input_ref": "22001",
+          "turn_ref": "22000",
+          "value_type": "str"
+        },
+        "device_volume@15400": {
+          "current_option": "low",
+          "options": [
+            "mute",
+            "low",
+            "medium",
+            "high"
+          ],
+          "ref": "15400",
+          "value_type": "int"
+        },
+        "mode@15200": {
+          "current_option": "home",
+          "options": [
+            "home",
+            "away",
+            "disarm"
+          ],
+          "ref": "15200",
+          "value_type": "int"
+        },
+        "night_vision_mode@112400": {
+          "current_option": "infrared",
+          "options": [
+            "infrared",
+            "off"
+          ],
+          "ref": "112400",
+          "value_type": "int"
+        },
+        "night_vision_mode@139700": {
+          "current_option": "intelligent",
+          "options": [
+            "intelligent",
+            "fullcolor",
+            "infrared",
+            "off",
+            "custom"
+          ],
+          "ref": "139700",
+          "value_type": "int"
+        },
+        "night_vision_mode@17400": {
+          "current_option": "intelligent",
+          "options": [
+            "intelligent",
+            "fullcolor",
+            "infrared",
+            "off"
+          ],
+          "ref": "17400",
+          "value_type": "int"
+        }
+      }
+    },
+    "sensor": {
+      "all_refs": {
+        "battery": {
+          "expression": null,
+          "ref": "11600",
+          "ref_type": "properties",
+          "state": 15,
+          "state_variant": "numeric"
+        },
+        "current": {
+          "expression": "round(data['29022']/1000,2)",
+          "ref": "29000",
+          "ref_type": "services",
+          "state": 0,
+          "state_variant": "numeric"
+        },
+        "humidity_current": {
+          "expression": null,
+          "ref": "16100",
+          "ref_type": "properties",
+          "state": 10.0,
+          "state_variant": "numeric"
+        },
+        "power": {
+          "expression": "data['29023']",
+          "ref": "29000",
+          "ref_type": "services",
+          "state": 0,
+          "state_variant": "numeric"
+        },
+        "status": {
+          "state": "offline",
+          "state_variant": "enum"
+        },
+        "storage_used": {
+          "expression": "('e1' if data['14603']==0 else 'e2') if data['14603'] != 1 else int(data['14602'] / data['14601'] * 100)",
+          "ref": "14600",
+          "ref_type": "properties",
+          "state": "e2",
+          "state_variant": "enum"
+        },
+        "switch_cnt": {
+          "expression": "data['29024']",
+          "ref": "29000",
+          "ref_type": "services",
+          "state": 0,
+          "state_variant": "numeric"
+        },
+        "temperature_current": {
+          "expression": null,
+          "ref": "16000",
+          "ref_type": "properties",
+          "state": 10.0,
+          "state_variant": "numeric"
+        },
+        "use_electricity": {
+          "expression": "round(data['115401']/1000,2)",
+          "ref": "115400",
+          "ref_type": "properties",
+          "state": 0,
+          "state_variant": "numeric"
+        },
+        "use_time": {
+          "expression": "round(data['115402']/60,0)",
+          "ref": "115400",
+          "ref_type": "properties",
+          "state": 0,
+          "state_variant": "numeric"
+        },
+        "voltage": {
+          "expression": "round(data['29021']/1000,2)",
+          "ref": "29000",
+          "ref_type": "services",
+          "state": 0,
+          "state_variant": "numeric"
+        }
+      },
+      "per_entry": {
+        "battery@106200": {
+          "expression": "battery_106200(data)",
+          "ref": "106200",
+          "ref_type": "properties",
+          "state": 0,
+          "state_variant": "numeric"
+        },
+        "battery@11600": {
+          "expression": null,
+          "ref": "11600",
+          "ref_type": "properties",
+          "state": 15,
+          "state_variant": "numeric"
+        },
+        "current@29000": {
+          "expression": "round(data['29022']/1000,2)",
+          "ref": "29000",
+          "ref_type": "services",
+          "state": 0,
+          "state_variant": "numeric"
+        },
+        "humidity_current@16100": {
+          "expression": null,
+          "ref": "16100",
+          "ref_type": "properties",
+          "state": 10.0,
+          "state_variant": "numeric"
+        },
+        "power@29000": {
+          "expression": "data['29023']",
+          "ref": "29000",
+          "ref_type": "services",
+          "state": 0,
+          "state_variant": "numeric"
+        },
+        "storage_used@14600": {
+          "expression": "('e1' if data['14603']==0 else 'e2') if data['14603'] != 1 else int(data['14602'] / data['14601'] * 100)",
+          "ref": "14600",
+          "ref_type": "properties",
+          "state": "e2",
+          "state_variant": "enum"
+        },
+        "switch_cnt@29000": {
+          "expression": "data['29024']",
+          "ref": "29000",
+          "ref_type": "services",
+          "state": 0,
+          "state_variant": "numeric"
+        },
+        "temperature_current@16000": {
+          "expression": null,
+          "ref": "16000",
+          "ref_type": "properties",
+          "state": 10.0,
+          "state_variant": "numeric"
+        },
+        "use_electricity@115400": {
+          "expression": "round(data['115401']/1000,2)",
+          "ref": "115400",
+          "ref_type": "properties",
+          "state": 0,
+          "state_variant": "numeric"
+        },
+        "use_time@115400": {
+          "expression": "round(data['115402']/60,0)",
+          "ref": "115400",
+          "ref_type": "properties",
+          "state": 0,
+          "state_variant": "numeric"
+        },
+        "voltage@29000": {
+          "expression": "round(data['29021']/1000,2)",
+          "ref": "29000",
+          "ref_type": "services",
+          "state": 0,
+          "state_variant": "numeric"
+        }
+      }
+    },
+    "switch": {
+      "all_refs": {
+        "ab_alarm_sound": {
+          "ref": "14200",
+          "state": false
+        },
+        "audio_encode_control": {
+          "ref": "13900",
+          "state": false
+        },
+        "close_camera": {
+          "ref": "13100",
+          "state": false
+        },
+        "header_detect": {
+          "ref": "17100",
+          "state": false
+        },
+        "light": {
+          "ref": "11400",
+          "state": false
+        },
+        "motion_detect": {
+          "ref": "14800",
+          "state": false
+        },
+        "switch": {
+          "ref": "11900",
+          "state": false
+        },
+        "white_light": {
+          "ref": "19700",
+          "state": false
+        }
+      },
+      "per_entry": {
+        "ab_alarm_sound@115300": {
+          "ref": "115300",
+          "state": false
+        },
+        "ab_alarm_sound@14200": {
+          "ref": "14200",
+          "state": false
+        },
+        "audio_encode_control@103800": {
+          "ref": "103800",
+          "state": false
+        },
+        "audio_encode_control@104000": {
+          "ref": "104000",
+          "state": false
+        },
+        "audio_encode_control@13900": {
+          "ref": "13900",
+          "state": false
+        },
+        "close_camera@13100": {
+          "ref": "13100",
+          "state": false
+        },
+        "header_detect@108900": {
+          "ref": "108900",
+          "state": false
+        },
+        "header_detect@17100": {
+          "ref": "17100",
+          "state": false
+        },
+        "header_detect@17900": {
+          "ref": "17900",
+          "state": false
+        },
+        "header_detect@18200": {
+          "ref": "18200",
+          "state": false
+        },
+        "light@11400": {
+          "ref": "11400",
+          "state": false
+        },
+        "light@12700": {
+          "ref": "12700",
+          "state": false
+        },
+        "motion_detect@108800": {
+          "ref": "108800",
+          "state": false
+        },
+        "motion_detect@14800": {
+          "ref": "14800",
+          "state": false
+        },
+        "motion_detect@305000": {
+          "ref": "305000",
+          "state": false
+        },
+        "switch@11900": {
+          "ref": "11900",
+          "state": false
+        },
+        "white_light@19700": {
+          "ref": "19700",
+          "state": false
+        }
+      }
+    },
+    "text": {
+      "all_refs": {
+        "count_down_switch": {
+          "expression": "str(int(data['28823']/60)) if data['28821'] == 1 else '0'",
+          "ref": "28800",
+          "ref_type": "services",
+          "state": "0",
+          "value_type": "int"
+        },
+        "overcharge_switch": {
+          "expression": null,
+          "ref": "1008",
+          "ref_type": "properties",
+          "state": "100",
+          "value_type": "int"
+        }
+      },
+      "per_entry": {
+        "count_down_switch@28800": {
+          "expression": "str(int(data['28823']/60)) if data['28821'] == 1 else '0'",
+          "ref": "28800",
+          "ref_type": "services",
+          "state": "0",
+          "value_type": "int"
+        },
+        "overcharge_switch@1008": {
+          "expression": null,
+          "ref": "1008",
+          "ref_type": "properties",
+          "state": "100",
+          "value_type": "int"
+        },
+        "overcharge_switch@128900": {
+          "expression": null,
+          "ref": "128900",
+          "ref_type": "properties",
+          "state": "100",
+          "value_type": "int"
+        }
+      }
+    }
+  }
+}
