@@ -10,7 +10,6 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 #### Breaking
 
-- The `motion_detect` switch is no longer offered for product_id `FKX9UYL4`. That model advertises refs `14800` and `305000` but cannot serve them, so the entity never worked; consumers that had one will see it disappear
 - `async_get_device_image()` raises the reason a snapshot failed instead of logging it and returning `None`, so a caller can put it in front of a user
 - A 5xx response raises `ConnectFailedException` rather than `RequestFailedException`. Callers separating "could not reach the service" from "the request was refused" get the former for gateway and outage responses
 - Writing a switch that resolves to no ability raises instead of reporting the write as done
@@ -139,7 +138,6 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 #### 破坏性变更
 
-- 产品 `FKX9UYL4` 不再提供 `motion_detect` 开关。该型号会宣称 refs `14800`/`305000` 但实际不可用，实体从未真正工作；已有该实体的调用方会看到其消失
 - `async_get_device_image()` 在抓图失败时抛出原因，而不再仅打日志并返回 `None`，便于调用方展示给用户
 - 5xx 响应改为抛出 `ConnectFailedException` 而非 `RequestFailedException`。区分「连不上服务」与「请求被拒绝」的调用方，对网关/宕机类响应会得到前者
 - 写入开关时若解析不到任何能力，改为抛错，而不再假装写入成功
