@@ -14,12 +14,14 @@ IOT_REFS = {
     "frame_reverse": "13500",
     "wide_dynamic": "19400",
     "smart_track": "13300",
+    "play_sound": "14000",
 }
 
 PAAS_ABILITIES = {
     "frame_reverse": ("FrameReverse", "frameReverse"),
     "wide_dynamic": ("WideDynamic", "wideDynamic"),
     "smart_track": ("SmartTrack", "smartTrack"),
+    "play_sound": ("PlaySound", "playSound"),
 }
 
 
@@ -29,7 +31,7 @@ def _device() -> ImouHaDevice:
     return device
 
 
-def test_iot_refs_register_the_four_feature_switches() -> None:
+def test_iot_refs_register_the_feature_switches() -> None:
     device = _device()
     ImouHaDeviceManager.configure_switch_by_ref(
         list(IOT_REFS.values()),
@@ -42,7 +44,7 @@ def test_iot_refs_register_the_four_feature_switches() -> None:
         assert device.switches[switch_type][PARAM_STATE] is False
 
 
-def test_paas_abilities_register_three_switches_without_pet_detect() -> None:
+def test_paas_abilities_register_feature_switches_without_pet_detect() -> None:
     device = _device()
     ImouHaDeviceManager.configure_switch_by_ability(
         [ability for ability, _ in PAAS_ABILITIES.values()],

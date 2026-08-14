@@ -248,6 +248,13 @@ SWITCH_TYPE_ABILITY: dict[str, list[dict[str, Any]]] = {
             "function_type": "smartTrack",
         }
     ],
+    "play_sound": [
+        {
+            "ability": "PlaySound",
+            "default": False,
+            "function_type": "playSound",
+        }
+    ],
 }
 
 SWITCH_TYPE_REF: dict[str, list[dict[str, Any]]] = {
@@ -343,6 +350,12 @@ SWITCH_TYPE_REF: dict[str, list[dict[str, Any]]] = {
     "smart_track": [
         {
             "ref": "13300",
+            "default": False,
+        }
+    ],
+    "play_sound": [
+        {
+            "ref": "14000",
             "default": False,
         }
     ],

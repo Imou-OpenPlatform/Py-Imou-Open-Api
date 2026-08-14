@@ -113,6 +113,10 @@
           ],
           "state": false
         },
+        "play_sound": {
+          "function_type": "playSound",
+          "state": false
+        },
         "smart_track": {
           "function_type": "smartTrack",
           "state": false
@@ -175,6 +179,10 @@
             "mobileDetect",
             "motionDetect"
           ],
+          "state": false
+        },
+        "play_sound@PlaySound": {
+          "function_type": "playSound",
           "state": false
         },
         "smart_track@SmartTrack": {
@@ -652,6 +660,10 @@
           "ref": "18300",
           "state": false
         },
+        "play_sound": {
+          "ref": "14000",
+          "state": false
+        },
         "smart_track": {
           "ref": "13300",
           "state": false
@@ -720,6 +732,10 @@
         },
         "pet_detect@18300": {
           "ref": "18300",
+          "state": false
+        },
+        "play_sound@14000": {
+          "ref": "14000",
           "state": false
         },
         "smart_track@13300": {
