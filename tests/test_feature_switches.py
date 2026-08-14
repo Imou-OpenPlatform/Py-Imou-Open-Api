@@ -15,6 +15,8 @@ IOT_REFS = {
     "wide_dynamic": "19400",
     "smart_track": "13300",
     "play_sound": "14000",
+    "linkage_siren": "102000",
+    "linkage_white_light": "17300",
 }
 
 PAAS_ABILITIES = {
@@ -22,6 +24,7 @@ PAAS_ABILITIES = {
     "wide_dynamic": ("WideDynamic", "wideDynamic"),
     "smart_track": ("SmartTrack", "smartTrack"),
     "play_sound": ("PlaySound", "playSound"),
+    "linkage_siren": ("LinkageSiren", "linkageSiren"),
 }
 
 
@@ -66,3 +69,20 @@ def test_feature_switch_iot_refs_have_no_excepts() -> None:
     for switch_type, ref in IOT_REFS.items():
         [entry] = SWITCH_TYPE_REF[switch_type]
         assert entry == {"ref": ref, "default": False}
+
+
+def test_white_light_ability_exposes_manual_and_linkage_switches() -> None:
+    """WhiteLight / ChnWhiteLight gate both the lamp and the alarm-linked lamp."""
+    for ability in ("WhiteLight", "ChnWhiteLight"):
+        device = _device()
+        ImouHaDeviceManager.configure_switch_by_ability(
+            [ability],
+            False,
+            [],
+            device,
+        )
+        assert device.switches["white_light"][PARAM_FUNCTION_TYPE] == "whiteLight"
+        assert (
+            device.switches["linkage_white_light"][PARAM_FUNCTION_TYPE]
+            == "linkageWhiteLight"
+        )

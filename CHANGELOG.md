@@ -8,8 +8,8 @@ All notable changes to this project will be documented in this file.
 
 #### Added
 
-- IoT switches `pet_detect` (ref `18300`), `frame_reverse` (`13500`), `wide_dynamic` (`19400`), `smart_track` (`13300`), `play_sound` (`14000`)
-- PaaS switches `frame_reverse` (`FrameReverse` / `frameReverse`), `wide_dynamic` (`WideDynamic` / `wideDynamic`), `smart_track` (`SmartTrack` / `smartTrack`), `play_sound` (`PlaySound` / `playSound`)
+- IoT switches `pet_detect` (ref `18300`), `frame_reverse` (`13500`), `wide_dynamic` (`19400`), `smart_track` (`13300`), `play_sound` (`14000`), `linkage_siren` (`102000`), `linkage_white_light` (`17300`)
+- PaaS switches `frame_reverse` (`FrameReverse` / `frameReverse`), `wide_dynamic` (`WideDynamic` / `wideDynamic`), `smart_track` (`SmartTrack` / `smartTrack`), `play_sound` (`PlaySound` / `playSound`), `linkage_siren` (`LinkageSiren` / `linkageSiren`), `linkage_white_light` (`WhiteLight`/`ChnWhiteLight` / `linkageWhiteLight`)
 
 #### Changed
 
@@ -147,8 +147,8 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 #### 新增
 
-- IoT 开关：宠物检测 `pet_detect`（ref `18300`）、画面翻转 `frame_reverse`（`13500`）、宽动态 `wide_dynamic`（`19400`）、智能追踪 `smart_track`（`13300`）、设备提示音 `play_sound`（`14000`）
-- PaaS 开关：画面翻转 `FrameReverse`/`frameReverse`、宽动态 `WideDynamic`/`wideDynamic`、智能追踪 `SmartTrack`/`smartTrack`、设备提示音 `PlaySound`/`playSound`
+- IoT 开关：宠物检测 `pet_detect`（ref `18300`）、画面翻转 `frame_reverse`（`13500`）、宽动态 `wide_dynamic`（`19400`）、智能追踪 `smart_track`（`13300`）、设备提示音 `play_sound`（`14000`）、告警联动警笛 `linkage_siren`（`102000`）、报警联动白光灯 `linkage_white_light`（`17300`）
+- PaaS 开关：画面翻转 `FrameReverse`/`frameReverse`、宽动态 `WideDynamic`/`wideDynamic`、智能追踪 `SmartTrack`/`smartTrack`、设备提示音 `PlaySound`/`playSound`、告警联动警笛 `LinkageSiren`/`linkageSiren`、报警联动白光灯 `WhiteLight`/`ChnWhiteLight`/`linkageWhiteLight`
 
 #### 变更
 

@@ -255,6 +255,25 @@ SWITCH_TYPE_ABILITY: dict[str, list[dict[str, Any]]] = {
             "function_type": "playSound",
         }
     ],
+    "linkage_siren": [
+        {
+            "ability": "LinkageSiren",
+            "default": False,
+            "function_type": "linkageSiren",
+        }
+    ],
+    "linkage_white_light": [
+        {
+            "ability": "WhiteLight",
+            "default": False,
+            "function_type": "linkageWhiteLight",
+        },
+        {
+            "ability": "ChnWhiteLight",
+            "default": False,
+            "function_type": "linkageWhiteLight",
+        },
+    ],
 }
 
 SWITCH_TYPE_REF: dict[str, list[dict[str, Any]]] = {
@@ -356,6 +375,18 @@ SWITCH_TYPE_REF: dict[str, list[dict[str, Any]]] = {
     "play_sound": [
         {
             "ref": "14000",
+            "default": False,
+        }
+    ],
+    "linkage_siren": [
+        {
+            "ref": "102000",
+            "default": False,
+        }
+    ],
+    "linkage_white_light": [
+        {
+            "ref": "17300",
             "default": False,
         }
     ],

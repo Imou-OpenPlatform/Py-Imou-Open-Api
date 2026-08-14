@@ -106,6 +106,14 @@
           "function_type": "headerDetect",
           "state": false
         },
+        "linkage_siren": {
+          "function_type": "linkageSiren",
+          "state": false
+        },
+        "linkage_white_light": {
+          "function_type": "linkageWhiteLight",
+          "state": false
+        },
         "motion_detect": {
           "function_type": [
             "mobileDetect",
@@ -161,6 +169,18 @@
         },
         "header_detect@SMDH": {
           "function_type": "smdHuman",
+          "state": false
+        },
+        "linkage_siren@LinkageSiren": {
+          "function_type": "linkageSiren",
+          "state": false
+        },
+        "linkage_white_light@ChnWhiteLight": {
+          "function_type": "linkageWhiteLight",
+          "state": false
+        },
+        "linkage_white_light@WhiteLight": {
+          "function_type": "linkageWhiteLight",
           "state": false
         },
         "motion_detect@AlarmMD": {
@@ -652,6 +672,14 @@
           "ref": "11400",
           "state": false
         },
+        "linkage_siren": {
+          "ref": "102000",
+          "state": false
+        },
+        "linkage_white_light": {
+          "ref": "17300",
+          "state": false
+        },
         "motion_detect": {
           "ref": "14800",
           "state": false
@@ -720,6 +748,14 @@
         },
         "light@12700": {
           "ref": "12700",
+          "state": false
+        },
+        "linkage_siren@102000": {
+          "ref": "102000",
+          "state": false
+        },
+        "linkage_white_light@17300": {
+          "ref": "17300",
           "state": false
         },
         "motion_detect@108800": {
