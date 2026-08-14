@@ -4,7 +4,7 @@
 
 All notable changes to this project will be documented in this file.
 
-### [Unreleased]
+### [1.3.6]
 
 #### Added
 
@@ -143,7 +143,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 本项目的重要变更均记录于此。
 
-### [Unreleased]
+### [1.3.6]
 
 #### 新增
 
