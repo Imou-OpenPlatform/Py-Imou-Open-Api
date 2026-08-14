@@ -98,6 +98,10 @@
           "function_type": "closeCamera",
           "state": false
         },
+        "frame_reverse": {
+          "function_type": "frameReverse",
+          "state": false
+        },
         "header_detect": {
           "function_type": "headerDetect",
           "state": false
@@ -109,8 +113,16 @@
           ],
           "state": false
         },
+        "smart_track": {
+          "function_type": "smartTrack",
+          "state": false
+        },
         "white_light": {
           "function_type": "whiteLight",
+          "state": false
+        },
+        "wide_dynamic": {
+          "function_type": "wideDynamic",
           "state": false
         }
       },
@@ -129,6 +141,10 @@
         },
         "close_camera@CloseCamera": {
           "function_type": "closeCamera",
+          "state": false
+        },
+        "frame_reverse@FrameReverse": {
+          "function_type": "frameReverse",
           "state": false
         },
         "header_detect@AiHuman": {
@@ -161,12 +177,20 @@
           ],
           "state": false
         },
+        "smart_track@SmartTrack": {
+          "function_type": "smartTrack",
+          "state": false
+        },
         "white_light@ChnWhiteLight": {
           "function_type": "whiteLight",
           "state": false
         },
         "white_light@WhiteLight": {
           "function_type": "whiteLight",
+          "state": false
+        },
+        "wide_dynamic@WideDynamic": {
+          "function_type": "wideDynamic",
           "state": false
         }
       }
@@ -608,6 +632,10 @@
           "ref": "13100",
           "state": false
         },
+        "frame_reverse": {
+          "ref": "13500",
+          "state": false
+        },
         "header_detect": {
           "ref": "17100",
           "state": false
@@ -620,12 +648,24 @@
           "ref": "14800",
           "state": false
         },
+        "pet_detect": {
+          "ref": "18300",
+          "state": false
+        },
+        "smart_track": {
+          "ref": "13300",
+          "state": false
+        },
         "switch": {
           "ref": "11900",
           "state": false
         },
         "white_light": {
           "ref": "19700",
+          "state": false
+        },
+        "wide_dynamic": {
+          "ref": "19400",
           "state": false
         }
       },
@@ -652,6 +692,10 @@
         },
         "close_camera@13100": {
           "ref": "13100",
+          "state": false
+        },
+        "frame_reverse@13500": {
+          "ref": "13500",
           "state": false
         },
         "header_detect@108900": {
@@ -690,12 +734,24 @@
           "ref": "305000",
           "state": false
         },
+        "pet_detect@18300": {
+          "ref": "18300",
+          "state": false
+        },
+        "smart_track@13300": {
+          "ref": "13300",
+          "state": false
+        },
         "switch@11900": {
           "ref": "11900",
           "state": false
         },
         "white_light@19700": {
           "ref": "19700",
+          "state": false
+        },
+        "wide_dynamic@19400": {
+          "ref": "19400",
           "state": false
         }
       }

@@ -227,6 +227,27 @@ SWITCH_TYPE_ABILITY: dict[str, list[dict[str, Any]]] = {
             "function_type": "smdHuman",
         },
     ],
+    "frame_reverse": [
+        {
+            "ability": "FrameReverse",
+            "default": False,
+            "function_type": "frameReverse",
+        }
+    ],
+    "wide_dynamic": [
+        {
+            "ability": "WideDynamic",
+            "default": False,
+            "function_type": "wideDynamic",
+        }
+    ],
+    "smart_track": [
+        {
+            "ability": "SmartTrack",
+            "default": False,
+            "function_type": "smartTrack",
+        }
+    ],
 }
 
 SWITCH_TYPE_REF: dict[str, list[dict[str, Any]]] = {
@@ -317,6 +338,30 @@ SWITCH_TYPE_REF: dict[str, list[dict[str, Any]]] = {
     "switch": [
         {
             "ref": "11900",
+            "default": False,
+        }
+    ],
+    "pet_detect": [
+        {
+            "ref": "18300",
+            "default": False,
+        }
+    ],
+    "frame_reverse": [
+        {
+            "ref": "13500",
+            "default": False,
+        }
+    ],
+    "wide_dynamic": [
+        {
+            "ref": "19400",
+            "default": False,
+        }
+    ],
+    "smart_track": [
+        {
+            "ref": "13300",
             "default": False,
         }
     ],
