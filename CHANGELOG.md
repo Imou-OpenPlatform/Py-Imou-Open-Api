@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - IoT switches `pet_detect` (ref `18300`), `frame_reverse` (`13500`), `wide_dynamic` (`19400`), `smart_track` (`13300`)
 - PaaS switches `frame_reverse` (`FrameReverse` / `frameReverse`), `wide_dynamic` (`WideDynamic` / `wideDynamic`), `smart_track` (`SmartTrack` / `smartTrack`)
 
+#### Changed
+
+- Drop unused IoT switch fallback refs `305000` (`motion_detect`), `115300` (`ab_alarm_sound`), and `104000` / `103800` (`audio_encode_control`)
+
 ### [1.3.5]
 
 Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so this is a drop-in replacement for 1.3.4.
@@ -145,6 +149,10 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 - IoT 开关：宠物检测 `pet_detect`（ref `18300`）、画面翻转 `frame_reverse`（`13500`）、宽动态 `wide_dynamic`（`19400`）、智能追踪 `smart_track`（`13300`）
 - PaaS 开关：画面翻转 `FrameReverse`/`frameReverse`、宽动态 `WideDynamic`/`wideDynamic`、智能追踪 `SmartTrack`/`smartTrack`
+
+#### 变更
+
+- 去掉未使用的 IoT 开关回退 ref：`305000`（`motion_detect`）、`115300`（`ab_alarm_sound`）、`104000` / `103800`（`audio_encode_control`）
 
 ### [1.3.5]
 

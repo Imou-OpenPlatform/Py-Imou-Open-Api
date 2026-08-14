@@ -260,13 +260,6 @@ SWITCH_TYPE_REF: dict[str, list[dict[str, Any]]] = {
             ],
         },
         {
-            "ref": "305000",
-            "default": False,
-            "excepts": [
-                "FKX9UYL4",
-            ],
-        },
-        {
             "ref": "108800",
             "default": False,
         },
@@ -287,25 +280,13 @@ SWITCH_TYPE_REF: dict[str, list[dict[str, Any]]] = {
         {
             "ref": "14200",
             "default": False,
-        },
-        {
-            "ref": "115300",
-            "default": False,
-        },
+        }
     ],
     "audio_encode_control": [
         {
             "ref": "13900",
             "default": False,
-        },
-        {
-            "ref": "104000",
-            "default": False,
-        },
-        {
-            "ref": "103800",
-            "default": False,
-        },
+        }
     ],
     "header_detect": [
         {

@@ -670,20 +670,8 @@
         }
       },
       "per_entry": {
-        "ab_alarm_sound@115300": {
-          "ref": "115300",
-          "state": false
-        },
         "ab_alarm_sound@14200": {
           "ref": "14200",
-          "state": false
-        },
-        "audio_encode_control@103800": {
-          "ref": "103800",
-          "state": false
-        },
-        "audio_encode_control@104000": {
-          "ref": "104000",
           "state": false
         },
         "audio_encode_control@13900": {
@@ -728,10 +716,6 @@
         },
         "motion_detect@14800": {
           "ref": "14800",
-          "state": false
-        },
-        "motion_detect@305000": {
-          "ref": "305000",
           "state": false
         },
         "pet_detect@18300": {

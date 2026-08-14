@@ -9,7 +9,6 @@ from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
 EXCEPT_PID = "FKX9UYL4"
 REF_14800 = "14800"
-REF_305000 = "305000"
 REF_108800 = "108800"
 
 
@@ -21,11 +20,11 @@ def _ha_device(*, product_id: str) -> ImouHaDevice:
     return device
 
 
-def test_motion_detect_skips_14800_and_305000_for_excepted_product_id() -> None:
-    """FKX9UYL4 advertises 14800+305000+108800 but must bind 108800."""
+def test_motion_detect_skips_14800_for_excepted_product_id() -> None:
+    """FKX9UYL4 advertises 14800+108800 but must bind 108800."""
     device = _ha_device(product_id=EXCEPT_PID)
     ImouHaDeviceManager.configure_switch_by_ref(
-        channel_ability_refs=[REF_14800, REF_305000, REF_108800],
+        channel_ability_refs=[REF_14800, REF_108800],
         is_ipc=True,
         device_ability_refs=[],
         imou_ha_device=device,
@@ -60,7 +59,7 @@ def test_excepts_skip_logs_debug_when_ref_would_match(caplog) -> None:
     device = _ha_device(product_id=EXCEPT_PID)
     with caplog.at_level(logging.DEBUG, logger="pyimouapi"):
         ImouHaDeviceManager.configure_switch_by_ref(
-            channel_ability_refs=[REF_14800, REF_305000, REF_108800],
+            channel_ability_refs=[REF_14800, REF_108800],
             is_ipc=True,
             device_ability_refs=[],
             imou_ha_device=device,
@@ -71,7 +70,6 @@ def test_excepts_skip_logs_debug_when_ref_would_match(caplog) -> None:
         if r.levelno == logging.DEBUG and "excepts" in r.message.lower()
     }
     assert any(REF_14800 in m and EXCEPT_PID in m for m in skipped)
-    assert any(REF_305000 in m and EXCEPT_PID in m for m in skipped)
 
 
 def test_excepts_does_not_log_when_ref_not_in_ability_refs(caplog) -> None:
