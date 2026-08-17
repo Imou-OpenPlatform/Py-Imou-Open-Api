@@ -6,10 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ### [1.3.6]
 
+#### Breaking
+
+- `device.selects["mode"]` and `async_select_option(..., "mode", ...)` are removed. Use `device.alarm_control_panel` and `async_set_alarm_mode`.
+
 #### Added
 
 - IoT switches: pet detection `pet_detect` (ref `18300`), flip image `frame_reverse` (`13500`), wide dynamic range `wide_dynamic` (`19400`), smart tracking `smart_track` (`13300`), prompt sound `play_sound` (`14000`), alarm-linked siren `linkage_siren` (`102000`), alarm-linked white light `linkage_white_light` (`17300`)
 - PaaS switches: flip image `FrameReverse` / `frameReverse`, wide dynamic range `WideDynamic` / `wideDynamic`, smart tracking `SmartTrack` / `smartTrack`, prompt sound `PlaySound` / `playSound`, alarm-linked siren `LinkageSiren` / `linkageSiren`, alarm-linked white light `WhiteLight`/`ChnWhiteLight` / `linkageWhiteLight`
+- `ImouHaDevice.alarm_control_panel` and `async_set_alarm_mode` for IoT ref `15200`.
 
 #### Changed
 
@@ -145,10 +150,15 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 ### [1.3.6]
 
+#### 破坏性变更
+
+- 移除 `device.selects["mode"]` 与 `async_select_option(..., "mode", ...)`。请改用 `device.alarm_control_panel` 与 `async_set_alarm_mode`。
+
 #### 新增
 
 - IoT 开关：宠物检测 `pet_detect`（ref `18300`）、画面翻转 `frame_reverse`（`13500`）、宽动态 `wide_dynamic`（`19400`）、智能追踪 `smart_track`（`13300`）、设备提示音 `play_sound`（`14000`）、告警联动警笛 `linkage_siren`（`102000`）、告警联动白光灯 `linkage_white_light`（`17300`）
 - PaaS 开关：画面翻转 `FrameReverse`/`frameReverse`、宽动态 `WideDynamic`/`wideDynamic`、智能追踪 `SmartTrack`/`smartTrack`、设备提示音 `PlaySound`/`playSound`、告警联动警笛 `LinkageSiren`/`linkageSiren`、告警联动白光灯 `WhiteLight`/`ChnWhiteLight`/`linkageWhiteLight`
+- `ImouHaDevice.alarm_control_panel` 与 `async_set_alarm_mode`（IoT ref `15200`）。
 
 #### 变更
 

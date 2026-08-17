@@ -225,6 +225,30 @@
     }
   },
   "by_ref": {
+    "alarm_control_panel": {
+      "all_refs": {
+        "ref": "15200",
+        "state": "home",
+        "supported": [
+          "home",
+          "away",
+          "disarm"
+        ],
+        "value_type": "int"
+      },
+      "per_entry": {
+        "alarm_control_panel@15200": {
+          "ref": "15200",
+          "state": "home",
+          "supported": [
+            "home",
+            "away",
+            "disarm"
+          ],
+          "value_type": "int"
+        }
+      }
+    },
     "binary_sensor": {
       "all_refs": {
         "door_contact_status": {
@@ -400,16 +424,6 @@
           "ref": "15400",
           "value_type": "int"
         },
-        "mode": {
-          "current_option": "home",
-          "options": [
-            "home",
-            "away",
-            "disarm"
-          ],
-          "ref": "15200",
-          "value_type": "int"
-        },
         "night_vision_mode": {
           "current_option": "intelligent",
           "options": [
@@ -443,16 +457,6 @@
             "high"
           ],
           "ref": "15400",
-          "value_type": "int"
-        },
-        "mode@15200": {
-          "current_option": "home",
-          "options": [
-            "home",
-            "away",
-            "disarm"
-          ],
-          "ref": "15200",
           "value_type": "int"
         },
         "night_vision_mode@112400": {

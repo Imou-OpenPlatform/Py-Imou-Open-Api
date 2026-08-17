@@ -6,6 +6,7 @@ Used by the golden test that pins the configured output of every table entry.
 from typing import Any
 
 from pyimouapi.const import (
+    ALARM_CONTROL_PANEL_REF,
     BINARY_SENSOR_TYPE_ABILITY,
     BINARY_SENSOR_TYPE_REF,
     BUTTON_TYPE_ABILITY,
@@ -53,6 +54,11 @@ REF_TABLES: dict[str, tuple[dict, Any, str]] = {
         "binary_sensors",
     ),
     "text": (TEXT_TYPE_REF, ImouHaDeviceManager.configure_text_by_ref, "texts"),
+    "alarm_control_panel": (
+        {"alarm_control_panel": ALARM_CONTROL_PANEL_REF},
+        ImouHaDeviceManager.configure_alarm_control_panel_by_ref,
+        "alarm_control_panel",
+    ),
 }
 
 ABILITY_TABLES: dict[str, tuple[dict, Any, str]] = {
@@ -107,6 +113,19 @@ def snapshot_ref_table(name: str) -> dict[str, Any]:
     """Return the configured output for each entry, and for all entries at once."""
     table, configure_fn, attribute = REF_TABLES[name]
     per_entry: dict[str, Any] = {}
+    if attribute == "alarm_control_panel":
+        for entity_type, entries in table.items():
+            for entry in entries:
+                device = configure(configure_fn, [entry[PARAM_REF]])
+                key = f"{entity_type}@{entry[PARAM_REF]}"
+                per_entry[key] = device.alarm_control_panel
+        every_ref = [
+            entry[PARAM_REF] for entries in table.values() for entry in entries
+        ]
+        return {
+            "per_entry": per_entry,
+            "all_refs": configure(configure_fn, every_ref).alarm_control_panel,
+        }
     for entity_type, entries in table.items():
         for entry in entries:
             device = configure(configure_fn, [entry[PARAM_REF]])
