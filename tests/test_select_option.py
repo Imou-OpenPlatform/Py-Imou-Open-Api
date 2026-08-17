@@ -93,8 +93,7 @@ def test_configure_select_by_ref_uses_friendly_defaults() -> None:
         [],
         device,
     )
-    assert device.selects[PARAM_MODE]["options"] == ["home", "away", "disarm"]
-    assert device.selects[PARAM_MODE]["current_option"] == "home"
+    assert PARAM_MODE not in device.selects
     assert device.selects[PARAM_DEVICE_VOLUME]["options"] == [
         "mute",
         "low",

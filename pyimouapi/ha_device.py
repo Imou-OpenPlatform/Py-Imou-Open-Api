@@ -8,12 +8,15 @@ from typing import Any, NamedTuple
 
 from simpleeval import SimpleEval
 
+from .alarm_mode import to_friendly as alarm_mode_to_friendly
+from .alarm_mode import to_raw as alarm_mode_to_raw
 from .collection_point import (
     build_collection_point_options,
     parse_iot_collection_names,
     parse_paas_collection_names,
 )
 from .const import (
+    ALARM_CONTROL_PANEL_REF,
     BINARY_SENSOR_TYPE_ABILITY,
     BINARY_SENSOR_TYPE_REF,
     BUTTON_TYPE_ABILITY,
@@ -64,6 +67,7 @@ from .const import (
     PARAM_STORAGE_USED,
     PARAM_STREAM_ID,
     PARAM_STREAMS,
+    PARAM_SUPPORTED,
     PARAM_TEMPERATURE_CURRENT,
     PARAM_TOTAL_BYTES,
     PARAM_TURN_INPUT_REF,
@@ -293,6 +297,7 @@ class ImouHaDevice:
         self._selects: dict[str, dict[str, Any]] = {}
         self._buttons: dict[str, dict[str, Any]] = {}
         self._texts: dict[str, dict[str, Any]] = {}
+        self._alarm_control_panel: dict[str, Any] | None = None
         self._channel_id: str | None = None
         self._channel_name: str | None = None
         self._is_ipc = False
@@ -351,6 +356,14 @@ class ImouHaDevice:
     @property
     def texts(self) -> dict[str, dict[str, Any]]:
         return self._texts
+
+    @property
+    def alarm_control_panel(self) -> dict[str, Any] | None:
+        return self._alarm_control_panel
+
+    @alarm_control_panel.setter
+    def alarm_control_panel(self, value: dict[str, Any] | None) -> None:
+        self._alarm_control_panel = value
 
     @property
     def product_id(self) -> str | None:
@@ -480,6 +493,14 @@ class ImouHaDeviceManager:
                 if value.get(PARAM_REF_TYPE, PARAM_PROPERTIES) == PARAM_SERVICES:
                     continue
                 entities.append((kind, key, value))
+        if device.alarm_control_panel and PARAM_REF in device.alarm_control_panel:
+            entities.append(
+                (
+                    "alarm_control_panel",
+                    "alarm_control_panel",
+                    device.alarm_control_panel,
+                )
+            )
         return entities
 
     def _apply_property_value(
@@ -508,6 +529,8 @@ class ImouHaDeviceManager:
                 device.texts[key][PARAM_STATE] = (
                     str(state) if isinstance(state, int) else state
                 )
+        elif kind == "alarm_control_panel" and device.alarm_control_panel is not None:
+            device.alarm_control_panel[PARAM_STATE] = alarm_mode_to_friendly(raw_value)
 
     @staticmethod
     def _require_product_id(device: ImouHaDevice) -> str:
@@ -1302,6 +1325,12 @@ class ImouHaDeviceManager:
                 device_ability_refs,
                 imou_ha_device,
             )
+        ImouHaDeviceManager.configure_alarm_control_panel_by_ref(
+            channel_ability_refs,
+            is_ipc,
+            device_ability_refs,
+            imou_ha_device,
+        )
 
     @staticmethod
     def entity_need_add_to_device(
@@ -1400,6 +1429,38 @@ class ImouHaDeviceManager:
             device_ability_refs,
             imou_ha_device,
         )
+
+    @staticmethod
+    def configure_alarm_control_panel_by_ref(
+        channel_ability_refs: list[str],
+        is_ipc: bool,
+        device_ability_refs: list[str],
+        imou_ha_device: ImouHaDevice,
+    ) -> None:
+        for ref in ALARM_CONTROL_PANEL_REF:
+            exists_entities: dict[str, Any] = (
+                {}
+                if imou_ha_device.alarm_control_panel is None
+                else {"alarm_control_panel": True}
+            )
+            if ImouHaDeviceManager.entity_need_add_to_device_by_ref(
+                ref[PARAM_REF],
+                channel_ability_refs,
+                device_ability_refs,
+                is_ipc,
+                imou_ha_device.channel_id,
+                "alarm_control_panel",
+                exists_entities,
+                imou_ha_device.product_id,
+                ref.get(PARAM_EXCEPTS, []),
+            ):
+                imou_ha_device.alarm_control_panel = {
+                    PARAM_REF: ref[PARAM_REF],
+                    PARAM_STATE: ref["default"],
+                    PARAM_SUPPORTED: list(ref[PARAM_SUPPORTED]),
+                    PARAM_VALUE_TYPE: ref.get(PARAM_VALUE_TYPE, "int"),
+                }
+                break
 
     @staticmethod
     def configure_sensor_by_ref(
@@ -1539,6 +1600,21 @@ class ImouHaDeviceManager:
             await self.delegate.async_set_iot_device_properties(
                 device.device_id, None, self._require_product_id(device), {ref: value}
             )
+
+    async def async_set_alarm_mode(self, device: ImouHaDevice, mode: str) -> None:
+        panel = device.alarm_control_panel
+        if panel is None:
+            raise ValueError("device has no alarm_control_panel")
+        if mode not in panel[PARAM_SUPPORTED]:
+            raise ValueError(f"unknown alarm mode: {mode!r}")
+        write_option = alarm_mode_to_raw(mode)
+        await self._async_select_option_by_ref(
+            device,
+            write_option,
+            panel[PARAM_REF],
+            panel.get(PARAM_VALUE_TYPE, "int"),
+        )
+        panel[PARAM_STATE] = mode
 
     async def _async_switch_operation_by_ref(
         self, device: ImouHaDevice, switch_type: str, enable: bool, ref: str

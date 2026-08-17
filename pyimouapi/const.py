@@ -91,6 +91,7 @@ PARAM_STATUS = "status"
 PARAM_CURRENT_OPTION = "current_option"
 PARAM_MODES = "modes"
 PARAM_OPTIONS = "options"
+PARAM_SUPPORTED = "supported"
 PARAM_CHANNELS = "channels"
 PARAM_USED_BYTES = "usedBytes"
 PARAM_TOTAL_BYTES = "totalBytes"
@@ -511,14 +512,6 @@ SELECT_TYPE_REF: dict[str, list[dict[str, Any]]] = {
             "value_type": "int",
         },
     ],
-    "mode": [
-        {
-            "ref": "15200",
-            "default": "home",
-            "options": ["home", "away", "disarm"],
-            "value_type": "int",
-        }
-    ],
     "device_volume": [
         {
             "ref": "15400",
@@ -538,6 +531,14 @@ SELECT_TYPE_REF: dict[str, list[dict[str, Any]]] = {
         }
     ],
 }
+ALARM_CONTROL_PANEL_REF: list[dict[str, Any]] = [
+    {
+        "ref": "15200",
+        "default": "home",
+        "supported": ["home", "away", "disarm"],
+        "value_type": "int",
+    }
+]
 #  Required capacity for various sensor types
 SENSOR_TYPE_ABILITY: dict[str, list[str]] = {
     "storage_used": ["LocalStorage", "LocalStorageEnable"],
