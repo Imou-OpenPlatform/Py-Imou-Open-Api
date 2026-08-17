@@ -24,6 +24,25 @@ def _online_device() -> ImouHaDevice:
 
 
 @pytest.mark.asyncio
+async def test_update_from_detail_applies_alarm_control_panel():
+    device = _online_device()
+    ImouHaDeviceManager.configure_alarm_control_panel_by_ref(
+        ["15200"], True, [], device
+    )
+    assert device.alarm_control_panel[PARAM_STATE] == "home"
+
+    detail = {
+        PARAM_PROPERTIES: {"15200": 2},
+        PARAM_CHANNELS: [],
+    }
+
+    manager = ImouHaDeviceManager(MagicMock())
+    await manager._async_update_properties_from_detail(device, detail)
+
+    assert device.alarm_control_panel[PARAM_STATE] == "disarm"
+
+
+@pytest.mark.asyncio
 async def test_update_from_detail_applies_switch_and_select():
     device = _online_device()
     device.switches["relay"] = {PARAM_REF: "10001", PARAM_STATE: False}
