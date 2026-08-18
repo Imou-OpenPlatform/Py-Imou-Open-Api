@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 #### Breaking
 
 - `device.selects["mode"]` and `async_select_option(..., "mode", ...)` are removed. Use `device.alarm_control_panel` and `async_set_alarm_mode`.
+- `select_option.to_friendly` / `to_raw` no longer map `"mode"` (`"0"` stays `"0"`, not `"home"`). Use `pyimouapi.alarm_mode`.
+- Do not install this release under Imou Life 1.3.5: that integration still expects `selects["mode"]` and has no `alarm_control_panel` platform. Ship with HA 1.3.6.
 
 #### Added
 
@@ -18,7 +20,7 @@ All notable changes to this project will be documented in this file.
 
 #### Changed
 
-- Drop unused IoT switch fallback refs `305000` (`motion_detect`), `115300` (`ab_alarm_sound`), and `104000` / `103800` (`audio_encode_control`)
+- Drop unused IoT switch fallback refs `305000` (`motion_detect`), `115300` (`ab_alarm_sound`), and `104000` / `103800` (`audio_encode_control`). `FKX9UYL4` now skips `14800` and binds `108800` directly.
 
 ### [1.3.5]
 
@@ -153,6 +155,8 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 #### 破坏性变更
 
 - 移除 `device.selects["mode"]` 与 `async_select_option(..., "mode", ...)`。请改用 `device.alarm_control_panel` 与 `async_set_alarm_mode`。
+- `select_option.to_friendly` / `to_raw` 不再映射 `"mode"`（`"0"` 仍是 `"0"`，不会变成 `"home"`）。请改用 `pyimouapi.alarm_mode`。
+- 不要在 Imou Life 1.3.5 上单独安装本版：旧集成仍读 `selects["mode"]`，且没有 `alarm_control_panel` 平台。请与 HA 1.3.6 一起发布。
 
 #### 新增
 
@@ -162,7 +166,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 #### 变更
 
-- 去掉未使用的 IoT 开关回退 ref：`305000`（`motion_detect`）、`115300`（`ab_alarm_sound`）、`104000` / `103800`（`audio_encode_control`）
+- 去掉未使用的 IoT 开关回退 ref：`305000`（`motion_detect`）、`115300`（`ab_alarm_sound`）、`104000` / `103800`（`audio_encode_control`）。`FKX9UYL4` 现为跳过 `14800` 后直接绑 `108800`。
 
 ### [1.3.5]
 
