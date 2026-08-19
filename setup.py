@@ -4,7 +4,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="pyimouapi",
-    version="1.3.6",
+    version="1.3.7",
     packages=find_packages(),
     package_data={"pyimouapi": ["py.typed"]},
     zip_safe=False,

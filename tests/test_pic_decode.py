@@ -4,12 +4,29 @@ import ctypes
 from pathlib import Path
 from unittest.mock import MagicMock
 
+from pyimouapi.ha_device import ImouHaDeviceManager
 from pyimouapi.pic_decode import (
     LCOpenPicDecoder,
     PicDecodeError,
     is_tcm_ability,
     resolve_encrypt_key,
 )
+
+
+def test_build_device_copies_device_ability() -> None:
+    src = MagicMock()
+    src.device_id = "SN1"
+    src.device_name = "Cam"
+    src.brand = "Imou"
+    src.device_model = "IPC"
+    src.device_version = "1"
+    src.product_id = None
+    src.parent_product_id = None
+    src.parent_device_id = None
+    src.is_ipc = True
+    src.device_ability = "WLAN,TCM"
+    ha = ImouHaDeviceManager.build_device(src)
+    assert ha.device_ability == "WLAN,TCM"
 
 
 def test_is_tcm_ability_token() -> None:

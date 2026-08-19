@@ -304,6 +304,7 @@ class ImouHaDevice:
         self._product_id: str | None = None
         self._parent_product_id: str | None = None
         self._parent_device_id: str | None = None
+        self._device_ability = "unknown"
 
     @property
     def device_id(self) -> str:
@@ -378,6 +379,10 @@ class ImouHaDevice:
         return self._parent_device_id
 
     @property
+    def device_ability(self) -> str:
+        return self._device_ability
+
+    @property
     def device_name(self) -> str:
         return self._device_name
 
@@ -389,6 +394,9 @@ class ImouHaDevice:
 
     def set_parent_device_id(self, parent_device_id: str) -> None:
         self._parent_device_id = parent_device_id
+
+    def set_device_ability(self, device_ability: str) -> None:
+        self._device_ability = device_ability
 
     def __str__(self) -> str:
         return (
@@ -959,6 +967,7 @@ class ImouHaDeviceManager:
         if device.parent_device_id is not None:
             imou_ha_device.set_parent_device_id(device.parent_device_id)
         imou_ha_device.set_is_ipc(device.is_ipc)
+        imou_ha_device.set_device_ability(device.device_ability)
         return imou_ha_device
 
     async def async_press_button(
