@@ -4,13 +4,24 @@
 
 All notable changes to this project will be documented in this file.
 
+### [1.4.0]
+
+#### Added
+
+- `pyimouapi.pic_decode`: TCM detection, encrypt-key resolution, and `LCOpenPicDecoder` (ctypes wrapper for official LCOpenSDK `DecryptPicture` / `DecryptPictureEx`)
+- `ImouHaDevice.device_ability` copied in `ImouHaDeviceManager.build_device` so Home Assistant can tell TCM devices apart
+
+#### Changed
+
+- Ship with Imou Life 1.4.0. Do not install this library under older Imou Life releases that still expect `selects["mode"]`.
+
 ### [1.3.6]
 
 #### Breaking
 
 - `device.selects["mode"]` and `async_select_option(..., "mode", ...)` are removed. Use `device.alarm_control_panel` and `async_set_alarm_mode`.
 - `select_option.to_friendly` / `to_raw` no longer map `"mode"` (`"0"` stays `"0"`, not `"home"`). Use `pyimouapi.alarm_mode`.
-- Do not install this release under Imou Life 1.3.5: that integration still expects `selects["mode"]` and has no `alarm_control_panel` platform. Ship with HA 1.3.6.
+- Do not install this release under Imou Life 1.3.5: that integration still expects `selects["mode"]` and has no `alarm_control_panel` platform. Unreleased; ships as part of 1.4.0 with HA 1.4.0.
 
 #### Added
 
@@ -150,13 +161,24 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 本项目的重要变更均记录于此。
 
+### [1.4.0]
+
+#### 新增
+
+- `pyimouapi.pic_decode`：TCM 判定、加密密钥解析，以及 `LCOpenPicDecoder`（官方 LCOpenSDK `DecryptPicture` / `DecryptPictureEx` 的 ctypes 封装）
+- `ImouHaDeviceManager.build_device` 会拷贝 `device_ability`，供 Home Assistant 识别 TCM 设备
+
+#### 变更
+
+- 与 Imou Life 1.4.0 一起发布。不要在仍依赖 `selects["mode"]` 的旧版 Imou Life 上单独安装本库。
+
 ### [1.3.6]
 
 #### 破坏性变更
 
 - 移除 `device.selects["mode"]` 与 `async_select_option(..., "mode", ...)`。请改用 `device.alarm_control_panel` 与 `async_set_alarm_mode`。
 - `select_option.to_friendly` / `to_raw` 不再映射 `"mode"`（`"0"` 仍是 `"0"`，不会变成 `"home"`）。请改用 `pyimouapi.alarm_mode`。
-- 不要在 Imou Life 1.3.5 上单独安装本版：旧集成仍读 `selects["mode"]`，且没有 `alarm_control_panel` 平台。请与 HA 1.3.6 一起发布。
+- 不要在 Imou Life 1.3.5 上单独安装本版：旧集成仍读 `selects["mode"]`，且没有 `alarm_control_panel` 平台。未单独发版，随 1.4.0 与 HA 1.4.0 一起发布。
 
 #### 新增
 
