@@ -51,23 +51,23 @@ class LCOpenPicDecoder:
         self._client = ctypes.CDLL(str(client_path), mode=ctypes.RTLD_GLOBAL)
         self._sdk = ctypes.CDLL(str(sdk_path))
 
-        self._sdk.initOpenApi.argtypes = [
+        self._sdk.initOpenApi.argtypes = (
             ctypes.c_char_p,
             ctypes.c_int,
             ctypes.c_char_p,
             ctypes.c_char_p,
             ctypes.c_char_p,
-        ]
+        )
         self._sdk.initOpenApi.restype = None
 
-        decrypt_args = [
+        decrypt_args = (
             ctypes.c_char_p,
             ctypes.c_char_p,
             ctypes.c_char_p,
             ctypes.c_void_p,
             ctypes.POINTER(ctypes.c_int),
             ctypes.c_char_p,
-        ]
+        )
         self._sdk.DecryptPicture.argtypes = decrypt_args
         self._sdk.DecryptPicture.restype = ctypes.c_int
         self._sdk.DecryptPictureEx.argtypes = decrypt_args
@@ -75,8 +75,14 @@ class LCOpenPicDecoder:
 
         self._loaded = True
 
+    def _require_sdk(self) -> ctypes.CDLL:
+        if not self._loaded or self._sdk is None:
+            raise PicDecodeError(99, "not loaded")
+        return self._sdk
+
     def init_open_api(self, host: str, port: int, app_id: str, app_secret: str) -> None:
-        self._sdk.initOpenApi(
+        sdk = self._require_sdk()
+        sdk.initOpenApi(
             host.encode(),
             port,
             b"",
@@ -93,8 +99,7 @@ class LCOpenPicDecoder:
         token: str,
         use_tcm: bool,
     ) -> bytes:
-        if not self._loaded:
-            raise PicDecodeError(99, "not loaded")
+        sdk = self._require_sdk()
 
         buf = ctypes.create_string_buffer(20 * 1024 * 1024)
         dest_len = ctypes.c_int(len(buf))
@@ -107,10 +112,8 @@ class LCOpenPicDecoder:
             token.encode(),
         )
 
-        if use_tcm:
-            code = self._sdk.DecryptPictureEx(*args)
-        else:
-            code = self._sdk.DecryptPicture(*args)
+        decrypt = sdk.DecryptPictureEx if use_tcm else sdk.DecryptPicture
+        code = decrypt(*args)
 
         if code == 5:
             buf = ctypes.create_string_buffer(40 * 1024 * 1024)
@@ -123,10 +126,7 @@ class LCOpenPicDecoder:
                 ctypes.byref(dest_len),
                 token.encode(),
             )
-            if use_tcm:
-                code = self._sdk.DecryptPictureEx(*args)
-            else:
-                code = self._sdk.DecryptPicture(*args)
+            code = decrypt(*args)
 
         if code == 0:
             raw = buf.raw[: dest_len.value]

@@ -133,3 +133,31 @@ def test_load_missing_libs_raises(tmp_path: Path) -> None:
     except FileNotFoundError:
         return
     raise AssertionError("expected FileNotFoundError")
+
+
+def test_init_open_api_not_loaded_raises() -> None:
+    decoder = LCOpenPicDecoder(Path("/nonexistent"))
+    try:
+        decoder.init_open_api("openapi.example", 443, "id", "secret")
+    except PicDecodeError as err:
+        assert err.code == 99
+        assert err.message == "not loaded"
+    else:
+        raise AssertionError("expected PicDecodeError")
+
+
+def test_decrypt_picture_not_loaded_raises() -> None:
+    decoder = LCOpenPicDecoder(Path("/nonexistent"))
+    try:
+        decoder.decrypt_picture(
+            pic_url="https://cdn.example/p",
+            encrypt_key="SN1",
+            device_id="SN1",
+            token="",
+            use_tcm=False,
+        )
+    except PicDecodeError as err:
+        assert err.code == 99
+        assert err.message == "not loaded"
+    else:
+        raise AssertionError("expected PicDecodeError")
