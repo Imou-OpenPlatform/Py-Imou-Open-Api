@@ -1,6 +1,15 @@
 """TCM detection and encrypt-key resolution for LCOpenSDK picture decrypt."""
 
-from pyimouapi.pic_decode import is_tcm_ability, resolve_encrypt_key
+import ctypes
+from pathlib import Path
+from unittest.mock import MagicMock
+
+from pyimouapi.pic_decode import (
+    LCOpenPicDecoder,
+    PicDecodeError,
+    is_tcm_ability,
+    resolve_encrypt_key,
+)
 
 
 def test_is_tcm_ability_token() -> None:
@@ -27,3 +36,83 @@ def test_resolve_encrypt_key() -> None:
         resolve_encrypt_key(is_tcm=False, device_id="SN1", device_password=None)
         == "SN1"
     )
+
+
+def test_decrypt_picture_non_tcm_returns_jpeg() -> None:
+    jpeg = b"\xff\xd8fakejpeg"
+    decoder = LCOpenPicDecoder(Path("/nonexistent"))
+    decoder._loaded = True
+    decoder._sdk = MagicMock()
+
+    def _decrypt(pic_url, key, sn, dest, dest_len, token):
+        n = len(jpeg)
+        ctypes.memmove(dest, jpeg, n)
+        dest_len._obj.value = n
+        return 0
+
+    decoder._sdk.DecryptPicture.side_effect = _decrypt
+    assert (
+        decoder.decrypt_picture(
+            pic_url="https://cdn.example/p",
+            encrypt_key="SN1",
+            device_id="SN1",
+            token="tok",
+            use_tcm=False,
+        )
+        == jpeg
+    )
+    decoder._sdk.DecryptPictureEx.assert_not_called()
+
+
+def test_decrypt_picture_tcm_uses_ex() -> None:
+    jpeg = b"\xff\xd8x"
+    decoder = LCOpenPicDecoder(Path("/nonexistent"))
+    decoder._loaded = True
+    decoder._sdk = MagicMock()
+
+    def _decrypt_ex(pic_url, key, sn, dest, dest_len, token):
+        n = len(jpeg)
+        ctypes.memmove(dest, jpeg, n)
+        dest_len._obj.value = n
+        return 0
+
+    decoder._sdk.DecryptPictureEx.side_effect = _decrypt_ex
+    assert (
+        decoder.decrypt_picture(
+            pic_url="https://cdn.example/p",
+            encrypt_key="pw",
+            device_id="SN1",
+            token="",
+            use_tcm=True,
+        )
+        == jpeg
+    )
+    decoder._sdk.DecryptPicture.assert_not_called()
+
+
+def test_decrypt_picture_key_error_raises() -> None:
+    decoder = LCOpenPicDecoder(Path("/nonexistent"))
+    decoder._loaded = True
+    decoder._sdk = MagicMock()
+    decoder._sdk.DecryptPicture.return_value = 2
+    try:
+        decoder.decrypt_picture(
+            pic_url="https://cdn.example/p",
+            encrypt_key="bad",
+            device_id="SN1",
+            token="",
+            use_tcm=False,
+        )
+    except PicDecodeError as err:
+        assert err.code == 2
+    else:
+        raise AssertionError("expected PicDecodeError")
+
+
+def test_load_missing_libs_raises(tmp_path: Path) -> None:
+    decoder = LCOpenPicDecoder(tmp_path)
+    try:
+        decoder.load()
+    except FileNotFoundError:
+        return
+    raise AssertionError("expected FileNotFoundError")
