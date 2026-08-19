@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .const import (
+    API_ENDPOINT_BIND_DEVICE,
     API_ENDPOINT_BIND_DEVICE_LIVE,
     API_ENDPOINT_CONTROL_DEVICE_PTZ,
     API_ENDPOINT_DEVICE_SD_CARD_STATUS,
@@ -43,9 +44,9 @@ from .const import (
     PARAM_CHANNEL_NUM,
     PARAM_CHANNEL_STATUS,
     PARAM_CHANNELS,
+    PARAM_CODE,
     PARAM_COLLECTION_NAME,
     PARAM_CONTENT,
-    PARAM_COUNT,
     PARAM_DEVICE_ABILITY,
     PARAM_DEVICE_ID,
     PARAM_DEVICE_LIST,
@@ -93,6 +94,22 @@ def _parse_event_ref_map(data: dict[str, Any] | None) -> dict[str, str]:
             continue
         mapping[str(ref)] = str(identifier)
     return mapping
+
+
+def compose_iot_device_id(
+    device_id: str,
+    parent_device_id: str | None,
+    parent_product_id: str | None,
+) -> str:
+    """Return the id an iot device is addressed by.
+
+    An accessory paired to a gateway is reached through both of its parent's
+    ids. The API sends the pair or neither, so half of it identifies nothing and
+    the device is addressed on its own instead.
+    """
+    if parent_device_id and parent_product_id:
+        return f"{device_id}_{parent_device_id}_{parent_product_id}"
+    return device_id
 
 
 @dataclass(frozen=True)
@@ -159,10 +176,10 @@ class ImouDevice:
         self._device_model = device_model
         self._device_version = "unknown"
         self._channel_number = 0
-        self._channels = []
-        self._product_id = None
-        self._parent_product_id = None
-        self._parent_device_id = None
+        self._channels: list[ImouChannel] = []
+        self._product_id: str | None = None
+        self._parent_product_id: str | None = None
+        self._parent_device_id: str | None = None
         self._is_multi = False
         self._is_ipc = False
         self._access_type = "PaaS"
@@ -271,6 +288,10 @@ class ImouDeviceManager:
         """Close the underlying Open API HTTP session."""
         await self._imou_api_client.async_close()
 
+    async def async_download(self, url: str) -> bytes:
+        """GET a binary payload over the shared Open API session."""
+        return await self._imou_api_client.async_download(url)
+
     async def _async_lock_for_product(self, product_id: str) -> asyncio.Lock:
         async with self._event_map_locks_guard:
             lock = self._event_map_locks.get(product_id)
@@ -323,10 +344,12 @@ class ImouDeviceManager:
         data = await self._imou_api_client.async_request_api(
             API_ENDPOINT_LIST_DEVICE_DETAILS, params
         )
-        if data[PARAM_COUNT] == 0:
+        device_list = data.get(PARAM_DEVICE_LIST) or []
+        if not device_list:
             return []
         devices = []
-        for device in data[PARAM_DEVICE_LIST]:
+        iot_devices = []
+        for device in device_list:
             device_id = device[PARAM_DEVICE_ID]
             device_name = device[PARAM_DEVICE_NAME]
             device_status = device[PARAM_DEVICE_STATUS]
@@ -370,10 +393,35 @@ class ImouDeviceManager:
             # that needs to be registered based on this field
             if PARAM_PRODUCT_ID in device:
                 imou_device.set_product_id(device[PARAM_PRODUCT_ID])
-                await self._async_update_device_ability_refs(imou_device)
+                iot_devices.append(imou_device)
             devices.append(imou_device)
-        # If the return quantity is equal to the requested quantity, continue to request the next page
-        if data[PARAM_COUNT] == page_size:
+        # Each iot device costs one getIotDeviceDetailInfo call; issue them together
+        # so listing N devices is one round trip instead of N serial ones
+        if iot_devices:
+            # One accessory that is offline, rate limited, or answering 5xx must
+            # not cost the caller its whole account. That device keeps its
+            # "unknown" refs and comes back with the next listing.
+            results = await asyncio.gather(
+                *(
+                    self._async_update_device_ability_refs(iot_device)
+                    for iot_device in iot_devices
+                ),
+                return_exceptions=True,
+            )
+            for iot_device, result in zip(iot_devices, results, strict=True):
+                if isinstance(result, asyncio.CancelledError):
+                    raise result
+                if isinstance(result, BaseException):
+                    _LOGGER.warning(
+                        "Could not read ability refs for device %s: %s",
+                        iot_device.device_id,
+                        result,
+                    )
+        # A full page may have more behind it. This counts what actually arrived
+        # rather than trusting `count`, which stops the paging either way: were
+        # that field the account total instead of this page's size, an account
+        # holding an exact multiple of page_size would page on forever.
+        if len(device_list) >= page_size:
             devices.extend(await self.async_get_devices(page + 1, page_size))
         return devices
 
@@ -387,10 +435,11 @@ class ImouDeviceManager:
         data = await self._imou_api_client.async_request_api(
             API_ENDPOINT_LIST_DEVICE_DETAILS, params
         )
-        if data[PARAM_COUNT] == 0:
+        device_list = data.get(PARAM_DEVICE_LIST) or []
+        if not device_list:
             return []
         summaries: list[ImouDeviceSummary] = []
-        for device in data[PARAM_DEVICE_LIST]:
+        for device in device_list:
             device_id = device.get(PARAM_DEVICE_ID)
             if not device_id:
                 continue
@@ -405,12 +454,13 @@ class ImouDeviceManager:
                     status=status,
                 )
             )
-        if data[PARAM_COUNT] >= page_size:
+        # Counts what arrived rather than trusting `count`; see async_get_devices.
+        if len(device_list) >= page_size:
             summaries.extend(await self.async_get_device_summaries(page + 1, page_size))
         return summaries
 
     async def async_control_device_ptz(
-        self, device_id: str, channel_id: str, operation: int, duration: int
+        self, device_id: str, channel_id: str | None, operation: int, duration: int
     ) -> None:
         """control ptz"""
         params = {
@@ -424,7 +474,7 @@ class ImouDeviceManager:
         )
 
     async def async_modify_device_alarm_status(
-        self, device_id: str, channel_id: str, enabled: bool
+        self, device_id: str, channel_id: str | None, enabled: bool
     ) -> None:
         """SET DEVICE ALARM STATUS"""
         params = {
@@ -437,7 +487,7 @@ class ImouDeviceManager:
         )
 
     async def async_get_device_status(
-        self, device_id: str, channel_id: str, enable_type: str
+        self, device_id: str, channel_id: str | None, enable_type: str
     ) -> dict[str, Any]:
         """obtain device capability switch status"""
         params = {
@@ -459,7 +509,7 @@ class ImouDeviceManager:
         )
 
     async def async_set_device_status(
-        self, device_id: str, channel_id: str, enable_type: str, enable: bool
+        self, device_id: str, channel_id: str | None, enable_type: str, enable: bool
     ) -> None:
         params = {
             PARAM_DEVICE_ID: device_id,
@@ -472,7 +522,7 @@ class ImouDeviceManager:
         )
 
     async def async_get_device_night_vision_mode(
-        self, device_id: str, channel_id: str
+        self, device_id: str, channel_id: str | None
     ) -> dict[str, Any]:
         """obtain device night vision mode"""
         params = {
@@ -484,7 +534,7 @@ class ImouDeviceManager:
         )
 
     async def async_set_device_night_vision_mode(
-        self, device_id: str, channel_id: str, night_vision_mode: str
+        self, device_id: str, channel_id: str | None, night_vision_mode: str
     ) -> None:
         """set device night vision mode"""
         if night_vision_mode in NIGHT_VISION_MODE_MAP:
@@ -512,8 +562,13 @@ class ImouDeviceManager:
             API_ENDPOINT_RESTART_DEVICE, params
         )
 
+    async def async_bind_device(self, device_id: str, code: str) -> None:
+        """Bind device to the open-platform account (bindDevice)."""
+        params = {PARAM_DEVICE_ID: device_id, PARAM_CODE: code}
+        await self._imou_api_client.async_request_api(API_ENDPOINT_BIND_DEVICE, params)
+
     async def async_get_stream_url(
-        self, device_id: str, channel_id: str
+        self, device_id: str, channel_id: str | None
     ) -> dict[str, Any]:
         """obtain the hls stream address of the device"""
         params = {PARAM_DEVICE_ID: device_id, PARAM_CHANNEL_ID: channel_id}
@@ -522,7 +577,7 @@ class ImouDeviceManager:
         )
 
     async def async_get_device_snap(
-        self, device_id: str, channel_id: str
+        self, device_id: str, channel_id: str | None
     ) -> dict[str, Any]:
         params = {PARAM_DEVICE_ID: device_id, PARAM_CHANNEL_ID: channel_id}
         return await self._imou_api_client.async_request_api(
@@ -530,7 +585,7 @@ class ImouDeviceManager:
         )
 
     async def async_create_stream_url(
-        self, device_id: str, channel_id: str, stream_id: int = 0
+        self, device_id: str, channel_id: str | None, stream_id: int = 0
     ) -> dict[str, Any]:
         """create device hls stream address"""
         params = {
@@ -690,15 +745,15 @@ class ImouDeviceManager:
         await self._imou_api_client.async_request_api(API_ENDPOINT_SIREN_STOP, params)
 
     async def _async_update_device_ability_refs(self, imou_device: ImouDevice) -> None:
-        device_id = imou_device.device_id
-        if imou_device.parent_product_id is not None:
-            device_id = (
-                imou_device.device_id
-                + "_"
-                + imou_device.parent_device_id
-                + "_"
-                + imou_device.parent_product_id
-            )
+        # Only iot devices carry a product id, and it is what the detail call
+        # is keyed on, so there is nothing to ask about without one.
+        if imou_device.product_id is None:
+            return
+        device_id = compose_iot_device_id(
+            imou_device.device_id,
+            imou_device.parent_device_id,
+            imou_device.parent_product_id,
+        )
         device_detail = await self.async_get_iot_device_detail_info(
             device_id,
             imou_device.product_id,
@@ -706,8 +761,8 @@ class ImouDeviceManager:
         imou_device.set_device_ability_refs(
             device_detail.get(PARAM_ABILITY_REFS, "unknown")
         )
-        if device_detail.get(PARAM_CHANNELS) and imou_device.channels:
-            channels_detail = device_detail.get(PARAM_CHANNELS)
+        channels_detail = device_detail.get(PARAM_CHANNELS)
+        if channels_detail and imou_device.channels:
             channel_detail_map = {
                 str(channel_detail.get(PARAM_CHANNEL_ID)): channel_detail.get(
                     PARAM_ABILITY_REFS, "unknown"

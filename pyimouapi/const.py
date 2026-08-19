@@ -1,3 +1,5 @@
+from typing import Any
+
 # API Endpoints
 API_ENDPOINT_ACCESS_TOKEN = "/openapi/accessToken"
 API_ENDPOINT_LIST_DEVICE_DETAILS = "/openapi/listDeviceDetailsByPage"
@@ -10,6 +12,7 @@ API_ENDPOINT_GET_DEVICE_NIGHT_VISION_MODE = "/openapi/getNightVisionMode"
 API_ENDPOINT_SET_DEVICE_NIGHT_VISION_MODE = "/openapi/setNightVisionMode"
 API_ENDPOINT_DEVICE_STORAGE = "/openapi/deviceStorage"
 API_ENDPOINT_RESTART_DEVICE = "/openapi/restartDevice"
+API_ENDPOINT_BIND_DEVICE = "/openapi/bindDevice"
 API_ENDPOINT_BIND_DEVICE_LIVE = "/openapi/bindDeviceLive"
 API_ENDPOINT_GET_DEVICE_ONLINE = "/openapi/deviceOnline"
 API_ENDPOINT_GET_DEVICE_LIVE_INFO = "/openapi/getLiveStreamInfo"
@@ -88,6 +91,7 @@ PARAM_STATUS = "status"
 PARAM_CURRENT_OPTION = "current_option"
 PARAM_MODES = "modes"
 PARAM_OPTIONS = "options"
+PARAM_SUPPORTED = "supported"
 PARAM_CHANNELS = "channels"
 PARAM_USED_BYTES = "usedBytes"
 PARAM_TOTAL_BYTES = "totalBytes"
@@ -113,6 +117,7 @@ PARAM_MOTION_DETECT = "motion_detect"
 PARAM_STORAGE_USED = "storage_used"
 PARAM_RESTART_DEVICE = "restart_device"
 PARAM_NIGHT_VISION_MODE = "night_vision_mode"
+PARAM_DEVICE_VOLUME = "device_volume"
 PARAM_COLLECTION_POINT = "collection_point"
 PARAM_COLLECTION_POINT_PROMPT = "select_collection_point"
 PARAM_SIREN_START = "siren_start"
@@ -154,7 +159,7 @@ PARAM_ABILITY = "ability"
 PARAM_FUNCTION_TYPE = "function_type"
 
 # Required capacity for various switch types
-SWITCH_TYPE_ABILITY = {
+SWITCH_TYPE_ABILITY: dict[str, list[dict[str, Any]]] = {
     "motion_detect": [
         {
             "ability": "MobileDetect",
@@ -223,17 +228,63 @@ SWITCH_TYPE_ABILITY = {
             "function_type": "smdHuman",
         },
     ],
+    "frame_reverse": [
+        {
+            "ability": "FrameReverse",
+            "default": False,
+            "function_type": "frameReverse",
+        }
+    ],
+    "wide_dynamic": [
+        {
+            "ability": "WideDynamic",
+            "default": False,
+            "function_type": "wideDynamic",
+        }
+    ],
+    "smart_track": [
+        {
+            "ability": "SmartTrack",
+            "default": False,
+            "function_type": "smartTrack",
+        }
+    ],
+    "play_sound": [
+        {
+            "ability": "PlaySound",
+            "default": False,
+            "function_type": "playSound",
+        }
+    ],
+    "linkage_siren": [
+        {
+            "ability": "LinkageSiren",
+            "default": False,
+            "function_type": "linkageSiren",
+        }
+    ],
+    "linkage_white_light": [
+        {
+            "ability": "WhiteLight",
+            "default": False,
+            "function_type": "linkageWhiteLight",
+        },
+        {
+            "ability": "ChnWhiteLight",
+            "default": False,
+            "function_type": "linkageWhiteLight",
+        },
+    ],
 }
 
-SWITCH_TYPE_REF = {
+SWITCH_TYPE_REF: dict[str, list[dict[str, Any]]] = {
     "motion_detect": [
         {
             "ref": "14800",
             "default": False,
-        },
-        {
-            "ref": "305000",
-            "default": False,
+            "excepts": [
+                "FKX9UYL4",
+            ],
         },
         {
             "ref": "108800",
@@ -256,25 +307,13 @@ SWITCH_TYPE_REF = {
         {
             "ref": "14200",
             "default": False,
-        },
-        {
-            "ref": "115300",
-            "default": False,
-        },
+        }
     ],
     "audio_encode_control": [
         {
             "ref": "13900",
             "default": False,
-        },
-        {
-            "ref": "104000",
-            "default": False,
-        },
-        {
-            "ref": "103800",
-            "default": False,
-        },
+        }
     ],
     "header_detect": [
         {
@@ -310,9 +349,51 @@ SWITCH_TYPE_REF = {
             "default": False,
         }
     ],
+    "pet_detect": [
+        {
+            "ref": "18300",
+            "default": False,
+        }
+    ],
+    "frame_reverse": [
+        {
+            "ref": "13500",
+            "default": False,
+        }
+    ],
+    "wide_dynamic": [
+        {
+            "ref": "19400",
+            "default": False,
+        }
+    ],
+    "smart_track": [
+        {
+            "ref": "13300",
+            "default": False,
+        }
+    ],
+    "play_sound": [
+        {
+            "ref": "14000",
+            "default": False,
+        }
+    ],
+    "linkage_siren": [
+        {
+            "ref": "102000",
+            "default": False,
+        }
+    ],
+    "linkage_white_light": [
+        {
+            "ref": "17300",
+            "default": False,
+        }
+    ],
 }
 #  Required capacity for various button types
-BUTTON_TYPE_ABILITY = {
+BUTTON_TYPE_ABILITY: dict[str, list[str]] = {
     "restart_device": ["Reboot"],
     "siren_start": ["Siren"],
     "siren_stop": ["Siren"],
@@ -321,7 +402,7 @@ BUTTON_TYPE_ABILITY = {
     "ptz_left": ["PT", "PTZ"],
     "ptz_right": ["PT", "PTZ"],
 }
-BUTTON_TYPE_REF = {
+BUTTON_TYPE_REF: dict[str, list[dict[str, Any]]] = {
     "restart_device": [
         {"ref": "2300"},
         {"ref": "21200"},
@@ -400,39 +481,42 @@ BUTTON_TYPE_REF = {
     ],
 }
 #  Required capacity for various select types
-SELECT_TYPE_ABILITY = {
+SELECT_TYPE_ABILITY: dict[str, list[str]] = {
     "night_vision_mode": ["NVM"],
     "collection_point": ["CollectionPoint"],
 }
-SELECT_TYPE_REF = {
+SELECT_TYPE_REF: dict[str, list[dict[str, Any]]] = {
     "night_vision_mode": [
         {
             "ref": "17400",
-            "default": "0",
-            "options": ["0", "1", "2", "3"],
+            "default": "intelligent",
+            "options": ["intelligent", "fullcolor", "infrared", "off"],
             "value_type": "int",
         },
         {
             "ref": "139700",
-            "default": "0",
-            "options": ["0", "1", "2", "3", "4"],
+            "default": "intelligent",
+            "options": [
+                "intelligent",
+                "fullcolor",
+                "infrared",
+                "off",
+                "custom",
+            ],
             "value_type": "int",
         },
-        {"ref": "112400", "default": "2", "options": ["2", "3"], "value_type": "int"},
-    ],
-    "mode": [
         {
-            "ref": "15200",
-            "default": "0",
-            "options": ["0", "1", "2"],
+            "ref": "112400",
+            "default": "infrared",
+            "options": ["infrared", "off"],
             "value_type": "int",
-        }
+        },
     ],
     "device_volume": [
         {
             "ref": "15400",
-            "default": "0",
-            "options": ["99", "0", "1", "2"],
+            "default": "low",
+            "options": ["mute", "low", "medium", "high"],
             "value_type": "int",
         }
     ],
@@ -447,12 +531,20 @@ SELECT_TYPE_REF = {
         }
     ],
 }
+ALARM_CONTROL_PANEL_REF: list[dict[str, Any]] = [
+    {
+        "ref": "15200",
+        "default": "home",
+        "supported": ["home", "away", "disarm"],
+        "value_type": "int",
+    }
+]
 #  Required capacity for various sensor types
-SENSOR_TYPE_ABILITY = {
+SENSOR_TYPE_ABILITY: dict[str, list[str]] = {
     "storage_used": ["LocalStorage", "LocalStorageEnable"],
     "battery": ["Electric"],
 }
-SENSOR_TYPE_REF = {
+SENSOR_TYPE_REF: dict[str, list[dict[str, Any]]] = {
     "storage_used": [
         {
             "ref": "14600",
@@ -524,10 +616,12 @@ SENSOR_TYPE_REF = {
     ],
 }
 
-BINARY_SENSOR_TYPE_ABILITY = {}
-BINARY_SENSOR_TYPE_REF = {"door_contact_status": [{"ref": "16300", "default": False}]}
+BINARY_SENSOR_TYPE_ABILITY: dict[str, list[str]] = {}
+BINARY_SENSOR_TYPE_REF: dict[str, list[dict[str, Any]]] = {
+    "door_contact_status": [{"ref": "16300", "default": False}]
+}
 
-TEXT_TYPE_REF = {
+TEXT_TYPE_REF: dict[str, list[dict[str, Any]]] = {
     "count_down_switch": [
         {
             "ref": "28800",

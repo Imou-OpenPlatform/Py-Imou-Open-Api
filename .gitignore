@@ -69,11 +69,11 @@ instance/
 # Scrapy stuff:
 .scrapy
 
-# Sphinx documentation
-docs/*
-!docs/superpowers/
-!docs/superpowers/**
+# Sphinx / local planning docs / Superpowers (canonical copy lives in workspace .doc/)
+docs/
 docs/_build/
+.superpowers
+.superpowers/
 
 # PyBuilder
 .pybuilder/
@@ -163,4 +163,13 @@ cython_debug/
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
+
+# VS Code / Cursor workspace
+.vscode/
+
+# Cursor IDE / Agent
+.cursor/
+
+# Ruff
+.ruff_cache/
