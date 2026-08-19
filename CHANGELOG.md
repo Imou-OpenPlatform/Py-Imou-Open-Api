@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 
 - `pyimouapi.pic_decode`: TCM detection, encrypt-key resolution, and `LCOpenPicDecoder` (ctypes wrapper for official LCOpenSDK `DecryptPicture` / `DecryptPictureEx`)
 - `ImouHaDevice.device_ability` copied in `ImouHaDeviceManager.build_device` so Home Assistant can tell TCM devices apart
+- `pyimouapi.push`: normalize Open Platform event-push payloads, classify alarm vs status `msgType`, IoT `iotEvent` envelope check, event-ref lookup, and `picUrlArray` helpers
 
 #### Changed
 
@@ -167,6 +168,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 - `pyimouapi.pic_decode`：TCM 判定、加密密钥解析，以及 `LCOpenPicDecoder`（官方 LCOpenSDK `DecryptPicture` / `DecryptPictureEx` 的 ctypes 封装）
 - `ImouHaDeviceManager.build_device` 会拷贝 `device_ability`，供 Home Assistant 识别 TCM 设备
+- `pyimouapi.push`：开放平台事件推送消息体归一化、报警/状态 `msgType` 分类、IoT `iotEvent` 信封判定、event ref 抽取、`picUrlArray` 辅助函数
 
 #### 变更
 
