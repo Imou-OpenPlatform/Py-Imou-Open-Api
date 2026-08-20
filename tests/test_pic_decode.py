@@ -146,6 +146,14 @@ def test_init_open_api_not_loaded_raises() -> None:
         raise AssertionError("expected PicDecodeError")
 
 
+def test_resolve_ca_path_prefers_native_pem(tmp_path: Path) -> None:
+    pem = tmp_path / "cacert.pem"
+    pem.write_text("dummy-ca")
+    decoder = LCOpenPicDecoder(tmp_path)
+    assert decoder._resolve_ca_path(None) == str(pem).encode()
+    assert decoder._resolve_ca_path("/explicit.pem") == b"/explicit.pem"
+
+
 def test_decrypt_picture_not_loaded_raises() -> None:
     decoder = LCOpenPicDecoder(Path("/nonexistent"))
     try:

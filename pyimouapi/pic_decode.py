@@ -80,12 +80,32 @@ class LCOpenPicDecoder:
             raise PicDecodeError(99, "not loaded")
         return self._sdk
 
-    def init_open_api(self, host: str, port: int, app_id: str, app_secret: str) -> None:
+    def _resolve_ca_path(self, ca_path: str | None) -> bytes:
+        if ca_path:
+            return ca_path.encode()
+        native_ca = self.native_dir / "cacert.pem"
+        if native_ca.is_file():
+            return str(native_ca).encode()
+        try:
+            import certifi
+
+            return certifi.where().encode()
+        except ImportError:
+            return b""
+
+    def init_open_api(
+        self,
+        host: str,
+        port: int,
+        app_id: str,
+        app_secret: str,
+        ca_path: str | None = None,
+    ) -> None:
         sdk = self._require_sdk()
         sdk.initOpenApi(
             host.encode(),
             port,
-            b"",
+            self._resolve_ca_path(ca_path),
             app_id.encode(),
             app_secret.encode(),
         )

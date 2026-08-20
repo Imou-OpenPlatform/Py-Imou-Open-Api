@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 #### Changed
 
 - Ship with Imou Life 1.4.0. Do not install this library under older Imou Life releases that still expect `selects["mode"]`.
+- `LCOpenPicDecoder.init_open_api` uses `native/cacert.pem` or certifi for the SDK CA path (empty `caPath` made HTTPS picture downloads incomplete, SDK code `1`)
 
 ### [1.3.6]
 
@@ -173,6 +174,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 #### 变更
 
 - 与 Imou Life 1.4.0 一起发布。不要在仍依赖 `selects["mode"]` 的旧版 Imou Life 上单独安装本库。
+- `LCOpenPicDecoder.init_open_api` 使用 `native/cacert.pem` 或 certifi 作为 SDK CA；空 `caPath` 会导致 HTTPS 下图不完整（SDK `code=1`）
 
 ### [1.3.6]
 
