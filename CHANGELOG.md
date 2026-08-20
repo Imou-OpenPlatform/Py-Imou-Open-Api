@@ -8,14 +8,13 @@ All notable changes to this project will be documented in this file.
 
 #### Added
 
-- `pyimouapi.pic_decode`: TCM detection, encrypt-key resolution, and `LCOpenPicDecoder` (ctypes wrapper for official LCOpenSDK `DecryptPicture` / `DecryptPictureEx`)
+- `pyimouapi.pic_decode`: TCM detection, encrypt-key resolution, and `LCOpenPicDecoder.decrypt_bytes`, which decrypts picture bytes the caller downloaded. It binds the official LCOpenSDK's `CDecrypter` rather than `DecryptPicture` / `DecryptPictureEx`, so it needs no `strongDidCheck` call, no access token, and no CA bundle. Both `.so` files must still be loaded: the SDK resolves its OpenSSL symbols out of the client library.
 - `ImouHaDevice.device_ability` copied in `ImouHaDeviceManager.build_device` so Home Assistant can tell TCM devices apart
 - `pyimouapi.push`: normalize Open Platform event-push payloads, classify alarm vs status `msgType`, IoT `iotEvent` envelope check, event-ref lookup, and `picUrlArray` helpers
 
 #### Changed
 
 - Ship with Imou Life 1.4.0. Do not install this library under older Imou Life releases that still expect `selects["mode"]`.
-- `LCOpenPicDecoder.init_open_api` uses `native/cacert.pem` or certifi for the SDK CA path (empty `caPath` made HTTPS picture downloads incomplete, SDK code `1`)
 
 ### [1.3.6]
 
@@ -167,14 +166,13 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 #### 新增
 
-- `pyimouapi.pic_decode`：TCM 判定、加密密钥解析，以及 `LCOpenPicDecoder`（官方 LCOpenSDK `DecryptPicture` / `DecryptPictureEx` 的 ctypes 封装）
+- `pyimouapi.pic_decode`：TCM 判定、加密密钥解析，以及 `LCOpenPicDecoder.decrypt_bytes`（解密调用方自行下载好的图片字节）。它绑定官方 LCOpenSDK 的 `CDecrypter`，而非 `DecryptPicture` / `DecryptPictureEx`，因此不需要 `strongDidCheck`、不需要 access token、也不需要 CA 证书；但两个 `.so` 仍须同时加载：SDK 的 OpenSSL 符号由 client 库提供。
 - `ImouHaDeviceManager.build_device` 会拷贝 `device_ability`，供 Home Assistant 识别 TCM 设备
 - `pyimouapi.push`：开放平台事件推送消息体归一化、报警/状态 `msgType` 分类、IoT `iotEvent` 信封判定、event ref 抽取、`picUrlArray` 辅助函数
 
 #### 变更
 
 - 与 Imou Life 1.4.0 一起发布。不要在仍依赖 `selects["mode"]` 的旧版 Imou Life 上单独安装本库。
-- `LCOpenPicDecoder.init_open_api` 使用 `native/cacert.pem` 或 certifi 作为 SDK CA；空 `caPath` 会导致 HTTPS 下图不完整（SDK `code=1`）
 
 ### [1.3.6]
 

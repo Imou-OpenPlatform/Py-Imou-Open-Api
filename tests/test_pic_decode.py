@@ -1,6 +1,7 @@
 """TCM detection and encrypt-key resolution for LCOpenSDK picture decrypt."""
 
 import ctypes
+import hashlib
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -10,6 +11,7 @@ from pyimouapi.pic_decode import (
     PicDecodeError,
     is_tcm_ability,
     resolve_encrypt_key,
+    serial_aes_key,
 )
 
 
@@ -55,77 +57,6 @@ def test_resolve_encrypt_key() -> None:
     )
 
 
-def test_decrypt_picture_non_tcm_returns_jpeg() -> None:
-    jpeg = b"\xff\xd8fakejpeg"
-    decoder = LCOpenPicDecoder(Path("/nonexistent"))
-    decoder._loaded = True
-    decoder._sdk = MagicMock()
-
-    def _decrypt(pic_url, key, sn, dest, dest_len, token):
-        n = len(jpeg)
-        ctypes.memmove(dest, jpeg, n)
-        dest_len._obj.value = n
-        return 0
-
-    decoder._sdk.DecryptPicture.side_effect = _decrypt
-    assert (
-        decoder.decrypt_picture(
-            pic_url="https://cdn.example/p",
-            encrypt_key="SN1",
-            device_id="SN1",
-            token="tok",
-            use_tcm=False,
-        )
-        == jpeg
-    )
-    decoder._sdk.DecryptPictureEx.assert_not_called()
-
-
-def test_decrypt_picture_tcm_uses_ex() -> None:
-    jpeg = b"\xff\xd8x"
-    decoder = LCOpenPicDecoder(Path("/nonexistent"))
-    decoder._loaded = True
-    decoder._sdk = MagicMock()
-
-    def _decrypt_ex(pic_url, key, sn, dest, dest_len, token):
-        n = len(jpeg)
-        ctypes.memmove(dest, jpeg, n)
-        dest_len._obj.value = n
-        return 0
-
-    decoder._sdk.DecryptPictureEx.side_effect = _decrypt_ex
-    assert (
-        decoder.decrypt_picture(
-            pic_url="https://cdn.example/p",
-            encrypt_key="pw",
-            device_id="SN1",
-            token="",
-            use_tcm=True,
-        )
-        == jpeg
-    )
-    decoder._sdk.DecryptPicture.assert_not_called()
-
-
-def test_decrypt_picture_key_error_raises() -> None:
-    decoder = LCOpenPicDecoder(Path("/nonexistent"))
-    decoder._loaded = True
-    decoder._sdk = MagicMock()
-    decoder._sdk.DecryptPicture.return_value = 2
-    try:
-        decoder.decrypt_picture(
-            pic_url="https://cdn.example/p",
-            encrypt_key="bad",
-            device_id="SN1",
-            token="",
-            use_tcm=False,
-        )
-    except PicDecodeError as err:
-        assert err.code == 2
-    else:
-        raise AssertionError("expected PicDecodeError")
-
-
 def test_load_missing_libs_raises(tmp_path: Path) -> None:
     decoder = LCOpenPicDecoder(tmp_path)
     try:
@@ -135,34 +66,109 @@ def test_load_missing_libs_raises(tmp_path: Path) -> None:
     raise AssertionError("expected FileNotFoundError")
 
 
-def test_init_open_api_not_loaded_raises() -> None:
+def test_serial_aes_key_is_md5_hex() -> None:
+    assert serial_aes_key("SN1") == hashlib.md5(b"SN1").hexdigest()
+
+
+def _decoder_with_stub_decrypt(
+    jpeg: bytes, code: int = 0, codes: list[int] | None = None
+) -> tuple[LCOpenPicDecoder, list]:
+    """Return a decoder whose CDecrypter symbols are recorded, not called."""
+    calls: list = []
     decoder = LCOpenPicDecoder(Path("/nonexistent"))
+    decoder._loaded = True
+    sdk = MagicMock()
+
+    def _decrypt(obj, data, length, aes_key, device_id, password, dest, dest_len):
+        calls.append((data, length, aes_key, device_id, password))
+        this_code = codes[len(calls) - 1] if codes else code
+        if this_code == 0:
+            ctypes.memmove(dest, jpeg, len(jpeg))
+            dest_len._obj.value = len(jpeg)
+        return this_code
+
+    sdk.__getitem__ = None
+    attrs = {
+        "_ZN5Dahua8LCCommon10CDecrypterC1ENS0_11RuleVersionE": MagicMock(),
+        "_ZN5Dahua8LCCommon10CDecrypterD1Ev": MagicMock(),
+        "_ZN5Dahua8LCCommon10CDecrypter22decryptDataWithoutHeadEPKciS3_S3_S3_PcRi": (
+            MagicMock(side_effect=_decrypt)
+        ),
+    }
+    sdk.configure_mock(**attrs)
+    decoder._sdk = sdk
+    return decoder, calls
+
+
+def test_decrypt_bytes_tcm_passes_serial_and_password() -> None:
+    jpeg = b"\xff\xd8tcm"
+    decoder, calls = _decoder_with_stub_decrypt(jpeg)
+
+    result = decoder.decrypt_bytes(
+        b"DHAVciphertext", device_id="SN1", encrypt_key="pw", use_tcm=True
+    )
+
+    assert result == jpeg
+    data, length, aes_key, device_id, password = calls[0]
+    assert (data, length) == (b"DHAVciphertext", len(b"DHAVciphertext"))
+    assert (aes_key, device_id, password) == (b"", b"SN1", b"pw")
+
+
+def test_decrypt_bytes_non_tcm_uses_serial_aes_key() -> None:
+    jpeg = b"\xff\xd8plain"
+    decoder, calls = _decoder_with_stub_decrypt(jpeg)
+
+    result = decoder.decrypt_bytes(
+        b"DHAVciphertext", device_id="SN1", encrypt_key="SN1", use_tcm=False
+    )
+
+    assert result == jpeg
+    _data, _length, aes_key, device_id, password = calls[0]
+    assert aes_key == serial_aes_key("SN1").encode()
+    assert (device_id, password) == (b"", b"")
+
+
+def test_decrypt_bytes_error_code_raises() -> None:
+    decoder, _calls = _decoder_with_stub_decrypt(b"", code=2)
     try:
-        decoder.init_open_api("openapi.example", 443, "id", "secret")
+        decoder.decrypt_bytes(b"DHAV", device_id="SN1", encrypt_key="bad", use_tcm=True)
     except PicDecodeError as err:
-        assert err.code == 99
-        assert err.message == "not loaded"
+        assert err.code == 2
     else:
         raise AssertionError("expected PicDecodeError")
 
 
-def test_resolve_ca_path_prefers_native_pem(tmp_path: Path) -> None:
-    pem = tmp_path / "cacert.pem"
-    pem.write_text("dummy-ca")
-    decoder = LCOpenPicDecoder(tmp_path)
-    assert decoder._resolve_ca_path(None) == str(pem).encode()
-    assert decoder._resolve_ca_path("/explicit.pem") == b"/explicit.pem"
+def test_decrypt_bytes_empty_data_raises() -> None:
+    decoder, _calls = _decoder_with_stub_decrypt(b"")
+    try:
+        decoder.decrypt_bytes(b"", device_id="SN1", encrypt_key="pw", use_tcm=True)
+    except PicDecodeError as err:
+        assert err.code == 1
+    else:
+        raise AssertionError("expected PicDecodeError")
 
 
-def test_decrypt_picture_not_loaded_raises() -> None:
+def test_decrypt_bytes_non_tcm_retries_with_password_key() -> None:
+    """A serial-keyed picture that rejects the AES key is retried as a password."""
+    jpeg = b"\xff\xd8retry"
+    decoder, calls = _decoder_with_stub_decrypt(jpeg, codes=[2, 0])
+
+    result = decoder.decrypt_bytes(
+        b"DHAV", device_id="SN1", encrypt_key="pw", use_tcm=False
+    )
+
+    assert result == jpeg
+    assert [c[2:] for c in calls] == [
+        (serial_aes_key("SN1").encode(), b"", b""),
+        (b"", b"SN1", b"pw"),
+    ]
+
+
+def test_decrypt_bytes_not_loaded_raises() -> None:
     decoder = LCOpenPicDecoder(Path("/nonexistent"))
     try:
-        decoder.decrypt_picture(
-            pic_url="https://cdn.example/p",
-            encrypt_key="SN1",
-            device_id="SN1",
-            token="",
-            use_tcm=False,
+        decoder.decrypt_bytes(
+            b"DHAV", device_id="SN1", encrypt_key="SN1", use_tcm=False
         )
     except PicDecodeError as err:
         assert err.code == 99

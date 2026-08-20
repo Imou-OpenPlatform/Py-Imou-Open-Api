@@ -1,9 +1,39 @@
-"""Official LCOpenSDK picture decrypt (ctypes)."""
+"""Official LCOpenSDK picture decrypt (ctypes).
+
+The SDK also exports ``DecryptPicture`` / ``DecryptPictureEx``, which download
+the picture themselves after an ``/openapi/strongDidCheck`` round trip. That
+downloader truncates on some alarm CDNs, and a short body fails the decrypt with
+code 1 on a picture that is perfectly decryptable. This module therefore binds
+only the decrypt half, ``CDecrypter``, and leaves the download to the caller: no
+access token, no ``initOpenApi``, and no CA bundle are involved.
+"""
 
 from __future__ import annotations
 
 import ctypes
+import hashlib
 from pathlib import Path
+
+CLIENT_LIB = "libLCOpenApiClient.so"
+SDK_LIB = "libLCOpenSDK.so"
+
+# libLCOpenSDK.so resolves its OpenSSL symbols (OCSP_response_status and
+# friends) out of libLCOpenApiClient.so, so both have to be loaded, the client
+# one globally, even though every symbol used here lives in the SDK.
+_SYM_CTOR = "_ZN5Dahua8LCCommon10CDecrypterC1ENS0_11RuleVersionE"
+_SYM_DTOR = "_ZN5Dahua8LCCommon10CDecrypterD1Ev"
+_SYM_DECRYPT = (
+    "_ZN5Dahua8LCCommon10CDecrypter22decryptDataWithoutHeadEPKciS3_S3_S3_PcRi"
+)
+
+# The rule version DecryptPicture and DecryptPictureEx both construct with.
+_RULE_VERSION = 1
+
+# CDecrypter is stack allocated by the SDK within 20 bytes; this is slack.
+_DECRYPTER_SIZE = 256
+
+_CODE_WRONG_KEY = 2
+_CODE_BUFFER_TOO_SMALL = 5
 
 
 def is_tcm_ability(device_ability: str) -> bool:
@@ -25,6 +55,16 @@ def resolve_encrypt_key(
     return device_id
 
 
+def serial_aes_key(device_id: str) -> str:
+    """Return the AES key a non-TCM picture is encrypted with.
+
+    DecryptPicture derives it from the serial with the SDK-internal
+    ``getAesKey``, which copies at most 127 bytes of the serial and renders
+    its MD5 as hex.
+    """
+    return hashlib.md5(device_id.encode()[:127]).hexdigest()
+
+
 class PicDecodeError(Exception):
     def __init__(self, code: int, message: str) -> None:
         self.code = code
@@ -42,8 +82,8 @@ class LCOpenPicDecoder:
     def load(self) -> None:
         if self._loaded:
             return
-        client_path = self.native_dir / "libLCOpenApiClient.so"
-        sdk_path = self.native_dir / "libLCOpenSDK.so"
+        client_path = self.native_dir / CLIENT_LIB
+        sdk_path = self.native_dir / SDK_LIB
         if not client_path.exists() or not sdk_path.exists():
             raise FileNotFoundError(
                 f"LCOpenSDK native libs not found in {self.native_dir}"
@@ -51,27 +91,24 @@ class LCOpenPicDecoder:
         self._client = ctypes.CDLL(str(client_path), mode=ctypes.RTLD_GLOBAL)
         self._sdk = ctypes.CDLL(str(sdk_path))
 
-        self._sdk.initOpenApi.argtypes = (
+        ctor = getattr(self._sdk, _SYM_CTOR)
+        ctor.argtypes = (ctypes.c_void_p, ctypes.c_int)
+        ctor.restype = None
+        dtor = getattr(self._sdk, _SYM_DTOR)
+        dtor.argtypes = (ctypes.c_void_p,)
+        dtor.restype = None
+        decrypt_data = getattr(self._sdk, _SYM_DECRYPT)
+        decrypt_data.argtypes = (
+            ctypes.c_void_p,
             ctypes.c_char_p,
             ctypes.c_int,
             ctypes.c_char_p,
             ctypes.c_char_p,
             ctypes.c_char_p,
-        )
-        self._sdk.initOpenApi.restype = None
-
-        decrypt_args = (
             ctypes.c_char_p,
-            ctypes.c_char_p,
-            ctypes.c_char_p,
-            ctypes.c_void_p,
             ctypes.POINTER(ctypes.c_int),
-            ctypes.c_char_p,
         )
-        self._sdk.DecryptPicture.argtypes = decrypt_args
-        self._sdk.DecryptPicture.restype = ctypes.c_int
-        self._sdk.DecryptPictureEx.argtypes = decrypt_args
-        self._sdk.DecryptPictureEx.restype = ctypes.c_int
+        decrypt_data.restype = ctypes.c_int
 
         self._loaded = True
 
@@ -80,78 +117,98 @@ class LCOpenPicDecoder:
             raise PicDecodeError(99, "not loaded")
         return self._sdk
 
-    def _resolve_ca_path(self, ca_path: str | None) -> bytes:
-        if ca_path:
-            return ca_path.encode()
-        native_ca = self.native_dir / "cacert.pem"
-        if native_ca.is_file():
-            return str(native_ca).encode()
-        try:
-            import certifi
-
-            return certifi.where().encode()
-        except ImportError:
-            return b""
-
-    def init_open_api(
+    def _decrypt_data(
         self,
-        host: str,
-        port: int,
-        app_id: str,
-        app_secret: str,
-        ca_path: str | None = None,
-    ) -> None:
-        sdk = self._require_sdk()
-        sdk.initOpenApi(
-            host.encode(),
-            port,
-            self._resolve_ca_path(ca_path),
-            app_id.encode(),
-            app_secret.encode(),
-        )
-
-    def decrypt_picture(
-        self,
+        data: bytes,
         *,
-        pic_url: str,
-        encrypt_key: str,
+        aes_key: bytes,
+        device_id: bytes,
+        device_password: bytes,
+        dest_size: int,
+    ) -> tuple[int, bytes]:
+        sdk = self._require_sdk()
+        ctor = getattr(sdk, _SYM_CTOR)
+        dtor = getattr(sdk, _SYM_DTOR)
+        decrypt_data = getattr(sdk, _SYM_DECRYPT)
+
+        decrypter = ctypes.create_string_buffer(_DECRYPTER_SIZE)
+        ctor(decrypter, _RULE_VERSION)
+        try:
+            dest = ctypes.create_string_buffer(dest_size)
+            dest_len = ctypes.c_int(dest_size)
+            code = decrypt_data(
+                decrypter,
+                data,
+                len(data),
+                aes_key,
+                device_id,
+                device_password,
+                dest,
+                ctypes.byref(dest_len),
+            )
+            if code != 0:
+                return code, b""
+            return 0, dest.raw[: dest_len.value]
+        finally:
+            dtor(decrypter)
+
+    def _key_candidates(
+        self, *, device_id: str, encrypt_key: str, use_tcm: bool
+    ) -> list[tuple[bytes, bytes, bytes]]:
+        """Return (aes_key, device_id, password) triples to try, in order.
+
+        TCM pictures are keyed by serial plus device password. Others use an
+        AES key the SDK derives from the serial; the extra candidates cover a
+        serial that was passed where a password belongs.
+        """
+        if use_tcm:
+            return [(b"", device_id.encode(), encrypt_key.encode())]
+        candidates = [(serial_aes_key(device_id).encode(), b"", b"")]
+        if encrypt_key and encrypt_key != device_id:
+            candidates.append((b"", device_id.encode(), encrypt_key.encode()))
+        return candidates
+
+    def decrypt_bytes(
+        self,
+        data: bytes,
+        *,
         device_id: str,
-        token: str,
+        encrypt_key: str,
         use_tcm: bool,
     ) -> bytes:
-        sdk = self._require_sdk()
+        """Decrypt an alarm picture the caller already downloaded."""
+        if not data:
+            raise PicDecodeError(1, "empty picture data")
 
-        buf = ctypes.create_string_buffer(20 * 1024 * 1024)
-        dest_len = ctypes.c_int(len(buf))
-        args = (
-            pic_url.encode(),
-            encrypt_key.encode(),
-            device_id.encode(),
-            buf,
-            ctypes.byref(dest_len),
-            token.encode(),
+        dest_size = max(len(data) * 2, 1024 * 1024)
+        candidates = self._key_candidates(
+            device_id=device_id, encrypt_key=encrypt_key, use_tcm=use_tcm
         )
-
-        decrypt = sdk.DecryptPictureEx if use_tcm else sdk.DecryptPicture
-        code = decrypt(*args)
-
-        if code == 5:
-            buf = ctypes.create_string_buffer(40 * 1024 * 1024)
-            dest_len = ctypes.c_int(len(buf))
-            args = (
-                pic_url.encode(),
-                encrypt_key.encode(),
-                device_id.encode(),
-                buf,
-                ctypes.byref(dest_len),
-                token.encode(),
+        code = 99
+        raw = b""
+        for aes_key, did, password in candidates:
+            code, raw = self._decrypt_data(
+                data,
+                aes_key=aes_key,
+                device_id=did,
+                device_password=password,
+                dest_size=dest_size,
             )
-            code = decrypt(*args)
+            if code == _CODE_BUFFER_TOO_SMALL:
+                code, raw = self._decrypt_data(
+                    data,
+                    aes_key=aes_key,
+                    device_id=did,
+                    device_password=password,
+                    dest_size=dest_size * 4,
+                )
+            if code == 0:
+                break
+            if code != _CODE_WRONG_KEY:
+                break
 
-        if code == 0:
-            raw = buf.raw[: dest_len.value]
-            if not raw.startswith(b"\xff\xd8"):
-                raise PicDecodeError(99, "not jpeg")
-            return raw
-
-        raise PicDecodeError(code, f"sdk {code}")
+        if code != 0:
+            raise PicDecodeError(code, f"sdk {code}")
+        if not raw.startswith(b"\xff\xd8"):
+            raise PicDecodeError(99, "not jpeg")
+        return raw
