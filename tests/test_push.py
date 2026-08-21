@@ -86,6 +86,20 @@ def test_normalize_iot_event_keeps_top_level_msg_type() -> None:
     assert "is_alarm" not in event
 
 
+def test_normalize_does_not_use_dname_as_device_id() -> None:
+    """Display name alone must not become device_id."""
+    event = normalize_push_payload({"msgType": "human", "dname": "Gate"})
+    assert event["device_id"] is None
+    assert event["name"] == "Gate"
+
+
+def test_pic_urls_accepts_pic_url_arr() -> None:
+    """Some pushes use picUrlArr instead of picUrlArray."""
+    assert pic_urls_from_payload({"picUrlArr": ["https://example/a.jpg"]}) == [
+        "https://example/a.jpg"
+    ]
+
+
 def test_normalize_paas_device_id_and_channel() -> None:
     """PaaS aliases deviceId / channelId."""
     event = normalize_push_payload(

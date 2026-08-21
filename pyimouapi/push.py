@@ -110,10 +110,7 @@ def normalize_push_payload(payload: dict[str, Any]) -> dict[str, Any]:
     Does not raise. Caller must pass a dict. Does not set device_name.
     """
     device_id = (
-        payload.get("did")
-        or payload.get("deviceId")
-        or payload.get("msgDeviceId")
-        or payload.get("dname")
+        payload.get("did") or payload.get("deviceId") or payload.get("msgDeviceId")
     )
     channel_id = _channel_id_from_payload(payload)
     msg_type = payload.get("msgType")
@@ -145,14 +142,15 @@ def normalize_push_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def pic_urls_from_payload(raw: dict[str, Any]) -> list[str]:
-    """Return picUrlArray strings from a push payload, if any."""
-    value = raw.get("picUrlArray")
-    if not isinstance(value, list):
-        return []
+    """Return picture URL strings from a push payload, if any."""
     urls: list[str] = []
-    for item in value:
-        if isinstance(item, str) and item:
-            urls.append(item)
+    for key in ("picUrlArray", "picUrlArr"):
+        value = raw.get(key)
+        if not isinstance(value, list):
+            continue
+        for item in value:
+            if isinstance(item, str) and item and item not in urls:
+                urls.append(item)
     return urls
 
 

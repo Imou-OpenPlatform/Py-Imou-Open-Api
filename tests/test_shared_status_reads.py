@@ -96,3 +96,54 @@ async def test_update_devices_status_still_calls_once_per_physical_device() -> N
 
     assert delegate.async_get_device_online_status.await_count == 2
     assert delegate.async_get_iot_device_detail_info.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_update_devices_status_skips_offline_channel_detail() -> None:
+    """One offline channel still shares online, but must not refresh detail."""
+    ch0 = _channel_device("0", switch_ref="10001")
+    ch1 = _channel_device("1", switch_ref="10002")
+
+    delegate = MagicMock()
+    delegate.async_get_device_online_status = AsyncMock(
+        return_value={
+            PARAM_ONLINE: "1",
+            PARAM_CHANNELS: [
+                {PARAM_CHANNEL_ID: 0, PARAM_ONLINE: "1"},
+                {PARAM_CHANNEL_ID: 1, PARAM_ONLINE: "0"},
+            ],
+        }
+    )
+    delegate.async_get_iot_device_detail_info = AsyncMock(
+        return_value={
+            PARAM_PROPERTIES: {},
+            PARAM_CHANNELS: [
+                {PARAM_CHANNEL_ID: 0, PARAM_PROPERTIES: {"10001": 1}},
+                {PARAM_CHANNEL_ID: 1, PARAM_PROPERTIES: {"10002": 1}},
+            ],
+        }
+    )
+
+    manager = ImouHaDeviceManager(delegate)
+    await manager.async_update_devices_status([ch0, ch1])
+
+    assert delegate.async_get_device_online_status.await_count == 1
+    assert delegate.async_get_iot_device_detail_info.await_count == 1
+    assert ch0.switches["relay"][PARAM_STATE] is True
+    assert ch1.switches["relay"][PARAM_STATE] is False
+    assert ch1.sensors[PARAM_STATUS][PARAM_STATE] == DeviceStatus.OFFLINE.value
+
+
+@pytest.mark.asyncio
+async def test_apply_online_status_marks_missing_channel_offline() -> None:
+    """A channel absent from deviceOnline must not stay sticky-online."""
+    ch = _channel_device("9")
+    manager = ImouHaDeviceManager(MagicMock())
+    manager._apply_online_status(
+        ch,
+        {
+            PARAM_ONLINE: "1",
+            PARAM_CHANNELS: [{PARAM_CHANNEL_ID: 0, PARAM_ONLINE: "1"}],
+        },
+    )
+    assert ch.sensors[PARAM_STATUS][PARAM_STATE] == DeviceStatus.OFFLINE.value

@@ -714,7 +714,19 @@ class ImouHaDeviceManager:
                     PARAM_STATUS,
                     self.get_device_status(channel[PARAM_ONLINE]),
                 )
-                break
+                return
+        # Channel missing from the payload: treat as offline so we do not keep
+        # refreshing detail/entity reads against a stale "online" cache.
+        _LOGGER.debug(
+            "deviceOnline has no channel %s for %s; marking offline",
+            device_channel_id,
+            device.device_id,
+        )
+        apply_sensor_state(
+            device.sensors,
+            PARAM_STATUS,
+            DeviceStatus.OFFLINE.value,
+        )
 
     @staticmethod
     async def _async_gather_reads(
