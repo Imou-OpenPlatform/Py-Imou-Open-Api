@@ -6,8 +6,6 @@ All notable changes to this project will be documented in this file.
 
 ### [1.4.0]
 
-1.3.6 was prepared but never published, so everything below ships in 1.4.0. Upgrading from 1.3.5 means taking both sets of changes at once, including the breaking ones.
-
 #### Breaking
 
 - `device.selects["mode"]` and `async_select_option(..., "mode", ...)` are removed. Use `device.alarm_control_panel` and `async_set_alarm_mode`.
@@ -156,8 +154,6 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 本项目的重要变更均记录于此。
 
 ### [1.4.0]
-
-1.3.6 准备好了但从未发布，所以下面这些全部随 1.4.0 一起交付。从 1.3.5 升级会一次性拿到两批变更，包括破坏性变更。
 
 #### 破坏性变更
 
