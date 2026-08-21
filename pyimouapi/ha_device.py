@@ -601,26 +601,66 @@ class ImouHaDeviceManager:
         )
         await self._async_gather_reads(updates, device, "service-backed entities")
 
+    async def async_update_devices_status(self, devices: list[ImouHaDevice]) -> None:
+        """Update many devices, sharing online/detail reads per physical device.
+
+        An NVR (or any multi-lens camera) becomes one Home Assistant device per
+        channel, but ``deviceOnline`` and ``getIotDeviceDetailInfo`` are keyed on
+        the account device id. Issuing those once per channel would multiply the
+        Open API cost by the channel count for no extra information.
+        """
+        if not devices:
+            return
+        groups: dict[str, list[ImouHaDevice]] = {}
+        for device in devices:
+            groups.setdefault(self._resolve_device_id(device), []).append(device)
+        results = await asyncio.gather(
+            *(self._async_update_device_group(group) for group in groups.values()),
+            return_exceptions=True,
+        )
+        for result in results:
+            if isinstance(
+                result, asyncio.CancelledError | InvalidAppIdOrSecretException
+            ):
+                raise result
+            if isinstance(result, BaseException):
+                _LOGGER.warning("Failed to update a device group: %s", result)
+
     async def async_update_device_status(self, device: ImouHaDevice) -> None:
         """Update device status, with the updater calling every time the coordinator is updated"""
-        # The device status is updated first, and if it's not online, the other entity status isn't updated
-        await self._async_update_status(device)
-        if device.sensors[PARAM_STATUS][PARAM_STATE] == DeviceStatus.OFFLINE.value:
-            # Logged every poll for as long as the device stays offline, which is
-            # routine for battery cameras that sleep.
-            _LOGGER.debug("device %s is offline,stop updating", device.device_name)
+        await self._async_update_device_group([device])
+
+    async def _async_update_device_group(self, devices: list[ImouHaDevice]) -> None:
+        """Refresh one physical device and every HA channel that shares it."""
+        if not devices:
+            return
+        await self._async_update_status_shared(devices)
+        online_devices = [
+            device
+            for device in devices
+            if device.sensors[PARAM_STATUS][PARAM_STATE] != DeviceStatus.OFFLINE.value
+        ]
+        if len(online_devices) < len(devices):
+            for device in devices:
+                if device not in online_devices:
+                    _LOGGER.debug(
+                        "device %s is offline,stop updating", device.device_name
+                    )
+        if not online_devices:
             return
 
-        if device.product_id is not None:
+        iot_devices = [d for d in online_devices if d.product_id is not None]
+        if iot_devices:
             try:
-                detail = await self._async_fetch_device_detail(device)
-                entities = self._collect_property_entities(device)
-                _LOGGER.debug(
-                    "fetched device detail for %s, updating %d property entities",
-                    self._resolve_device_id(device),
-                    len(entities),
-                )
-                await self._async_update_properties_from_detail(device, detail)
+                detail = await self._async_fetch_device_detail(iot_devices[0])
+                for device in iot_devices:
+                    entities = self._collect_property_entities(device)
+                    _LOGGER.debug(
+                        "fetched device detail for %s, updating %d property entities",
+                        self._resolve_device_id(device),
+                        len(entities),
+                    )
+                    await self._async_update_properties_from_detail(device, detail)
             except InvalidAppIdOrSecretException:
                 raise
             except Exception as e:
@@ -628,15 +668,53 @@ class ImouHaDeviceManager:
 
         await self._async_gather_reads(
             [
-                self._async_update_services_entities(device),
-                self._async_update_device_switch_status(device),
-                self._async_update_device_select_status(device),
-                self._async_update_device_sensor_status(device),
+                coro
+                for device in online_devices
+                for coro in (
+                    self._async_update_services_entities(device),
+                    self._async_update_device_switch_status(device),
+                    self._async_update_device_select_status(device),
+                    self._async_update_device_sensor_status(device),
+                )
             ],
-            device,
+            online_devices[0],
             "entities",
         )
-        _LOGGER.debug("update_device_status finish: %s", device)
+        for device in online_devices:
+            _LOGGER.debug("update_device_status finish: %s", device)
+
+    async def _async_update_status_shared(self, devices: list[ImouHaDevice]) -> None:
+        """Apply one deviceOnline response to every channel that shares it."""
+        try:
+            device_id = self._resolve_device_id(devices[0])
+            data = await self.delegate.async_get_device_online_status(device_id)
+            for device in devices:
+                self._apply_online_status(device, data)
+        except InvalidAppIdOrSecretException:
+            raise
+        except Exception as e:
+            _LOGGER.error("_async_update_device_status error:  %s", e)
+
+    def _apply_online_status(self, device: ImouHaDevice, data: dict[str, Any]) -> None:
+        """Write the online sensor from a deviceOnline payload."""
+        if device.channel_id is None and device.product_id is not None:
+            apply_sensor_state(
+                device.sensors,
+                PARAM_STATUS,
+                self.get_device_status(data[PARAM_ONLINE]),
+            )
+            return
+        device_channel_id = (
+            str(device.channel_id) if device.channel_id is not None else None
+        )
+        for channel in data[PARAM_CHANNELS]:
+            if str(channel[PARAM_CHANNEL_ID]) == device_channel_id:
+                apply_sensor_state(
+                    device.sensors,
+                    PARAM_STATUS,
+                    self.get_device_status(channel[PARAM_ONLINE]),
+                )
+                break
 
     @staticmethod
     async def _async_gather_reads(
@@ -783,33 +861,6 @@ class ImouHaDeviceManager:
                 coroutines.append(self._async_update_device_battery(device))
         await self._async_gather_reads(coroutines, device, "sensors")
 
-    async def _async_update_status(self, device: ImouHaDevice):
-        try:
-            device_id = self._resolve_device_id(device)
-            data = await self.delegate.async_get_device_online_status(device_id)
-            if device.channel_id is None and device.product_id is not None:
-                apply_sensor_state(
-                    device.sensors,
-                    PARAM_STATUS,
-                    self.get_device_status(data[PARAM_ONLINE]),
-                )
-            else:
-                device_channel_id = (
-                    str(device.channel_id) if device.channel_id is not None else None
-                )
-                for channel in data[PARAM_CHANNELS]:
-                    if str(channel[PARAM_CHANNEL_ID]) == device_channel_id:
-                        apply_sensor_state(
-                            device.sensors,
-                            PARAM_STATUS,
-                            self.get_device_status(channel[PARAM_ONLINE]),
-                        )
-                        break
-        except InvalidAppIdOrSecretException:
-            raise
-        except Exception as e:
-            _LOGGER.error("_async_update_device_status error:  %s", e)
-
     async def _async_update_device_storage(self, device: ImouHaDevice):
         try:
             data = await self.delegate.async_get_device_storage(device.device_id)
@@ -885,12 +936,16 @@ class ImouHaDeviceManager:
         await asyncio.sleep(wait_seconds)
         return await self.delegate.async_download(data[PARAM_URL])
 
-    async def async_get_devices(self) -> list[ImouHaDevice]:
+    async def async_get_devices(
+        self, *, fetch_ability_refs: bool | set[str] = True
+    ) -> list[ImouHaDevice]:
         """
         GET A LIST OF ALL DEVICES。
         """
         devices = []
-        for device in await self.delegate.async_get_devices():
+        for device in await self.delegate.async_get_devices(
+            fetch_ability_refs=fetch_ability_refs
+        ):
             # Prioritize whether it's a video device.
             if device.channels:
                 for channel in device.channels:

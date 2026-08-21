@@ -24,6 +24,8 @@ All notable changes to this project will be documented in this file.
 
 - Ship with Imou Life 1.4.0. Do not install this library under older Imou Life releases that still expect `selects["mode"]`.
 - Drop unused IoT switch fallback refs `305000` (`motion_detect`), `115300` (`ab_alarm_sound`), and `104000` / `103800` (`audio_encode_control`). `FKX9UYL4` now skips `14800` and binds `108800` directly.
+- `ImouDeviceManager.async_get_devices(fetch_ability_refs=...)` can list without the per-IoT detail call (`False`), or only for a set of device ids. Home Assistant uses this so rediscovery does not re-fetch ability refs for devices it already has.
+- `ImouHaDeviceManager.async_update_devices_status` updates many devices in one go and shares `deviceOnline` / `getIotDeviceDetailInfo` across channels of the same physical device id.
 
 ### [1.3.5]
 
@@ -173,6 +175,8 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 - 与 Imou Life 1.4.0 一起发布。不要在仍依赖 `selects["mode"]` 的旧版 Imou Life 上单独安装本库。
 - 去掉未使用的 IoT 开关回退 ref：`305000`（`motion_detect`）、`115300`（`ab_alarm_sound`）、`104000` / `103800`（`audio_encode_control`）。`FKX9UYL4` 现为跳过 `14800` 后直接绑 `108800`。
+- `ImouDeviceManager.async_get_devices(fetch_ability_refs=...)` 可在列举时跳过每台 IoT 的 detail 调用（`False`），或只对给定 device id 集合拉取。Home Assistant 用它让重新发现不再为已有设备重取 ability refs。
+- `ImouHaDeviceManager.async_update_devices_status` 一次更新多台设备，并在同一物理 device id 的各通道间共享 `deviceOnline` / `getIotDeviceDetailInfo`。
 
 ### [1.3.5]
 

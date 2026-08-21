@@ -35,7 +35,7 @@ async def test_online_status_matches_int_channel_id():
         }
     )
     manager = ImouHaDeviceManager(delegate)
-    await manager._async_update_status(device)
+    await manager._async_update_status_shared([device])
 
     assert device.sensors[PARAM_STATUS][PARAM_STATE] == DeviceStatus.ONLINE.value
 
