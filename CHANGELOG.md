@@ -6,8 +6,18 @@ All notable changes to this project will be documented in this file.
 
 ### [1.4.0]
 
+1.3.6 was prepared but never published, so everything below ships in 1.4.0. Upgrading from 1.3.5 means taking both sets of changes at once, including the breaking ones.
+
+#### Breaking
+
+- `device.selects["mode"]` and `async_select_option(..., "mode", ...)` are removed. Use `device.alarm_control_panel` and `async_set_alarm_mode`.
+- `select_option.to_friendly` / `to_raw` no longer map `"mode"` (`"0"` stays `"0"`, not `"home"`). Use `pyimouapi.alarm_mode`.
+
 #### Added
 
+- IoT switches: pet detection `pet_detect` (ref `18300`), flip image `frame_reverse` (`13500`), wide dynamic range `wide_dynamic` (`19400`), smart tracking `smart_track` (`13300`), prompt sound `play_sound` (`14000`), alarm-linked siren `linkage_siren` (`102000`), alarm-linked white light `linkage_white_light` (`17300`)
+- PaaS switches: flip image `FrameReverse` / `frameReverse`, wide dynamic range `WideDynamic` / `wideDynamic`, smart tracking `SmartTrack` / `smartTrack`, prompt sound `PlaySound` / `playSound`, alarm-linked siren `LinkageSiren` / `linkageSiren`, alarm-linked white light `WhiteLight`/`ChnWhiteLight` / `linkageWhiteLight`
+- `ImouHaDevice.alarm_control_panel` and `async_set_alarm_mode` for IoT ref `15200`.
 - `pyimouapi.pic_decode`: TCM detection, encrypt-key resolution, and `LCOpenPicDecoder.decrypt_bytes`, which decrypts picture bytes the caller downloaded. It binds the official LCOpenSDK's `CDecrypter` rather than `DecryptPicture` / `DecryptPictureEx`, so it needs no `strongDidCheck` call, no access token, and no CA bundle. Both `.so` files must still be loaded: the SDK resolves its OpenSSL symbols out of the client library.
 - `ImouHaDevice.device_ability` copied in `ImouHaDeviceManager.build_device` so Home Assistant can tell TCM devices apart
 - `pyimouapi.push`: normalize Open Platform event-push payloads, classify alarm vs status `msgType`, IoT `iotEvent` envelope check, event-ref lookup, and `picUrlArray` helpers
@@ -15,23 +25,6 @@ All notable changes to this project will be documented in this file.
 #### Changed
 
 - Ship with Imou Life 1.4.0. Do not install this library under older Imou Life releases that still expect `selects["mode"]`.
-
-### [1.3.6]
-
-#### Breaking
-
-- `device.selects["mode"]` and `async_select_option(..., "mode", ...)` are removed. Use `device.alarm_control_panel` and `async_set_alarm_mode`.
-- `select_option.to_friendly` / `to_raw` no longer map `"mode"` (`"0"` stays `"0"`, not `"home"`). Use `pyimouapi.alarm_mode`.
-- Do not install this release under Imou Life 1.3.5: that integration still expects `selects["mode"]` and has no `alarm_control_panel` platform. Unreleased; ships as part of 1.4.0 with HA 1.4.0.
-
-#### Added
-
-- IoT switches: pet detection `pet_detect` (ref `18300`), flip image `frame_reverse` (`13500`), wide dynamic range `wide_dynamic` (`19400`), smart tracking `smart_track` (`13300`), prompt sound `play_sound` (`14000`), alarm-linked siren `linkage_siren` (`102000`), alarm-linked white light `linkage_white_light` (`17300`)
-- PaaS switches: flip image `FrameReverse` / `frameReverse`, wide dynamic range `WideDynamic` / `wideDynamic`, smart tracking `SmartTrack` / `smartTrack`, prompt sound `PlaySound` / `playSound`, alarm-linked siren `LinkageSiren` / `linkageSiren`, alarm-linked white light `WhiteLight`/`ChnWhiteLight` / `linkageWhiteLight`
-- `ImouHaDevice.alarm_control_panel` and `async_set_alarm_mode` for IoT ref `15200`.
-
-#### Changed
-
 - Drop unused IoT switch fallback refs `305000` (`motion_detect`), `115300` (`ab_alarm_sound`), and `104000` / `103800` (`audio_encode_control`). `FKX9UYL4` now skips `14800` and binds `108800` directly.
 
 ### [1.3.5]
@@ -164,8 +157,18 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 ### [1.4.0]
 
+1.3.6 准备好了但从未发布，所以下面这些全部随 1.4.0 一起交付。从 1.3.5 升级会一次性拿到两批变更，包括破坏性变更。
+
+#### 破坏性变更
+
+- 移除 `device.selects["mode"]` 与 `async_select_option(..., "mode", ...)`。请改用 `device.alarm_control_panel` 与 `async_set_alarm_mode`。
+- `select_option.to_friendly` / `to_raw` 不再映射 `"mode"`（`"0"` 仍是 `"0"`，不会变成 `"home"`）。请改用 `pyimouapi.alarm_mode`。
+
 #### 新增
 
+- IoT 开关：宠物检测 `pet_detect`（ref `18300`）、画面翻转 `frame_reverse`（`13500`）、宽动态 `wide_dynamic`（`19400`）、智能追踪 `smart_track`（`13300`）、设备提示音 `play_sound`（`14000`）、告警联动警笛 `linkage_siren`（`102000`）、告警联动白光灯 `linkage_white_light`（`17300`）
+- PaaS 开关：画面翻转 `FrameReverse`/`frameReverse`、宽动态 `WideDynamic`/`wideDynamic`、智能追踪 `SmartTrack`/`smartTrack`、设备提示音 `PlaySound`/`playSound`、告警联动警笛 `LinkageSiren`/`linkageSiren`、告警联动白光灯 `WhiteLight`/`ChnWhiteLight`/`linkageWhiteLight`
+- `ImouHaDevice.alarm_control_panel` 与 `async_set_alarm_mode`（IoT ref `15200`）。
 - `pyimouapi.pic_decode`：TCM 判定、加密密钥解析，以及 `LCOpenPicDecoder.decrypt_bytes`（解密调用方自行下载好的图片字节）。它绑定官方 LCOpenSDK 的 `CDecrypter`，而非 `DecryptPicture` / `DecryptPictureEx`，因此不需要 `strongDidCheck`、不需要 access token、也不需要 CA 证书；但两个 `.so` 仍须同时加载：SDK 的 OpenSSL 符号由 client 库提供。
 - `ImouHaDeviceManager.build_device` 会拷贝 `device_ability`，供 Home Assistant 识别 TCM 设备
 - `pyimouapi.push`：开放平台事件推送消息体归一化、报警/状态 `msgType` 分类、IoT `iotEvent` 信封判定、event ref 抽取、`picUrlArray` 辅助函数
@@ -173,23 +176,6 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 #### 变更
 
 - 与 Imou Life 1.4.0 一起发布。不要在仍依赖 `selects["mode"]` 的旧版 Imou Life 上单独安装本库。
-
-### [1.3.6]
-
-#### 破坏性变更
-
-- 移除 `device.selects["mode"]` 与 `async_select_option(..., "mode", ...)`。请改用 `device.alarm_control_panel` 与 `async_set_alarm_mode`。
-- `select_option.to_friendly` / `to_raw` 不再映射 `"mode"`（`"0"` 仍是 `"0"`，不会变成 `"home"`）。请改用 `pyimouapi.alarm_mode`。
-- 不要在 Imou Life 1.3.5 上单独安装本版：旧集成仍读 `selects["mode"]`，且没有 `alarm_control_panel` 平台。未单独发版，随 1.4.0 与 HA 1.4.0 一起发布。
-
-#### 新增
-
-- IoT 开关：宠物检测 `pet_detect`（ref `18300`）、画面翻转 `frame_reverse`（`13500`）、宽动态 `wide_dynamic`（`19400`）、智能追踪 `smart_track`（`13300`）、设备提示音 `play_sound`（`14000`）、告警联动警笛 `linkage_siren`（`102000`）、告警联动白光灯 `linkage_white_light`（`17300`）
-- PaaS 开关：画面翻转 `FrameReverse`/`frameReverse`、宽动态 `WideDynamic`/`wideDynamic`、智能追踪 `SmartTrack`/`smartTrack`、设备提示音 `PlaySound`/`playSound`、告警联动警笛 `LinkageSiren`/`linkageSiren`、告警联动白光灯 `WhiteLight`/`ChnWhiteLight`/`linkageWhiteLight`
-- `ImouHaDevice.alarm_control_panel` 与 `async_set_alarm_mode`（IoT ref `15200`）。
-
-#### 变更
-
 - 去掉未使用的 IoT 开关回退 ref：`305000`（`motion_detect`）、`115300`（`ab_alarm_sound`）、`104000` / `103800`（`audio_encode_control`）。`FKX9UYL4` 现为跳过 `14800` 后直接绑 `108800`。
 
 ### [1.3.5]
