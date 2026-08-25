@@ -647,7 +647,7 @@ class ImouHaDeviceManager:
                 fetched.update(result)
         return fetched
 
-    async def async_update_device_status(self, device: ImouHaDevice) -> None:
+    async def async_update_device_status(self, device: ImouHaDevice) -> set[str]:
         """Update device status, with the updater calling every time the coordinator is updated"""
         return await self._async_update_device_group([device])
 

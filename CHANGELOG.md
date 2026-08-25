@@ -19,6 +19,8 @@ All notable changes to this project will be documented in this file.
 - `pyimouapi.pic_decode`: TCM detection, encrypt-key resolution, and `LCOpenPicDecoder.decrypt_bytes`, which decrypts picture bytes the caller downloaded. It binds the official LCOpenSDK's `CDecrypter` rather than `DecryptPicture` / `DecryptPictureEx`, so it needs no `strongDidCheck` call, no access token, and no CA bundle. Both `.so` files must still be loaded: the SDK resolves its OpenSSL symbols out of the client library.
 - `ImouHaDevice.device_ability` copied in `ImouHaDeviceManager.build_device` so Home Assistant can tell TCM devices apart
 - `pyimouapi.push`: normalize Open Platform event-push payloads, classify alarm vs status `msgType`, IoT `iotEvent` envelope check, event-ref lookup, and `picUrlArray` helpers
+- `pyimouapi.push.iot_property_values`: extract ref→value maps from `iotProperty` push payloads
+- `ImouHaDeviceManager.apply_iot_property_values`: apply an `iotProperty` ref map onto one device
 
 #### Changed
 
@@ -26,6 +28,8 @@ All notable changes to this project will be documented in this file.
 - Drop unused IoT switch fallback refs `305000` (`motion_detect`), `115300` (`ab_alarm_sound`), and `104000` / `103800` (`audio_encode_control`). `FKX9UYL4` now skips `14800` and binds `108800` directly.
 - `ImouDeviceManager.async_get_devices(fetch_ability_refs=...)` can list without the per-IoT detail call (`False`), or only for a set of device ids. Home Assistant uses this so rediscovery does not re-fetch ability refs for devices it already has.
 - `ImouHaDeviceManager.async_update_devices_status` updates many devices in one go and shares `deviceOnline` / `getIotDeviceDetailInfo` across channels of the same physical device id.
+- `pyimouapi.push.is_iot_non_event` also accepts `iotProperty` envelopes (not only `iotEvent`).
+- `ImouHaDeviceManager.async_update_devices_status(..., skip_iot_property_ids=...)` can skip `getIotDeviceDetailInfo` for given physical device ids and returns the set of ids that still fetched detail; `async_update_device_status` returns the same set for its device.
 
 ### [1.3.5]
 
@@ -170,6 +174,8 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 - `pyimouapi.pic_decode`：TCM 判定、加密密钥解析，以及 `LCOpenPicDecoder.decrypt_bytes`（解密调用方自行下载好的图片字节）。它绑定官方 LCOpenSDK 的 `CDecrypter`，而非 `DecryptPicture` / `DecryptPictureEx`，因此不需要 `strongDidCheck`、不需要 access token、也不需要 CA 证书；但两个 `.so` 仍须同时加载：SDK 的 OpenSSL 符号由 client 库提供。
 - `ImouHaDeviceManager.build_device` 会拷贝 `device_ability`，供 Home Assistant 识别 TCM 设备
 - `pyimouapi.push`：开放平台事件推送消息体归一化、报警/状态 `msgType` 分类、IoT `iotEvent` 信封判定、event ref 抽取、`picUrlArray` 辅助函数
+- `pyimouapi.push.iot_property_values`：从 `iotProperty` 推送正文抽出 ref→值映射
+- `ImouHaDeviceManager.apply_iot_property_values`：将 `iotProperty` 的 ref 映射写入单台设备
 
 #### 变更
 
@@ -177,6 +183,8 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 - 去掉未使用的 IoT 开关回退 ref：`305000`（`motion_detect`）、`115300`（`ab_alarm_sound`）、`104000` / `103800`（`audio_encode_control`）。`FKX9UYL4` 现为跳过 `14800` 后直接绑 `108800`。
 - `ImouDeviceManager.async_get_devices(fetch_ability_refs=...)` 可在列举时跳过每台 IoT 的 detail 调用（`False`），或只对给定 device id 集合拉取。Home Assistant 用它让重新发现不再为已有设备重取 ability refs。
 - `ImouHaDeviceManager.async_update_devices_status` 一次更新多台设备，并在同一物理 device id 的各通道间共享 `deviceOnline` / `getIotDeviceDetailInfo`。
+- `pyimouapi.push.is_iot_non_event` 现也放行 `iotProperty` 信封（不再仅限 `iotEvent`）。
+- `ImouHaDeviceManager.async_update_devices_status(..., skip_iot_property_ids=...)` 可跳过指定物理 device id 的 `getIotDeviceDetailInfo`，并返回仍拉取详情的 id 集合；`async_update_device_status` 对其单台设备返回同一集合。
 
 ### [1.3.5]
 
