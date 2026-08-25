@@ -127,3 +127,25 @@ async def test_switch_operation_by_ref_updates_local_state_without_read():
     delegate.async_get_iot_device_detail_info.assert_not_called()
     delegate.async_get_iot_device_properties.assert_not_called()
     assert device.switches["relay"][PARAM_STATE] is True
+
+
+def test_apply_iot_property_values_updates_known_switch() -> None:
+    """Known refs update local switch state; unknown refs are ignored."""
+    device = _online_device()
+    device.switches["relay"] = {PARAM_REF: "10001", PARAM_STATE: False}
+    manager = ImouHaDeviceManager(MagicMock())
+
+    changed = manager.apply_iot_property_values(device, {"10001": 1, "99999": 0})
+
+    assert changed is True
+    assert device.switches["relay"][PARAM_STATE] is True
+
+
+def test_apply_iot_property_values_unknown_only() -> None:
+    """A payload with no matching entity refs is a no-op."""
+    device = _online_device()
+    device.switches["relay"] = {PARAM_REF: "10001", PARAM_STATE: False}
+    manager = ImouHaDeviceManager(MagicMock())
+
+    assert manager.apply_iot_property_values(device, {"99999": 1}) is False
+    assert device.switches["relay"][PARAM_STATE] is False

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Mapping
 from enum import Enum
 from typing import Any, NamedTuple
 
@@ -539,6 +539,19 @@ class ImouHaDeviceManager:
                 )
         elif kind == "alarm_control_panel" and device.alarm_control_panel is not None:
             device.alarm_control_panel[PARAM_STATE] = alarm_mode_to_friendly(raw_value)
+
+    def apply_iot_property_values(
+        self, device: ImouHaDevice, values: Mapping[str, Any]
+    ) -> bool:
+        """Apply a ref→value map from an iotProperty push. Unknown refs skipped."""
+        changed = False
+        for kind, key, meta in self._collect_property_entities(device):
+            ref = str(meta[PARAM_REF])
+            if ref not in values:
+                continue
+            self._apply_property_value(device, kind, key, meta, values[ref])
+            changed = True
+        return changed
 
     @staticmethod
     def _require_product_id(device: ImouHaDevice) -> str:
