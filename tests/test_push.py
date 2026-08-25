@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from pyimouapi.push import (
     event_ref_lookup_key,
+    iot_property_values,
     is_alarm_msg_type,
     is_iot_non_event,
     normalize_push_payload,
@@ -132,9 +133,11 @@ def test_normalize_skips_list_channel_keys() -> None:
 
 
 def test_is_iot_non_event() -> None:
-    """Drop non-iotEvent envelopes only when product_id is truthy."""
+    """Drop non-event/property envelopes only when product_id is truthy."""
     assert is_iot_non_event("mhpf7Dsz", "videoMotion") is True
     assert is_iot_non_event("mhpf7Dsz", "iotEvent") is False
+    assert is_iot_non_event("mhpf7Dsz", "iotProperty") is False
+    assert is_iot_non_event("mhpf7Dsz", "iotAction") is True
     assert is_iot_non_event(None, "videoMotion") is False
     assert is_iot_non_event("", "videoMotion") is False
     assert is_iot_non_event(0, "videoMotion") is False
@@ -160,3 +163,21 @@ def test_preferred_pic_url_prefers_small_thumb() -> None:
     assert preferred_pic_url(["https://a/big", "https://a/small"]) == "https://a/small"
     assert preferred_pic_url(["https://a/big"]) == "https://a/big"
     assert preferred_pic_url([]) is None
+
+
+def test_iot_property_values_from_content() -> None:
+    """Prefer content.properties; stringify keys."""
+    raw = {"content": {"properties": {10001: 1, "15400": 2}}}
+    assert iot_property_values(raw) == {"10001": 1, "15400": 2}
+
+
+def test_iot_property_values_from_top_level() -> None:
+    """Fall back to top-level properties when content has none."""
+    assert iot_property_values({"properties": {"10001": 0}}) == {"10001": 0}
+
+
+def test_iot_property_values_empty() -> None:
+    """Missing or non-dict properties yield an empty map."""
+    assert iot_property_values({}) == {}
+    assert iot_property_values({"content": "x"}) == {}
+    assert iot_property_values({"content": {"properties": []}}) == {}

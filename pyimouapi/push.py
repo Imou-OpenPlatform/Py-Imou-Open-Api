@@ -62,9 +62,24 @@ def is_alarm_msg_type(msg_type: str | None) -> bool:
     return msg_type is not None and msg_type not in NON_ALARM_MSG_TYPES
 
 
+_IOT_PUSH_ENVELOPES = frozenset({"iotEvent", "iotProperty"})
+
+
 def is_iot_non_event(product_id: Any, msg_type: str | None) -> bool:
-    """Return True when an IoT device sent a non-iotEvent envelope."""
-    return bool(product_id) and msg_type != "iotEvent"
+    """Return True when an IoT device sent an envelope this integration ignores."""
+    return bool(product_id) and msg_type not in _IOT_PUSH_ENVELOPES
+
+
+def iot_property_values(raw: dict[str, Any]) -> dict[str, Any]:
+    """Return ref→value from an iotProperty payload. Never raises."""
+    content = raw.get("content")
+    if isinstance(content, dict) and isinstance(content.get("properties"), dict):
+        source = content["properties"]
+    elif isinstance(raw.get("properties"), dict):
+        source = raw["properties"]
+    else:
+        return {}
+    return {str(key): value for key, value in source.items()}
 
 
 def _is_digit_str(value: Any) -> bool:
