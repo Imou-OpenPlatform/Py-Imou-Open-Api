@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable, Coroutine, Mapping
+from collections.abc import Callable, Coroutine, Mapping, Set
 from enum import Enum
 from typing import Any, NamedTuple
 
@@ -614,23 +614,27 @@ class ImouHaDeviceManager:
         )
         await self._async_gather_reads(updates, device, "service-backed entities")
 
-    async def async_update_devices_status(self, devices: list[ImouHaDevice]) -> None:
-        """Update many devices, sharing online/detail reads per physical device.
-
-        An NVR (or any multi-lens camera) becomes one Home Assistant device per
-        channel, but ``deviceOnline`` and ``getIotDeviceDetailInfo`` are keyed on
-        the account device id. Issuing those once per channel would multiply the
-        Open API cost by the channel count for no extra information.
-        """
+    async def async_update_devices_status(
+        self,
+        devices: list[ImouHaDevice],
+        *,
+        skip_iot_property_ids: Set[str] | None = None,
+    ) -> set[str]:
+        """Update many devices, sharing online/detail reads per physical device."""
         if not devices:
-            return
+            return set()
+        skip = skip_iot_property_ids or frozenset()
         groups: dict[str, list[ImouHaDevice]] = {}
         for device in devices:
             groups.setdefault(self._resolve_device_id(device), []).append(device)
         results = await asyncio.gather(
-            *(self._async_update_device_group(group) for group in groups.values()),
+            *(
+                self._async_update_device_group(group, skip_iot_property_ids=skip)
+                for group in groups.values()
+            ),
             return_exceptions=True,
         )
+        fetched: set[str] = set()
         for result in results:
             if isinstance(
                 result, asyncio.CancelledError | InvalidAppIdOrSecretException
@@ -638,15 +642,24 @@ class ImouHaDeviceManager:
                 raise result
             if isinstance(result, BaseException):
                 _LOGGER.warning("Failed to update a device group: %s", result)
+                continue
+            if isinstance(result, set):
+                fetched.update(result)
+        return fetched
 
     async def async_update_device_status(self, device: ImouHaDevice) -> None:
         """Update device status, with the updater calling every time the coordinator is updated"""
-        await self._async_update_device_group([device])
+        return await self._async_update_device_group([device])
 
-    async def _async_update_device_group(self, devices: list[ImouHaDevice]) -> None:
+    async def _async_update_device_group(
+        self,
+        devices: list[ImouHaDevice],
+        *,
+        skip_iot_property_ids: Set[str] = frozenset(),
+    ) -> set[str]:
         """Refresh one physical device and every HA channel that shares it."""
         if not devices:
-            return
+            return set()
         await self._async_update_status_shared(devices)
         online_devices = [
             device
@@ -660,24 +673,28 @@ class ImouHaDeviceManager:
                         "device %s is offline,stop updating", device.device_name
                     )
         if not online_devices:
-            return
+            return set()
 
+        fetched: set[str] = set()
         iot_devices = [d for d in online_devices if d.product_id is not None]
         if iot_devices:
-            try:
-                detail = await self._async_fetch_device_detail(iot_devices[0])
-                for device in iot_devices:
-                    entities = self._collect_property_entities(device)
-                    _LOGGER.debug(
-                        "fetched device detail for %s, updating %d property entities",
-                        self._resolve_device_id(device),
-                        len(entities),
-                    )
-                    await self._async_update_properties_from_detail(device, detail)
-            except InvalidAppIdOrSecretException:
-                raise
-            except Exception as e:
-                _LOGGER.error("async_get_iot_device_detail_info failed: %s", e)
+            physical_id = self._resolve_device_id(iot_devices[0])
+            if physical_id not in skip_iot_property_ids:
+                try:
+                    detail = await self._async_fetch_device_detail(iot_devices[0])
+                    for device in iot_devices:
+                        entities = self._collect_property_entities(device)
+                        _LOGGER.debug(
+                            "fetched device detail for %s, updating %d property entities",
+                            physical_id,
+                            len(entities),
+                        )
+                        await self._async_update_properties_from_detail(device, detail)
+                    fetched.add(physical_id)
+                except InvalidAppIdOrSecretException:
+                    raise
+                except Exception as e:
+                    _LOGGER.error("async_get_iot_device_detail_info failed: %s", e)
 
         await self._async_gather_reads(
             [
@@ -695,6 +712,7 @@ class ImouHaDeviceManager:
         )
         for device in online_devices:
             _LOGGER.debug("update_device_status finish: %s", device)
+        return fetched
 
     async def _async_update_status_shared(self, devices: list[ImouHaDevice]) -> None:
         """Apply one deviceOnline response to every channel that shares it."""
