@@ -40,3 +40,7 @@
 ## CODEOWNERS
 
 合并 `.github/CODEOWNERS` 后，PR 会自动请求 `@Imou-OpenPlatform` 团队 review。请确认团队成员已加入 GitHub 组织并具有 review 权限。
+
+## `dev` 分支
+
+`dev` 是日常开发分支。维护者直接 push，**不要**给 `dev` 配置 “Require a pull request before merging”。CI 已在 push 到 `dev` 时运行。

@@ -2,18 +2,21 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Mapping, Set
 from enum import Enum
 from typing import Any, NamedTuple
 
 from simpleeval import SimpleEval
 
+from .alarm_mode import to_friendly as alarm_mode_to_friendly
+from .alarm_mode import to_raw as alarm_mode_to_raw
 from .collection_point import (
     build_collection_point_options,
     parse_iot_collection_names,
     parse_paas_collection_names,
 )
 from .const import (
+    ALARM_CONTROL_PANEL_REF,
     BINARY_SENSOR_TYPE_ABILITY,
     BINARY_SENSOR_TYPE_REF,
     BUTTON_TYPE_ABILITY,
@@ -64,6 +67,7 @@ from .const import (
     PARAM_STORAGE_USED,
     PARAM_STREAM_ID,
     PARAM_STREAMS,
+    PARAM_SUPPORTED,
     PARAM_TEMPERATURE_CURRENT,
     PARAM_TOTAL_BYTES,
     PARAM_TURN_INPUT_REF,
@@ -293,12 +297,14 @@ class ImouHaDevice:
         self._selects: dict[str, dict[str, Any]] = {}
         self._buttons: dict[str, dict[str, Any]] = {}
         self._texts: dict[str, dict[str, Any]] = {}
+        self._alarm_control_panel: dict[str, Any] | None = None
         self._channel_id: str | None = None
         self._channel_name: str | None = None
         self._is_ipc = False
         self._product_id: str | None = None
         self._parent_product_id: str | None = None
         self._parent_device_id: str | None = None
+        self._device_ability = "unknown"
 
     @property
     def device_id(self) -> str:
@@ -353,6 +359,14 @@ class ImouHaDevice:
         return self._texts
 
     @property
+    def alarm_control_panel(self) -> dict[str, Any] | None:
+        return self._alarm_control_panel
+
+    @alarm_control_panel.setter
+    def alarm_control_panel(self, value: dict[str, Any] | None) -> None:
+        self._alarm_control_panel = value
+
+    @property
     def product_id(self) -> str | None:
         return self._product_id
 
@@ -363,6 +377,10 @@ class ImouHaDevice:
     @property
     def parent_device_id(self) -> str | None:
         return self._parent_device_id
+
+    @property
+    def device_ability(self) -> str:
+        return self._device_ability
 
     @property
     def device_name(self) -> str:
@@ -376,6 +394,9 @@ class ImouHaDevice:
 
     def set_parent_device_id(self, parent_device_id: str) -> None:
         self._parent_device_id = parent_device_id
+
+    def set_device_ability(self, device_ability: str) -> None:
+        self._device_ability = device_ability
 
     def __str__(self) -> str:
         return (
@@ -480,6 +501,14 @@ class ImouHaDeviceManager:
                 if value.get(PARAM_REF_TYPE, PARAM_PROPERTIES) == PARAM_SERVICES:
                     continue
                 entities.append((kind, key, value))
+        if device.alarm_control_panel and PARAM_REF in device.alarm_control_panel:
+            entities.append(
+                (
+                    "alarm_control_panel",
+                    "alarm_control_panel",
+                    device.alarm_control_panel,
+                )
+            )
         return entities
 
     def _apply_property_value(
@@ -508,6 +537,21 @@ class ImouHaDeviceManager:
                 device.texts[key][PARAM_STATE] = (
                     str(state) if isinstance(state, int) else state
                 )
+        elif kind == "alarm_control_panel" and device.alarm_control_panel is not None:
+            device.alarm_control_panel[PARAM_STATE] = alarm_mode_to_friendly(raw_value)
+
+    def apply_iot_property_values(
+        self, device: ImouHaDevice, values: Mapping[str, Any]
+    ) -> bool:
+        """Apply a ref→value map from an iotProperty push. Unknown refs skipped."""
+        changed = False
+        for kind, key, meta in self._collect_property_entities(device):
+            ref = str(meta[PARAM_REF])
+            if ref not in values:
+                continue
+            self._apply_property_value(device, kind, key, meta, values[ref])
+            changed = True
+        return changed
 
     @staticmethod
     def _require_product_id(device: ImouHaDevice) -> str:
@@ -570,42 +614,183 @@ class ImouHaDeviceManager:
         )
         await self._async_gather_reads(updates, device, "service-backed entities")
 
-    async def async_update_device_status(self, device: ImouHaDevice) -> None:
-        """Update device status, with the updater calling every time the coordinator is updated"""
-        # The device status is updated first, and if it's not online, the other entity status isn't updated
-        await self._async_update_status(device)
-        if device.sensors[PARAM_STATUS][PARAM_STATE] == DeviceStatus.OFFLINE.value:
-            # Logged every poll for as long as the device stays offline, which is
-            # routine for battery cameras that sleep.
-            _LOGGER.debug("device %s is offline,stop updating", device.device_name)
-            return
+    async def async_update_devices_status(
+        self,
+        devices: list[ImouHaDevice],
+        *,
+        skip_iot_property_ids: Set[str] | None = None,
+    ) -> set[str]:
+        """Update many devices, sharing online/detail reads per physical device.
 
-        if device.product_id is not None:
-            try:
-                detail = await self._async_fetch_device_detail(device)
-                entities = self._collect_property_entities(device)
-                _LOGGER.debug(
-                    "fetched device detail for %s, updating %d property entities",
-                    self._resolve_device_id(device),
-                    len(entities),
-                )
-                await self._async_update_properties_from_detail(device, detail)
-            except InvalidAppIdOrSecretException:
-                raise
-            except Exception as e:
-                _LOGGER.error("async_get_iot_device_detail_info failed: %s", e)
+        ``skip_iot_property_ids`` must be physical ids as returned by this
+        method (``compose_iot_device_id`` / ``_resolve_device_id``), not the
+        bare ``did`` from a push payload. A gateway accessory is
+        ``{device_id}_{parent_device_id}_{parent_product_id}``. Reuse this
+        return set rather than building ids from push fields.
+
+        When every physical-device group fails to fetch online status, the
+        first failure is raised so the caller can mark the poll failed. A
+        single-device ``async_update_device_status`` still logs ordinary
+        read failures and returns.
+        """
+        if not devices:
+            return set()
+        skip = skip_iot_property_ids or frozenset()
+        groups: dict[str, list[ImouHaDevice]] = {}
+        for device in devices:
+            groups.setdefault(self._resolve_device_id(device), []).append(device)
+        results = await asyncio.gather(
+            *(
+                self._async_update_device_group(group, skip_iot_property_ids=skip)
+                for group in groups.values()
+            ),
+            return_exceptions=True,
+        )
+        fetched: set[str] = set()
+        failures: list[BaseException] = []
+        succeeded = 0
+        for result in results:
+            if isinstance(
+                result, asyncio.CancelledError | InvalidAppIdOrSecretException
+            ):
+                raise result
+            if isinstance(result, BaseException):
+                _LOGGER.warning("Failed to update a device group: %s", result)
+                failures.append(result)
+                continue
+            if isinstance(result, set):
+                fetched.update(result)
+                succeeded += 1
+        if failures and succeeded == 0:
+            raise failures[0]
+        return fetched
+
+    async def async_update_device_status(self, device: ImouHaDevice) -> set[str]:
+        """Update device status, with the updater calling every time the coordinator is updated
+
+        One device is its own outage, so a failed read is logged and skipped
+        here rather than raised. Callers polling a whole account want
+        ``async_update_devices_status``, which reports a total failure.
+        """
+        try:
+            return await self._async_update_device_group([device])
+        except InvalidAppIdOrSecretException:
+            raise
+        except Exception as e:
+            _LOGGER.warning("Failed to update %s: %s", device.device_name, e)
+            return set()
+
+    async def _async_update_device_group(
+        self,
+        devices: list[ImouHaDevice],
+        *,
+        skip_iot_property_ids: Set[str] = frozenset(),
+    ) -> set[str]:
+        """Refresh one physical device and every HA channel that shares it."""
+        if not devices:
+            return set()
+        await self._async_update_status_shared(devices)
+        online_devices = [
+            device
+            for device in devices
+            if device.sensors[PARAM_STATUS][PARAM_STATE] != DeviceStatus.OFFLINE.value
+        ]
+        if len(online_devices) < len(devices):
+            for device in devices:
+                if device not in online_devices:
+                    _LOGGER.debug(
+                        "device %s is offline,stop updating", device.device_name
+                    )
+        if not online_devices:
+            return set()
+
+        fetched: set[str] = set()
+        iot_devices = [d for d in online_devices if d.product_id is not None]
+        if iot_devices:
+            physical_id = self._resolve_device_id(iot_devices[0])
+            if physical_id not in skip_iot_property_ids:
+                try:
+                    detail = await self._async_fetch_device_detail(iot_devices[0])
+                    for device in iot_devices:
+                        entities = self._collect_property_entities(device)
+                        _LOGGER.debug(
+                            "fetched device detail for %s, updating %d property entities",
+                            physical_id,
+                            len(entities),
+                        )
+                        await self._async_update_properties_from_detail(device, detail)
+                    fetched.add(physical_id)
+                except InvalidAppIdOrSecretException:
+                    raise
+                except Exception as e:
+                    _LOGGER.error("async_get_iot_device_detail_info failed: %s", e)
 
         await self._async_gather_reads(
             [
-                self._async_update_services_entities(device),
-                self._async_update_device_switch_status(device),
-                self._async_update_device_select_status(device),
-                self._async_update_device_sensor_status(device),
+                coro
+                for device in online_devices
+                for coro in (
+                    self._async_update_services_entities(device),
+                    self._async_update_device_switch_status(device),
+                    self._async_update_device_select_status(device),
+                    self._async_update_device_sensor_status(device),
+                )
             ],
-            device,
+            online_devices[0],
             "entities",
         )
-        _LOGGER.debug("update_device_status finish: %s", device)
+        for device in online_devices:
+            _LOGGER.debug("update_device_status finish: %s", device)
+        return fetched
+
+    async def _async_update_status_shared(self, devices: list[ImouHaDevice]) -> None:
+        """Apply one deviceOnline response to every channel that shares it."""
+        # A failure here is the caller's to report: one physical device going
+        # unreadable is skipped, a whole account doing so is an outage.
+        device_id = self._resolve_device_id(devices[0])
+        data = await self.delegate.async_get_device_online_status(device_id)
+        for device in devices:
+            try:
+                self._apply_online_status(device, data)
+            except (KeyError, TypeError, ValueError) as e:
+                _LOGGER.error(
+                    "_apply_online_status error for %s: %s",
+                    device.device_name,
+                    e,
+                )
+
+    def _apply_online_status(self, device: ImouHaDevice, data: dict[str, Any]) -> None:
+        """Write the online sensor from a deviceOnline payload."""
+        if device.channel_id is None and device.product_id is not None:
+            apply_sensor_state(
+                device.sensors,
+                PARAM_STATUS,
+                self.get_device_status(data[PARAM_ONLINE]),
+            )
+            return
+        device_channel_id = (
+            str(device.channel_id) if device.channel_id is not None else None
+        )
+        for channel in data[PARAM_CHANNELS]:
+            if str(channel[PARAM_CHANNEL_ID]) == device_channel_id:
+                apply_sensor_state(
+                    device.sensors,
+                    PARAM_STATUS,
+                    self.get_device_status(channel[PARAM_ONLINE]),
+                )
+                return
+        # Channel missing from the payload: treat as offline so we do not keep
+        # refreshing detail/entity reads against a stale "online" cache.
+        _LOGGER.debug(
+            "deviceOnline has no channel %s for %s; marking offline",
+            device_channel_id,
+            device.device_id,
+        )
+        apply_sensor_state(
+            device.sensors,
+            PARAM_STATUS,
+            DeviceStatus.OFFLINE.value,
+        )
 
     @staticmethod
     async def _async_gather_reads(
@@ -752,33 +937,6 @@ class ImouHaDeviceManager:
                 coroutines.append(self._async_update_device_battery(device))
         await self._async_gather_reads(coroutines, device, "sensors")
 
-    async def _async_update_status(self, device: ImouHaDevice):
-        try:
-            device_id = self._resolve_device_id(device)
-            data = await self.delegate.async_get_device_online_status(device_id)
-            if device.channel_id is None and device.product_id is not None:
-                apply_sensor_state(
-                    device.sensors,
-                    PARAM_STATUS,
-                    self.get_device_status(data[PARAM_ONLINE]),
-                )
-            else:
-                device_channel_id = (
-                    str(device.channel_id) if device.channel_id is not None else None
-                )
-                for channel in data[PARAM_CHANNELS]:
-                    if str(channel[PARAM_CHANNEL_ID]) == device_channel_id:
-                        apply_sensor_state(
-                            device.sensors,
-                            PARAM_STATUS,
-                            self.get_device_status(channel[PARAM_ONLINE]),
-                        )
-                        break
-        except InvalidAppIdOrSecretException:
-            raise
-        except Exception as e:
-            _LOGGER.error("_async_update_device_status error:  %s", e)
-
     async def _async_update_device_storage(self, device: ImouHaDevice):
         try:
             data = await self.delegate.async_get_device_storage(device.device_id)
@@ -854,12 +1012,16 @@ class ImouHaDeviceManager:
         await asyncio.sleep(wait_seconds)
         return await self.delegate.async_download(data[PARAM_URL])
 
-    async def async_get_devices(self) -> list[ImouHaDevice]:
+    async def async_get_devices(
+        self, *, fetch_ability_refs: bool | set[str] = True
+    ) -> list[ImouHaDevice]:
         """
         GET A LIST OF ALL DEVICES。
         """
         devices = []
-        for device in await self.delegate.async_get_devices():
+        for device in await self.delegate.async_get_devices(
+            fetch_ability_refs=fetch_ability_refs
+        ):
             # Prioritize whether it's a video device.
             if device.channels:
                 for channel in device.channels:
@@ -936,6 +1098,7 @@ class ImouHaDeviceManager:
         if device.parent_device_id is not None:
             imou_ha_device.set_parent_device_id(device.parent_device_id)
         imou_ha_device.set_is_ipc(device.is_ipc)
+        imou_ha_device.set_device_ability(device.device_ability)
         return imou_ha_device
 
     async def async_press_button(
@@ -1302,6 +1465,12 @@ class ImouHaDeviceManager:
                 device_ability_refs,
                 imou_ha_device,
             )
+        ImouHaDeviceManager.configure_alarm_control_panel_by_ref(
+            channel_ability_refs,
+            is_ipc,
+            device_ability_refs,
+            imou_ha_device,
+        )
 
     @staticmethod
     def entity_need_add_to_device(
@@ -1400,6 +1569,38 @@ class ImouHaDeviceManager:
             device_ability_refs,
             imou_ha_device,
         )
+
+    @staticmethod
+    def configure_alarm_control_panel_by_ref(
+        channel_ability_refs: list[str],
+        is_ipc: bool,
+        device_ability_refs: list[str],
+        imou_ha_device: ImouHaDevice,
+    ) -> None:
+        for ref in ALARM_CONTROL_PANEL_REF:
+            exists_entities: dict[str, Any] = (
+                {}
+                if imou_ha_device.alarm_control_panel is None
+                else {"alarm_control_panel": True}
+            )
+            if ImouHaDeviceManager.entity_need_add_to_device_by_ref(
+                ref[PARAM_REF],
+                channel_ability_refs,
+                device_ability_refs,
+                is_ipc,
+                imou_ha_device.channel_id,
+                "alarm_control_panel",
+                exists_entities,
+                imou_ha_device.product_id,
+                ref.get(PARAM_EXCEPTS, []),
+            ):
+                imou_ha_device.alarm_control_panel = {
+                    PARAM_REF: ref[PARAM_REF],
+                    PARAM_STATE: ref["default"],
+                    PARAM_SUPPORTED: list(ref[PARAM_SUPPORTED]),
+                    PARAM_VALUE_TYPE: ref.get(PARAM_VALUE_TYPE, "int"),
+                }
+                break
 
     @staticmethod
     def configure_sensor_by_ref(
@@ -1539,6 +1740,21 @@ class ImouHaDeviceManager:
             await self.delegate.async_set_iot_device_properties(
                 device.device_id, None, self._require_product_id(device), {ref: value}
             )
+
+    async def async_set_alarm_mode(self, device: ImouHaDevice, mode: str) -> None:
+        panel = device.alarm_control_panel
+        if panel is None:
+            raise ValueError("device has no alarm_control_panel")
+        if mode not in panel[PARAM_SUPPORTED]:
+            raise ValueError(f"unknown alarm mode: {mode!r}")
+        write_option = alarm_mode_to_raw(mode)
+        await self._async_select_option_by_ref(
+            device,
+            write_option,
+            panel[PARAM_REF],
+            panel.get(PARAM_VALUE_TYPE, "int"),
+        )
+        panel[PARAM_STATE] = mode
 
     async def _async_switch_operation_by_ref(
         self, device: ImouHaDevice, switch_type: str, enable: bool, ref: str

@@ -8,7 +8,6 @@ import pytest
 from pyimouapi.const import (
     PARAM_CURRENT_OPTION,
     PARAM_DEVICE_VOLUME,
-    PARAM_MODE,
     PARAM_OPTIONS,
     PARAM_REF,
     PARAM_STATE,
@@ -43,22 +42,19 @@ async def test_switch_operation_by_ref_updates_local_state_without_read() -> Non
 
 @pytest.mark.asyncio
 async def test_select_option_by_ref_updates_local_state_without_read() -> None:
-    """IoT select writes update current_option without a coordinator refresh read."""
+    """IoT alarm mode writes update panel state without a coordinator refresh read."""
     device = _ha_device()
-    device.selects[PARAM_MODE] = {
-        PARAM_REF: "15200",
-        PARAM_CURRENT_OPTION: "home",
-        PARAM_OPTIONS: ["home", "away", "disarm"],
-        PARAM_VALUE_TYPE: "int",
-    }
+    ImouHaDeviceManager.configure_alarm_control_panel_by_ref(
+        ["15200"], True, [], device
+    )
     delegate = MagicMock()
     delegate.async_set_iot_device_properties = AsyncMock()
     delegate.async_get_iot_device_properties = AsyncMock()
     manager = ImouHaDeviceManager(delegate)
 
-    await manager.async_select_option(device, PARAM_MODE, "away")
+    await manager.async_set_alarm_mode(device, "away")
 
-    assert device.selects[PARAM_MODE][PARAM_CURRENT_OPTION] == "away"
+    assert device.alarm_control_panel[PARAM_STATE] == "away"
     props = delegate.async_set_iot_device_properties.await_args.args[3]
     assert props == {"15200": 1}
     delegate.async_get_iot_device_properties.assert_not_called()

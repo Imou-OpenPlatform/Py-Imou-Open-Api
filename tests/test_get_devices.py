@@ -168,3 +168,31 @@ async def test_pagination_fetches_details_for_every_page() -> None:
     assert len(tracker.calls) == 11
     # Pages are sequential, so concurrency is bounded by the largest page.
     assert tracker.max_in_flight == 10
+
+
+@pytest.mark.asyncio
+async def test_fetch_ability_refs_false_skips_detail_calls() -> None:
+    """Discovery can list devices without spending a detail call per IoT device."""
+    devices = [make_device(f"dev{i}", f"prod{i}") for i in range(3)]
+    manager, tracker = make_manager({1: {PARAM_COUNT: 3, PARAM_DEVICE_LIST: devices}})
+
+    result = await manager.async_get_devices(fetch_ability_refs=False)
+
+    assert len(result) == 3
+    assert tracker.calls == []
+    assert all(device.device_ability_refs == "unknown" for device in result)
+
+
+@pytest.mark.asyncio
+async def test_fetch_ability_refs_set_only_queries_named_devices() -> None:
+    """Only the device ids in the set spend a detail call."""
+    devices = [make_device(f"dev{i}", f"prod{i}") for i in range(3)]
+    manager, tracker = make_manager({1: {PARAM_COUNT: 3, PARAM_DEVICE_LIST: devices}})
+
+    result = await manager.async_get_devices(fetch_ability_refs={"dev1"})
+
+    assert len(result) == 3
+    assert tracker.calls == [("dev1", "prod1")]
+    assert result[0].device_ability_refs == "unknown"
+    assert result[1].device_ability_refs == "1,2,3"
+    assert result[2].device_ability_refs == "unknown"

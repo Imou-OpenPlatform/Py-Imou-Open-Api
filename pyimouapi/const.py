@@ -91,6 +91,7 @@ PARAM_STATUS = "status"
 PARAM_CURRENT_OPTION = "current_option"
 PARAM_MODES = "modes"
 PARAM_OPTIONS = "options"
+PARAM_SUPPORTED = "supported"
 PARAM_CHANNELS = "channels"
 PARAM_USED_BYTES = "usedBytes"
 PARAM_TOTAL_BYTES = "totalBytes"
@@ -227,19 +228,59 @@ SWITCH_TYPE_ABILITY: dict[str, list[dict[str, Any]]] = {
             "function_type": "smdHuman",
         },
     ],
+    "frame_reverse": [
+        {
+            "ability": "FrameReverse",
+            "default": False,
+            "function_type": "frameReverse",
+        }
+    ],
+    "wide_dynamic": [
+        {
+            "ability": "WideDynamic",
+            "default": False,
+            "function_type": "wideDynamic",
+        }
+    ],
+    "smart_track": [
+        {
+            "ability": "SmartTrack",
+            "default": False,
+            "function_type": "smartTrack",
+        }
+    ],
+    "play_sound": [
+        {
+            "ability": "PlaySound",
+            "default": False,
+            "function_type": "playSound",
+        }
+    ],
+    "linkage_siren": [
+        {
+            "ability": "LinkageSiren",
+            "default": False,
+            "function_type": "linkageSiren",
+        }
+    ],
+    "linkage_white_light": [
+        {
+            "ability": "WhiteLight",
+            "default": False,
+            "function_type": "linkageWhiteLight",
+        },
+        {
+            "ability": "ChnWhiteLight",
+            "default": False,
+            "function_type": "linkageWhiteLight",
+        },
+    ],
 }
 
 SWITCH_TYPE_REF: dict[str, list[dict[str, Any]]] = {
     "motion_detect": [
         {
             "ref": "14800",
-            "default": False,
-            "excepts": [
-                "FKX9UYL4",
-            ],
-        },
-        {
-            "ref": "305000",
             "default": False,
             "excepts": [
                 "FKX9UYL4",
@@ -266,25 +307,13 @@ SWITCH_TYPE_REF: dict[str, list[dict[str, Any]]] = {
         {
             "ref": "14200",
             "default": False,
-        },
-        {
-            "ref": "115300",
-            "default": False,
-        },
+        }
     ],
     "audio_encode_control": [
         {
             "ref": "13900",
             "default": False,
-        },
-        {
-            "ref": "104000",
-            "default": False,
-        },
-        {
-            "ref": "103800",
-            "default": False,
-        },
+        }
     ],
     "header_detect": [
         {
@@ -317,6 +346,48 @@ SWITCH_TYPE_REF: dict[str, list[dict[str, Any]]] = {
     "switch": [
         {
             "ref": "11900",
+            "default": False,
+        }
+    ],
+    "pet_detect": [
+        {
+            "ref": "18300",
+            "default": False,
+        }
+    ],
+    "frame_reverse": [
+        {
+            "ref": "13500",
+            "default": False,
+        }
+    ],
+    "wide_dynamic": [
+        {
+            "ref": "19400",
+            "default": False,
+        }
+    ],
+    "smart_track": [
+        {
+            "ref": "13300",
+            "default": False,
+        }
+    ],
+    "play_sound": [
+        {
+            "ref": "14000",
+            "default": False,
+        }
+    ],
+    "linkage_siren": [
+        {
+            "ref": "102000",
+            "default": False,
+        }
+    ],
+    "linkage_white_light": [
+        {
+            "ref": "17300",
             "default": False,
         }
     ],
@@ -441,14 +512,6 @@ SELECT_TYPE_REF: dict[str, list[dict[str, Any]]] = {
             "value_type": "int",
         },
     ],
-    "mode": [
-        {
-            "ref": "15200",
-            "default": "home",
-            "options": ["home", "away", "disarm"],
-            "value_type": "int",
-        }
-    ],
     "device_volume": [
         {
             "ref": "15400",
@@ -468,6 +531,14 @@ SELECT_TYPE_REF: dict[str, list[dict[str, Any]]] = {
         }
     ],
 }
+ALARM_CONTROL_PANEL_REF: list[dict[str, Any]] = [
+    {
+        "ref": "15200",
+        "default": "home",
+        "supported": ["home", "away", "disarm"],
+        "value_type": "int",
+    }
+]
 #  Required capacity for various sensor types
 SENSOR_TYPE_ABILITY: dict[str, list[str]] = {
     "storage_used": ["LocalStorage", "LocalStorageEnable"],

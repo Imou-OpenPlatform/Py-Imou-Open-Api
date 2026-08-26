@@ -8,15 +8,12 @@ from typing import Any
 from pyimouapi.const import (
     PARAM_COLLECTION_POINT,
     PARAM_DEVICE_VOLUME,
-    PARAM_MODE,
     PARAM_NIGHT_VISION_MODE,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-MAPPED_SELECT_TYPES = frozenset(
-    {PARAM_MODE, PARAM_DEVICE_VOLUME, PARAM_NIGHT_VISION_MODE}
-)
+MAPPED_SELECT_TYPES = frozenset({PARAM_DEVICE_VOLUME, PARAM_NIGHT_VISION_MODE})
 
 # raw string -> friendly
 _VOLUME_RAW_TO_FRIENDLY = {
@@ -32,9 +29,6 @@ _VOLUME_FRIENDLY_TO_RAW = {
     "medium": "1",
     "high": "2",
 }
-
-_MODE_RAW_TO_FRIENDLY = {"0": "home", "1": "away", "2": "disarm"}
-_MODE_FRIENDLY_TO_RAW = {v: k for k, v in _MODE_RAW_TO_FRIENDLY.items()}
 
 _NIGHT_VISION_RAW_TO_FRIENDLY = {
     "0": "intelligent",
@@ -79,8 +73,6 @@ def to_friendly(select_type: str, raw: Any) -> str:
     key = _as_raw_str(raw)
     if select_type == PARAM_DEVICE_VOLUME:
         table = _VOLUME_RAW_TO_FRIENDLY
-    elif select_type == PARAM_MODE:
-        table = _MODE_RAW_TO_FRIENDLY
     else:
         key_l = key.lower()
         mapped = _NIGHT_VISION_RAW_TO_FRIENDLY.get(key_l)
@@ -108,8 +100,6 @@ def to_raw(select_type: str, friendly: str) -> str:
     key = friendly.strip().lower()
     if select_type == PARAM_DEVICE_VOLUME:
         table = _VOLUME_FRIENDLY_TO_RAW
-    elif select_type == PARAM_MODE:
-        table = _MODE_FRIENDLY_TO_RAW
     else:
         table = _NIGHT_VISION_FRIENDLY_TO_RAW
 

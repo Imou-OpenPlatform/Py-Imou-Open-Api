@@ -98,8 +98,20 @@
           "function_type": "closeCamera",
           "state": false
         },
+        "frame_reverse": {
+          "function_type": "frameReverse",
+          "state": false
+        },
         "header_detect": {
           "function_type": "headerDetect",
+          "state": false
+        },
+        "linkage_siren": {
+          "function_type": "linkageSiren",
+          "state": false
+        },
+        "linkage_white_light": {
+          "function_type": "linkageWhiteLight",
           "state": false
         },
         "motion_detect": {
@@ -109,8 +121,20 @@
           ],
           "state": false
         },
+        "play_sound": {
+          "function_type": "playSound",
+          "state": false
+        },
+        "smart_track": {
+          "function_type": "smartTrack",
+          "state": false
+        },
         "white_light": {
           "function_type": "whiteLight",
+          "state": false
+        },
+        "wide_dynamic": {
+          "function_type": "wideDynamic",
           "state": false
         }
       },
@@ -131,6 +155,10 @@
           "function_type": "closeCamera",
           "state": false
         },
+        "frame_reverse@FrameReverse": {
+          "function_type": "frameReverse",
+          "state": false
+        },
         "header_detect@AiHuman": {
           "function_type": "aiHuman",
           "state": false
@@ -141,6 +169,18 @@
         },
         "header_detect@SMDH": {
           "function_type": "smdHuman",
+          "state": false
+        },
+        "linkage_siren@LinkageSiren": {
+          "function_type": "linkageSiren",
+          "state": false
+        },
+        "linkage_white_light@ChnWhiteLight": {
+          "function_type": "linkageWhiteLight",
+          "state": false
+        },
+        "linkage_white_light@WhiteLight": {
+          "function_type": "linkageWhiteLight",
           "state": false
         },
         "motion_detect@AlarmMD": {
@@ -161,6 +201,14 @@
           ],
           "state": false
         },
+        "play_sound@PlaySound": {
+          "function_type": "playSound",
+          "state": false
+        },
+        "smart_track@SmartTrack": {
+          "function_type": "smartTrack",
+          "state": false
+        },
         "white_light@ChnWhiteLight": {
           "function_type": "whiteLight",
           "state": false
@@ -168,11 +216,39 @@
         "white_light@WhiteLight": {
           "function_type": "whiteLight",
           "state": false
+        },
+        "wide_dynamic@WideDynamic": {
+          "function_type": "wideDynamic",
+          "state": false
         }
       }
     }
   },
   "by_ref": {
+    "alarm_control_panel": {
+      "all_refs": {
+        "ref": "15200",
+        "state": "home",
+        "supported": [
+          "home",
+          "away",
+          "disarm"
+        ],
+        "value_type": "int"
+      },
+      "per_entry": {
+        "alarm_control_panel@15200": {
+          "ref": "15200",
+          "state": "home",
+          "supported": [
+            "home",
+            "away",
+            "disarm"
+          ],
+          "value_type": "int"
+        }
+      }
+    },
     "binary_sensor": {
       "all_refs": {
         "door_contact_status": {
@@ -348,16 +424,6 @@
           "ref": "15400",
           "value_type": "int"
         },
-        "mode": {
-          "current_option": "home",
-          "options": [
-            "home",
-            "away",
-            "disarm"
-          ],
-          "ref": "15200",
-          "value_type": "int"
-        },
         "night_vision_mode": {
           "current_option": "intelligent",
           "options": [
@@ -391,16 +457,6 @@
             "high"
           ],
           "ref": "15400",
-          "value_type": "int"
-        },
-        "mode@15200": {
-          "current_option": "home",
-          "options": [
-            "home",
-            "away",
-            "disarm"
-          ],
-          "ref": "15200",
           "value_type": "int"
         },
         "night_vision_mode@112400": {
@@ -608,6 +664,10 @@
           "ref": "13100",
           "state": false
         },
+        "frame_reverse": {
+          "ref": "13500",
+          "state": false
+        },
         "header_detect": {
           "ref": "17100",
           "state": false
@@ -616,8 +676,28 @@
           "ref": "11400",
           "state": false
         },
+        "linkage_siren": {
+          "ref": "102000",
+          "state": false
+        },
+        "linkage_white_light": {
+          "ref": "17300",
+          "state": false
+        },
         "motion_detect": {
           "ref": "14800",
+          "state": false
+        },
+        "pet_detect": {
+          "ref": "18300",
+          "state": false
+        },
+        "play_sound": {
+          "ref": "14000",
+          "state": false
+        },
+        "smart_track": {
+          "ref": "13300",
           "state": false
         },
         "switch": {
@@ -627,23 +707,15 @@
         "white_light": {
           "ref": "19700",
           "state": false
+        },
+        "wide_dynamic": {
+          "ref": "19400",
+          "state": false
         }
       },
       "per_entry": {
-        "ab_alarm_sound@115300": {
-          "ref": "115300",
-          "state": false
-        },
         "ab_alarm_sound@14200": {
           "ref": "14200",
-          "state": false
-        },
-        "audio_encode_control@103800": {
-          "ref": "103800",
-          "state": false
-        },
-        "audio_encode_control@104000": {
-          "ref": "104000",
           "state": false
         },
         "audio_encode_control@13900": {
@@ -652,6 +724,10 @@
         },
         "close_camera@13100": {
           "ref": "13100",
+          "state": false
+        },
+        "frame_reverse@13500": {
+          "ref": "13500",
           "state": false
         },
         "header_detect@108900": {
@@ -678,6 +754,14 @@
           "ref": "12700",
           "state": false
         },
+        "linkage_siren@102000": {
+          "ref": "102000",
+          "state": false
+        },
+        "linkage_white_light@17300": {
+          "ref": "17300",
+          "state": false
+        },
         "motion_detect@108800": {
           "ref": "108800",
           "state": false
@@ -686,8 +770,16 @@
           "ref": "14800",
           "state": false
         },
-        "motion_detect@305000": {
-          "ref": "305000",
+        "pet_detect@18300": {
+          "ref": "18300",
+          "state": false
+        },
+        "play_sound@14000": {
+          "ref": "14000",
+          "state": false
+        },
+        "smart_track@13300": {
+          "ref": "13300",
           "state": false
         },
         "switch@11900": {
@@ -696,6 +788,10 @@
         },
         "white_light@19700": {
           "ref": "19700",
+          "state": false
+        },
+        "wide_dynamic@19400": {
+          "ref": "19400",
           "state": false
         }
       }

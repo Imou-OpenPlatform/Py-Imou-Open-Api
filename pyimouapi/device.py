@@ -334,9 +334,22 @@ class ImouDeviceManager:
         return mapping.get(str(ref))
 
     async def async_get_devices(
-        self, page: int = 1, page_size: int = 10
+        self,
+        page: int = 1,
+        page_size: int = 10,
+        *,
+        fetch_ability_refs: bool | set[str] = True,
     ) -> list[ImouDevice]:
-        """GET DEVICE LIST"""
+        """GET DEVICE LIST.
+
+        ``fetch_ability_refs`` controls the per-IoT ``getIotDeviceDetailInfo``
+        calls that resolve ability refs (needed to register entities, not to
+        notice that a device appeared or vanished):
+
+        - ``True`` (default): fetch for every IoT device on the page
+        - ``False``: skip every detail call (list-only discovery)
+        - a set of device ids: fetch only for those ids
+        """
         params = {
             PARAM_PAGE: page,
             PARAM_PAGE_SIZE: page_size,
@@ -396,19 +409,27 @@ class ImouDeviceManager:
                 iot_devices.append(imou_device)
             devices.append(imou_device)
         # Each iot device costs one getIotDeviceDetailInfo call; issue them together
-        # so listing N devices is one round trip instead of N serial ones
-        if iot_devices:
+        # so listing N devices is one round trip instead of N serial ones. Callers
+        # that only need the set of device keys (periodic rediscovery) pass
+        # fetch_ability_refs=False and skip this entirely.
+        if fetch_ability_refs is False:
+            to_fetch: list[ImouDevice] = []
+        elif fetch_ability_refs is True:
+            to_fetch = iot_devices
+        else:
+            to_fetch = [d for d in iot_devices if d.device_id in fetch_ability_refs]
+        if to_fetch:
             # One accessory that is offline, rate limited, or answering 5xx must
             # not cost the caller its whole account. That device keeps its
             # "unknown" refs and comes back with the next listing.
             results = await asyncio.gather(
                 *(
                     self._async_update_device_ability_refs(iot_device)
-                    for iot_device in iot_devices
+                    for iot_device in to_fetch
                 ),
                 return_exceptions=True,
             )
-            for iot_device, result in zip(iot_devices, results, strict=True):
+            for iot_device, result in zip(to_fetch, results, strict=True):
                 if isinstance(result, asyncio.CancelledError):
                     raise result
                 if isinstance(result, BaseException):
@@ -422,7 +443,13 @@ class ImouDeviceManager:
         # that field the account total instead of this page's size, an account
         # holding an exact multiple of page_size would page on forever.
         if len(device_list) >= page_size:
-            devices.extend(await self.async_get_devices(page + 1, page_size))
+            devices.extend(
+                await self.async_get_devices(
+                    page + 1,
+                    page_size,
+                    fetch_ability_refs=fetch_ability_refs,
+                )
+            )
         return devices
 
     async def async_get_device_summaries(

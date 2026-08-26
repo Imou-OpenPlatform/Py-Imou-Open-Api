@@ -24,6 +24,25 @@ def _online_device() -> ImouHaDevice:
 
 
 @pytest.mark.asyncio
+async def test_update_from_detail_applies_alarm_control_panel():
+    device = _online_device()
+    ImouHaDeviceManager.configure_alarm_control_panel_by_ref(
+        ["15200"], True, [], device
+    )
+    assert device.alarm_control_panel[PARAM_STATE] == "home"
+
+    detail = {
+        PARAM_PROPERTIES: {"15200": 2},
+        PARAM_CHANNELS: [],
+    }
+
+    manager = ImouHaDeviceManager(MagicMock())
+    await manager._async_update_properties_from_detail(device, detail)
+
+    assert device.alarm_control_panel[PARAM_STATE] == "disarm"
+
+
+@pytest.mark.asyncio
 async def test_update_from_detail_applies_switch_and_select():
     device = _online_device()
     device.switches["relay"] = {PARAM_REF: "10001", PARAM_STATE: False}
@@ -72,6 +91,49 @@ async def test_update_device_status_calls_detail_info_once():
 
 
 @pytest.mark.asyncio
+async def test_update_devices_status_skips_detail_for_listed_ids() -> None:
+    """skip_iot_property_ids suppresses getIotDeviceDetailInfo for that device."""
+    device = _online_device()
+    device.switches["relay"] = {PARAM_REF: "10001", PARAM_STATE: False}
+
+    delegate = MagicMock()
+    delegate.async_get_device_online_status = AsyncMock(
+        return_value={PARAM_ONLINE: "1", "channels": []}
+    )
+    delegate.async_get_iot_device_detail_info = AsyncMock()
+
+    manager = ImouHaDeviceManager(delegate)
+    fetched = await manager.async_update_devices_status(
+        [device], skip_iot_property_ids={device.device_id}
+    )
+
+    assert fetched == set()
+    delegate.async_get_iot_device_detail_info.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_devices_status_returns_fetched_physical_id() -> None:
+    """A successful detail read is reported so HA can skip next interval."""
+    device = _online_device()
+    device.switches["relay"] = {PARAM_REF: "10001", PARAM_STATE: False}
+
+    delegate = MagicMock()
+    delegate.async_get_device_online_status = AsyncMock(
+        return_value={PARAM_ONLINE: "1", "channels": []}
+    )
+    delegate.async_get_iot_device_detail_info = AsyncMock(
+        return_value={PARAM_PROPERTIES: {"10001": 1}, PARAM_CHANNELS: []}
+    )
+
+    manager = ImouHaDeviceManager(delegate)
+    fetched = await manager.async_update_devices_status([device])
+
+    assert device.device_id in fetched
+    delegate.async_get_iot_device_detail_info.assert_awaited_once()
+    assert device.switches["relay"][PARAM_STATE] is True
+
+
+@pytest.mark.asyncio
 async def test_update_device_status_skips_detail_when_offline():
     device = _online_device()
     device.sensors[PARAM_STATUS][PARAM_STATE] = DeviceStatus.OFFLINE.value
@@ -108,3 +170,25 @@ async def test_switch_operation_by_ref_updates_local_state_without_read():
     delegate.async_get_iot_device_detail_info.assert_not_called()
     delegate.async_get_iot_device_properties.assert_not_called()
     assert device.switches["relay"][PARAM_STATE] is True
+
+
+def test_apply_iot_property_values_updates_known_switch() -> None:
+    """Known refs update local switch state; unknown refs are ignored."""
+    device = _online_device()
+    device.switches["relay"] = {PARAM_REF: "10001", PARAM_STATE: False}
+    manager = ImouHaDeviceManager(MagicMock())
+
+    changed = manager.apply_iot_property_values(device, {"10001": 1, "99999": 0})
+
+    assert changed is True
+    assert device.switches["relay"][PARAM_STATE] is True
+
+
+def test_apply_iot_property_values_unknown_only() -> None:
+    """A payload with no matching entity refs is a no-op."""
+    device = _online_device()
+    device.switches["relay"] = {PARAM_REF: "10001", PARAM_STATE: False}
+    manager = ImouHaDeviceManager(MagicMock())
+
+    assert manager.apply_iot_property_values(device, {"99999": 1}) is False
+    assert device.switches["relay"][PARAM_STATE] is False

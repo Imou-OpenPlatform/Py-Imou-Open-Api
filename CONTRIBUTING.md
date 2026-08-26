@@ -8,14 +8,28 @@ Thank you for contributing to the Imou Open Platform Python SDK. This guide expl
 - [git](https://git-scm.com/)
 - [uv](https://github.com/astral-sh/uv) (installed automatically by `script/setup` if missing)
 
+## Git workflow
+
+This repo is maintained by one person. Keep the branch graph simple.
+
+| Branch | Role |
+|--------|------|
+| `dev` | **Only development branch.** All features, fixes, and docs land here. |
+| `main` | Released / PyPI. Update only when shipping a version (`dev` → `main`). |
+
+**Do not** create `feat/…`, `fix/…`, `chore/…`, or other topic branches on `Imou-OpenPlatform/Py-Imou-Open-Api`. Maintainers and agents commit on `dev`.
+
 ## Getting started
 
-1. Fork this repository on GitHub.
-2. Clone your fork and create a feature branch from `main`:
+1. Fork this repository on GitHub (external contributors) or clone it (maintainers).
+2. Base your work on `dev`:
 
    ```bash
-   git checkout -b feat/my-change main
+   git checkout dev
+   git pull origin dev
    ```
+
+   External contributors: create a short-lived branch **on the fork** from `dev`, then open a PR **into `dev`**. Do not open PRs against `main` unless you are merging a release.
 
 3. Install development dependencies:
 
@@ -46,11 +60,9 @@ Thank you for contributing to the Imou Open Platform Python SDK. This guide expl
 
 Pre-commit hooks run automatically on `git commit` after `script/setup`.
 
-### Suggested branch names
+### Branches (forks only)
 
-- `fix/…` for bug fixes
-- `feat/…` for new features
-- `chore/…` for tooling or documentation
+External contributors may use a short-lived branch **on their fork** (`fix/…`, `feat/…`, `chore/…`). That branch is deleted after the PR merges into `dev`. Do not push topic branches to the canonical repository.
 
 ## Code standards
 
@@ -67,14 +79,14 @@ Pre-commit hooks run automatically on `git commit` after `script/setup`.
 1. Bump the version in `pyproject.toml` (`[dependency-groups].dev`).
 2. Regenerate the lockfile: `uv lock`
 3. Run `script/lint-check` and `script/test`.
-4. Open a `chore/…` PR.
+4. Commit on `dev` (maintainers) or open a PR into `dev` (forks).
 
 ### Runtime packages (`aiohttp`, `simpleeval`, etc.)
 
 1. Bump in `pyproject.toml` `[project].dependencies`.
 2. `uv lock`
 3. Run `script/lint-check` and `script/test`; add tests if public API changes.
-4. Open a `chore/…` PR. When releasing, bump `setup.py`, `pyimouapi/__init__.py`, and `pyproject.toml` together.
+4. Commit on `dev` or open a PR into `dev`. When releasing, bump `setup.py`, `pyimouapi/__init__.py`, and `pyproject.toml` together.
 
 ## Testing
 
@@ -84,8 +96,8 @@ Pre-commit hooks run automatically on `git commit` after `script/setup`.
 
 ## Opening a pull request
 
-1. Push your branch to your fork.
-2. Open a PR targeting **`main`**.
+1. Push your fork branch (or push `dev` if you are a maintainer merging a release).
+2. Open a PR targeting **`dev`**. Target **`main` only** for a release merge from `dev`.
 3. Fill out `.github/PULL_REQUEST_TEMPLATE.md` completely.
 4. Ensure all CI checks pass:
    - **Lint**, **Spell**, **YAML**, **Version-sync**, **Test**
@@ -96,7 +108,7 @@ Pre-commit hooks run automatically on `git commit` after `script/setup`.
 1. CODEOWNERS are automatically requested for review.
 2. A maintainer reviews functionality, compatibility, and test coverage.
 3. Merge requires **one approval** and **green CI**.
-4. Maintainers squash-merge to `main`.
+4. Maintainers squash-merge into `dev`. Releases squash-merge `dev` into `main`.
 
 ### PR labels (maintainers)
 
@@ -110,22 +122,24 @@ Pre-commit hooks run automatically on `git commit` after `script/setup`.
 
 ## Release process (maintainers)
 
-1. Update `CHANGELOG.md` and bump version in `setup.py`, `pyimouapi/__init__.py`, and `pyproject.toml`.
-2. Merge changes to `main`.
-3. Tag on `main`: `git tag 1.2.8 && git push origin 1.2.8` (or `v1.2.8`)
+1. On `dev`, update `CHANGELOG.md` and bump version in `setup.py`, `pyimouapi/__init__.py`, and `pyproject.toml`.
+2. Open a PR **`dev` → `main`** (this is the only time work should land on `main`).
+3. After merge, tag on `main`: `git tag 1.2.8 && git push origin 1.2.8` (or `v1.2.8`)
 4. The publish workflow uploads the package to PyPI.
 
 ## Imou-Home-Assistant integration
 
-When a release affects Home Assistant behavior, open a follow-up PR in [Imou-Home-Assistant](https://github.com/Imou-OpenPlatform/Imou-Home-Assistant) to bump the `pyimouapi` pin in `manifest.json` and `pyproject.toml`.
+When a release affects Home Assistant behavior, bump the `pyimouapi` pin in [Imou-Home-Assistant](https://github.com/Imou-OpenPlatform/Imou-Home-Assistant) on **that repo's `dev` branch** (`manifest.json` and `pyproject.toml`). Do not open a topic branch there either.
 
 ## Branch protection (maintainers)
 
-Configure in GitHub → **Settings** → **Branches** → rule for `main`:
+Configure in GitHub → **Settings** → **Branches** → rule for `main` (release only):
 
 - Require a pull request before merging (1 approval recommended)
 - Require status checks: **Lint**, **Spell**, **YAML**, **Version-sync**, **Test**
 - Dismiss stale approvals when new commits are pushed
+
+Do **not** require a pull request on `dev`. Maintainers push `dev` directly; CI already runs on push to `dev`.
 
 See `.github/BRANCH_PROTECTION.md` for step-by-step instructions.
 
@@ -133,7 +147,7 @@ See `.github/BRANCH_PROTECTION.md` for step-by-step instructions.
 
 1. **环境**：`script/setup` 安装依赖与 pre-commit。
 2. **提交前**：`script/lint` + `script/test` 必须通过。
-3. **PR 目标分支**：`main`；使用仓库 PR 模板填写说明。
+3. **开发分支**：`dev`（不要在本仓库开 feat/fix 分支）。**PR**：日常合入 `dev`；发版才从 `dev` 合到 `main`。使用仓库 PR 模板填写说明。
 4. **发版**：维护者自行 bump 版本、更新 CHANGELOG、打 tag；PyPI 由 `publish.yml` 发布。
-5. **HA 集成**：API 行为变更后，在 Imou-Home-Assistant 仓库另开 PR bump `pyimouapi` 版本。
+5. **HA 集成**：API 行为变更后，在 Imou-Home-Assistant 的 `dev` 上 bump `pyimouapi`，不要另开特性分支。
 6. **依赖升级**：仅 GitHub Actions 由 Dependabot 自动提 PR；Python 依赖手动升级。发版时须同步 bump `setup.py`、`pyimouapi/__init__.py`、`pyproject.toml`。

@@ -4,6 +4,35 @@
 
 All notable changes to this project will be documented in this file.
 
+### [1.4.0]
+
+#### Breaking
+
+- `device.selects["mode"]` and `async_select_option(..., "mode", ...)` are removed. Use `device.alarm_control_panel` and `async_set_alarm_mode`.
+- `select_option.to_friendly` / `to_raw` no longer map `"mode"` (`"0"` stays `"0"`, not `"home"`). Use `pyimouapi.alarm_mode`.
+
+#### Added
+
+- IoT switches: pet detection `pet_detect` (ref `18300`), flip image `frame_reverse` (`13500`), wide dynamic range `wide_dynamic` (`19400`), smart tracking `smart_track` (`13300`), prompt sound `play_sound` (`14000`), alarm-linked siren `linkage_siren` (`102000`), alarm-linked white light `linkage_white_light` (`17300`)
+- PaaS switches: flip image `FrameReverse` / `frameReverse`, wide dynamic range `WideDynamic` / `wideDynamic`, smart tracking `SmartTrack` / `smartTrack`, prompt sound `PlaySound` / `playSound`, alarm-linked siren `LinkageSiren` / `linkageSiren`, alarm-linked white light `WhiteLight`/`ChnWhiteLight` / `linkageWhiteLight`
+- `ImouHaDevice.alarm_control_panel` and `async_set_alarm_mode` for IoT ref `15200`.
+- `pyimouapi.pic_decode`: TCM detection, encrypt-key resolution, and `LCOpenPicDecoder.decrypt_bytes`, which decrypts picture bytes the caller downloaded. It binds the official LCOpenSDK's `CDecrypter` rather than `DecryptPicture` / `DecryptPictureEx`, so it needs no `strongDidCheck` call, no access token, and no CA bundle. Both `.so` files must still be loaded: the SDK resolves its OpenSSL symbols out of the client library.
+- `ImouHaDevice.device_ability` copied in `ImouHaDeviceManager.build_device` so Home Assistant can tell TCM devices apart
+- `pyimouapi.push`: normalize Open Platform event-push payloads, classify alarm vs status `msgType`, IoT `iotEvent` envelope check, event-ref lookup, and picture-URL helpers (`thumbUrl` first, then `picUrlArray` / `picUrlArr` / `picUrl`; each as a list or string)
+- `pyimouapi.push.iot_property_values`: extract ref→value maps from `iotProperty` push payloads
+- `ImouHaDeviceManager.apply_iot_property_values`: apply an `iotProperty` ref map onto one device
+
+#### Changed
+
+- Ship with Imou Life 1.4.0. Do not install this library under older Imou Life releases that still expect `selects["mode"]`.
+- Drop unused IoT switch fallback refs `305000` (`motion_detect`), `115300` (`ab_alarm_sound`), and `104000` / `103800` (`audio_encode_control`). `FKX9UYL4` now skips `14800` and binds `108800` directly.
+- `ImouDeviceManager.async_get_devices(fetch_ability_refs=...)` can list without the per-IoT detail call (`False`), or only for a set of device ids. Home Assistant uses this so rediscovery does not re-fetch ability refs for devices it already has.
+- `ImouHaDeviceManager.async_update_devices_status` updates many devices in one go and shares `deviceOnline` / `getIotDeviceDetailInfo` across channels of the same physical device id.
+- `pyimouapi.push.is_iot_non_event` also accepts `iotProperty` envelopes (not only `iotEvent`).
+- `ImouHaDeviceManager.async_update_devices_status(..., skip_iot_property_ids=...)` can skip `getIotDeviceDetailInfo` for given physical device ids and returns the set of ids that still fetched detail; `async_update_device_status` returns the same set for its device. The skip ids are composite physical ids (`compose_iot_device_id`); reuse this method's return set, not the bare `did` from a push.
+- A channel missing from a `deviceOnline` payload is marked offline instead of keeping a sticky previous state.
+- `async_update_devices_status` raises when every physical-device group fails to fetch online status, so a total outage is visible to the caller. `async_update_device_status` still logs ordinary read failures and returns.
+
 ### [1.3.5]
 
 Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so this is a drop-in replacement for 1.3.4.
@@ -131,6 +160,35 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 ## 中文
 
 本项目的重要变更均记录于此。
+
+### [1.4.0]
+
+#### 破坏性变更
+
+- 移除 `device.selects["mode"]` 与 `async_select_option(..., "mode", ...)`。请改用 `device.alarm_control_panel` 与 `async_set_alarm_mode`。
+- `select_option.to_friendly` / `to_raw` 不再映射 `"mode"`（`"0"` 仍是 `"0"`，不会变成 `"home"`）。请改用 `pyimouapi.alarm_mode`。
+
+#### 新增
+
+- IoT 开关：宠物检测 `pet_detect`（ref `18300`）、画面翻转 `frame_reverse`（`13500`）、宽动态 `wide_dynamic`（`19400`）、智能追踪 `smart_track`（`13300`）、设备提示音 `play_sound`（`14000`）、告警联动警笛 `linkage_siren`（`102000`）、告警联动白光灯 `linkage_white_light`（`17300`）
+- PaaS 开关：画面翻转 `FrameReverse`/`frameReverse`、宽动态 `WideDynamic`/`wideDynamic`、智能追踪 `SmartTrack`/`smartTrack`、设备提示音 `PlaySound`/`playSound`、告警联动警笛 `LinkageSiren`/`linkageSiren`、告警联动白光灯 `WhiteLight`/`ChnWhiteLight`/`linkageWhiteLight`
+- `ImouHaDevice.alarm_control_panel` 与 `async_set_alarm_mode`（IoT ref `15200`）。
+- `pyimouapi.pic_decode`：TCM 判定、加密密钥解析，以及 `LCOpenPicDecoder.decrypt_bytes`（解密调用方自行下载好的图片字节）。它绑定官方 LCOpenSDK 的 `CDecrypter`，而非 `DecryptPicture` / `DecryptPictureEx`，因此不需要 `strongDidCheck`、不需要 access token、也不需要 CA 证书；但两个 `.so` 仍须同时加载：SDK 的 OpenSSL 符号由 client 库提供。
+- `ImouHaDeviceManager.build_device` 会拷贝 `device_ability`，供 Home Assistant 识别 TCM 设备
+- `pyimouapi.push`：开放平台事件推送消息体归一化、报警/状态 `msgType` 分类、IoT `iotEvent` 信封判定、event ref 抽取、图片 URL 辅助函数（先 `thumbUrl`，再 `picUrlArray` / `picUrlArr` / `picUrl`；可以是数组或字符串）
+- `pyimouapi.push.iot_property_values`：从 `iotProperty` 推送正文抽出 ref→值映射
+- `ImouHaDeviceManager.apply_iot_property_values`：将 `iotProperty` 的 ref 映射写入单台设备
+
+#### 变更
+
+- 与 Imou Life 1.4.0 一起发布。不要在仍依赖 `selects["mode"]` 的旧版 Imou Life 上单独安装本库。
+- 去掉未使用的 IoT 开关回退 ref：`305000`（`motion_detect`）、`115300`（`ab_alarm_sound`）、`104000` / `103800`（`audio_encode_control`）。`FKX9UYL4` 现为跳过 `14800` 后直接绑 `108800`。
+- `ImouDeviceManager.async_get_devices(fetch_ability_refs=...)` 可在列举时跳过每台 IoT 的 detail 调用（`False`），或只对给定 device id 集合拉取。Home Assistant 用它让重新发现不再为已有设备重取 ability refs。
+- `ImouHaDeviceManager.async_update_devices_status` 一次更新多台设备，并在同一物理 device id 的各通道间共享 `deviceOnline` / `getIotDeviceDetailInfo`。
+- `pyimouapi.push.is_iot_non_event` 现也放行 `iotProperty` 信封（不再仅限 `iotEvent`）。
+- `ImouHaDeviceManager.async_update_devices_status(..., skip_iot_property_ids=...)` 可跳过指定物理 device id 的 `getIotDeviceDetailInfo`，并返回仍拉取详情的 id 集合；`async_update_device_status` 对其单台设备返回同一集合。跳过集合里的 id 是复合物理 id（`compose_iot_device_id`），应复用本方法的返回值，不要塞推送里的裸 `did`。
+- `deviceOnline` 响应中缺少的通道改为判离线，而不再沿用上一轮的在线缓存。
+- `async_update_devices_status` 在每个物理设备组都拉不到在线状态时向上抛错，以便调用方把整轮轮询标为失败。`async_update_device_status` 仍只记录普通读失败并返回。
 
 ### [1.3.5]
 
