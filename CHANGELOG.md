@@ -29,7 +29,9 @@ All notable changes to this project will be documented in this file.
 - `ImouDeviceManager.async_get_devices(fetch_ability_refs=...)` can list without the per-IoT detail call (`False`), or only for a set of device ids. Home Assistant uses this so rediscovery does not re-fetch ability refs for devices it already has.
 - `ImouHaDeviceManager.async_update_devices_status` updates many devices in one go and shares `deviceOnline` / `getIotDeviceDetailInfo` across channels of the same physical device id.
 - `pyimouapi.push.is_iot_non_event` also accepts `iotProperty` envelopes (not only `iotEvent`).
-- `ImouHaDeviceManager.async_update_devices_status(..., skip_iot_property_ids=...)` can skip `getIotDeviceDetailInfo` for given physical device ids and returns the set of ids that still fetched detail; `async_update_device_status` returns the same set for its device.
+- `ImouHaDeviceManager.async_update_devices_status(..., skip_iot_property_ids=...)` can skip `getIotDeviceDetailInfo` for given physical device ids and returns the set of ids that still fetched detail; `async_update_device_status` returns the same set for its device. The skip ids are composite physical ids (`compose_iot_device_id`); reuse this method's return set, not the bare `did` from a push.
+- A channel missing from a `deviceOnline` payload is marked offline instead of keeping a sticky previous state.
+- `async_update_devices_status` raises when every physical-device group fails to fetch online status, so a total outage is visible to the caller. `async_update_device_status` still logs ordinary read failures and returns.
 
 ### [1.3.5]
 
@@ -184,7 +186,9 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 - `ImouDeviceManager.async_get_devices(fetch_ability_refs=...)` 可在列举时跳过每台 IoT 的 detail 调用（`False`），或只对给定 device id 集合拉取。Home Assistant 用它让重新发现不再为已有设备重取 ability refs。
 - `ImouHaDeviceManager.async_update_devices_status` 一次更新多台设备，并在同一物理 device id 的各通道间共享 `deviceOnline` / `getIotDeviceDetailInfo`。
 - `pyimouapi.push.is_iot_non_event` 现也放行 `iotProperty` 信封（不再仅限 `iotEvent`）。
-- `ImouHaDeviceManager.async_update_devices_status(..., skip_iot_property_ids=...)` 可跳过指定物理 device id 的 `getIotDeviceDetailInfo`，并返回仍拉取详情的 id 集合；`async_update_device_status` 对其单台设备返回同一集合。
+- `ImouHaDeviceManager.async_update_devices_status(..., skip_iot_property_ids=...)` 可跳过指定物理 device id 的 `getIotDeviceDetailInfo`，并返回仍拉取详情的 id 集合；`async_update_device_status` 对其单台设备返回同一集合。跳过集合里的 id 是复合物理 id（`compose_iot_device_id`），应复用本方法的返回值，不要塞推送里的裸 `did`。
+- `deviceOnline` 响应中缺少的通道改为判离线，而不再沿用上一轮的在线缓存。
+- `async_update_devices_status` 在每个物理设备组都拉不到在线状态时向上抛错，以便调用方把整轮轮询标为失败。`async_update_device_status` 仍只记录普通读失败并返回。
 
 ### [1.3.5]
 

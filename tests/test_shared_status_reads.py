@@ -12,6 +12,7 @@ from pyimouapi.const import (
     PARAM_STATE,
     PARAM_STATUS,
 )
+from pyimouapi.exceptions import RequestFailedException
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice, ImouHaDeviceManager
 
 
@@ -147,3 +148,72 @@ async def test_apply_online_status_marks_missing_channel_offline() -> None:
         },
     )
     assert ch.sensors[PARAM_STATUS][PARAM_STATE] == DeviceStatus.OFFLINE.value
+
+
+@pytest.mark.asyncio
+async def test_one_channel_apply_error_does_not_block_siblings() -> None:
+    """A malformed channel write must not leave later channels unupdated."""
+    channel = _channel_device("0")
+    accessory = ImouHaDevice("nvr1", "Door", "Imou", "Lock", "1.0")
+    accessory.set_product_id("lock1")
+    accessory.sensors[PARAM_STATUS][PARAM_STATE] = DeviceStatus.OFFLINE.value
+
+    delegate = MagicMock()
+    delegate.async_get_device_online_status = AsyncMock(
+        return_value={PARAM_ONLINE: "1"}
+    )
+    manager = ImouHaDeviceManager(delegate)
+
+    await manager._async_update_status_shared([channel, accessory])
+
+    assert accessory.sensors[PARAM_STATUS][PARAM_STATE] == DeviceStatus.ONLINE.value
+
+
+@pytest.mark.asyncio
+async def test_update_devices_status_raises_when_every_group_fails() -> None:
+    """A total outage must reach the caller so Home Assistant can fail the poll."""
+    cam = ImouHaDevice("cam_a", "Cam A", "Imou", "IPC", "1.0")
+    cam.set_channel_id("0")
+    cam.sensors[PARAM_STATUS][PARAM_STATE] = DeviceStatus.ONLINE.value
+
+    delegate = MagicMock()
+    delegate.async_get_device_online_status = AsyncMock(
+        side_effect=RequestFailedException("cloud down")
+    )
+    manager = ImouHaDeviceManager(delegate)
+
+    with pytest.raises(RequestFailedException, match="cloud down"):
+        await manager.async_update_devices_status([cam])
+
+
+@pytest.mark.asyncio
+async def test_update_devices_status_keeps_going_when_one_group_fails() -> None:
+    """One physical device failing online must not skip the rest of the account."""
+    a = ImouHaDevice("cam_a", "Cam A", "Imou", "IPC", "1.0")
+    a.set_channel_id("0")
+    a.sensors[PARAM_STATUS][PARAM_STATE] = DeviceStatus.OFFLINE.value
+
+    b = ImouHaDevice("cam_b", "Cam B", "Imou", "IPC", "1.0")
+    b.set_channel_id("0")
+    b.sensors[PARAM_STATUS][PARAM_STATE] = DeviceStatus.OFFLINE.value
+
+    delegate = MagicMock()
+    delegate.async_get_device_online_status = AsyncMock(
+        side_effect=[
+            RequestFailedException("cam_a busy"),
+            {
+                PARAM_ONLINE: "1",
+                PARAM_CHANNELS: [{PARAM_CHANNEL_ID: 0, PARAM_ONLINE: "1"}],
+            },
+        ]
+    )
+    delegate.async_get_iot_device_detail_info = AsyncMock(
+        return_value={PARAM_PROPERTIES: {}, PARAM_CHANNELS: []}
+    )
+    manager = ImouHaDeviceManager(delegate)
+
+    fetched = await manager.async_update_devices_status([a, b])
+
+    assert fetched == set()
+    assert a.sensors[PARAM_STATUS][PARAM_STATE] == DeviceStatus.OFFLINE.value
+    assert b.sensors[PARAM_STATUS][PARAM_STATE] == DeviceStatus.ONLINE.value

@@ -130,7 +130,7 @@ async def test_a_failing_read_is_reported_instead_of_vanishing(
     manager._async_update_device_switch_status = boom
     manager._async_update_device_sensor_status = boom
     manager._async_update_services_entities = boom
-    manager._async_update_status = _noop
+    manager._async_update_status_shared = _noop
 
     with caplog.at_level(logging.WARNING):
         await manager.async_update_device_status(device)

@@ -6,6 +6,12 @@ downloader truncates on some alarm CDNs, and a short body fails the decrypt with
 code 1 on a picture that is perfectly decryptable. This module therefore binds
 only the decrypt half, ``CDecrypter``, and leaves the download to the caller: no
 access token, no ``initOpenApi``, and no CA bundle are involved.
+
+``native_dir`` must be a directory the integration controls. Both ``.so`` files
+are loaded into the current process, and the client library is opened with
+``RTLD_GLOBAL`` so the SDK can resolve OpenSSL symbols from it — that injects
+those symbols into the process. ``load()`` and ``decrypt_bytes()`` are blocking
+and must run in an executor, not on the event loop.
 """
 
 from __future__ import annotations

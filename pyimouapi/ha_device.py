@@ -620,7 +620,19 @@ class ImouHaDeviceManager:
         *,
         skip_iot_property_ids: Set[str] | None = None,
     ) -> set[str]:
-        """Update many devices, sharing online/detail reads per physical device."""
+        """Update many devices, sharing online/detail reads per physical device.
+
+        ``skip_iot_property_ids`` must be physical ids as returned by this
+        method (``compose_iot_device_id`` / ``_resolve_device_id``), not the
+        bare ``did`` from a push payload. A gateway accessory is
+        ``{device_id}_{parent_device_id}_{parent_product_id}``. Reuse this
+        return set rather than building ids from push fields.
+
+        When every physical-device group fails to fetch online status, the
+        first failure is raised so the caller can mark the poll failed. A
+        single-device ``async_update_device_status`` still logs ordinary
+        read failures and returns.
+        """
         if not devices:
             return set()
         skip = skip_iot_property_ids or frozenset()
@@ -635,6 +647,8 @@ class ImouHaDeviceManager:
             return_exceptions=True,
         )
         fetched: set[str] = set()
+        failures: list[BaseException] = []
+        succeeded = 0
         for result in results:
             if isinstance(
                 result, asyncio.CancelledError | InvalidAppIdOrSecretException
@@ -642,14 +656,29 @@ class ImouHaDeviceManager:
                 raise result
             if isinstance(result, BaseException):
                 _LOGGER.warning("Failed to update a device group: %s", result)
+                failures.append(result)
                 continue
             if isinstance(result, set):
                 fetched.update(result)
+                succeeded += 1
+        if failures and succeeded == 0:
+            raise failures[0]
         return fetched
 
     async def async_update_device_status(self, device: ImouHaDevice) -> set[str]:
-        """Update device status, with the updater calling every time the coordinator is updated"""
-        return await self._async_update_device_group([device])
+        """Update device status, with the updater calling every time the coordinator is updated
+
+        One device is its own outage, so a failed read is logged and skipped
+        here rather than raised. Callers polling a whole account want
+        ``async_update_devices_status``, which reports a total failure.
+        """
+        try:
+            return await self._async_update_device_group([device])
+        except InvalidAppIdOrSecretException:
+            raise
+        except Exception as e:
+            _LOGGER.warning("Failed to update %s: %s", device.device_name, e)
+            return set()
 
     async def _async_update_device_group(
         self,
@@ -716,15 +745,19 @@ class ImouHaDeviceManager:
 
     async def _async_update_status_shared(self, devices: list[ImouHaDevice]) -> None:
         """Apply one deviceOnline response to every channel that shares it."""
-        try:
-            device_id = self._resolve_device_id(devices[0])
-            data = await self.delegate.async_get_device_online_status(device_id)
-            for device in devices:
+        # A failure here is the caller's to report: one physical device going
+        # unreadable is skipped, a whole account doing so is an outage.
+        device_id = self._resolve_device_id(devices[0])
+        data = await self.delegate.async_get_device_online_status(device_id)
+        for device in devices:
+            try:
                 self._apply_online_status(device, data)
-        except InvalidAppIdOrSecretException:
-            raise
-        except Exception as e:
-            _LOGGER.error("_async_update_device_status error:  %s", e)
+            except (KeyError, TypeError, ValueError) as e:
+                _LOGGER.error(
+                    "_apply_online_status error for %s: %s",
+                    device.device_name,
+                    e,
+                )
 
     def _apply_online_status(self, device: ImouHaDevice, data: dict[str, Any]) -> None:
         """Write the online sensor from a deviceOnline payload."""
