@@ -156,17 +156,26 @@ def normalize_push_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _pic_url_strings(value: Any) -> list[str]:
+    """Return non-empty URL strings from a list or a single string."""
+    if isinstance(value, str) and value:
+        return [value]
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str) and item]
+
+
 def pic_urls_from_payload(raw: dict[str, Any]) -> list[str]:
-    """Return picture URL strings from a push payload, if any."""
-    urls: list[str] = []
-    for key in ("picUrlArray", "picUrlArr"):
-        value = raw.get(key)
-        if not isinstance(value, list):
-            continue
-        for item in value:
-            if isinstance(item, str) and item and item not in urls:
-                urls.append(item)
-    return urls
+    """Return picture URL strings from the first populated push field.
+
+    Order: ``thumbUrl`` (usually smallest), then ``picUrlArray``,
+    ``picUrlArr``, ``picUrl``. Each field may be a list or a single string.
+    """
+    for key in ("thumbUrl", "picUrlArray", "picUrlArr", "picUrl"):
+        urls = _pic_url_strings(raw.get(key))
+        if urls:
+            return urls
+    return []
 
 
 def preferred_pic_url(urls: list[str]) -> str | None:

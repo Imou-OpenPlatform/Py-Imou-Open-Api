@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file.
 - `ImouHaDevice.alarm_control_panel` and `async_set_alarm_mode` for IoT ref `15200`.
 - `pyimouapi.pic_decode`: TCM detection, encrypt-key resolution, and `LCOpenPicDecoder.decrypt_bytes`, which decrypts picture bytes the caller downloaded. It binds the official LCOpenSDK's `CDecrypter` rather than `DecryptPicture` / `DecryptPictureEx`, so it needs no `strongDidCheck` call, no access token, and no CA bundle. Both `.so` files must still be loaded: the SDK resolves its OpenSSL symbols out of the client library.
 - `ImouHaDevice.device_ability` copied in `ImouHaDeviceManager.build_device` so Home Assistant can tell TCM devices apart
-- `pyimouapi.push`: normalize Open Platform event-push payloads, classify alarm vs status `msgType`, IoT `iotEvent` envelope check, event-ref lookup, and `picUrlArray` helpers
+- `pyimouapi.push`: normalize Open Platform event-push payloads, classify alarm vs status `msgType`, IoT `iotEvent` envelope check, event-ref lookup, and picture-URL helpers (`thumbUrl` first, then `picUrlArray` / `picUrlArr` / `picUrl`; each as a list or string)
 - `pyimouapi.push.iot_property_values`: extract ref→value maps from `iotProperty` push payloads
 - `ImouHaDeviceManager.apply_iot_property_values`: apply an `iotProperty` ref map onto one device
 
@@ -175,7 +175,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 - `ImouHaDevice.alarm_control_panel` 与 `async_set_alarm_mode`（IoT ref `15200`）。
 - `pyimouapi.pic_decode`：TCM 判定、加密密钥解析，以及 `LCOpenPicDecoder.decrypt_bytes`（解密调用方自行下载好的图片字节）。它绑定官方 LCOpenSDK 的 `CDecrypter`，而非 `DecryptPicture` / `DecryptPictureEx`，因此不需要 `strongDidCheck`、不需要 access token、也不需要 CA 证书；但两个 `.so` 仍须同时加载：SDK 的 OpenSSL 符号由 client 库提供。
 - `ImouHaDeviceManager.build_device` 会拷贝 `device_ability`，供 Home Assistant 识别 TCM 设备
-- `pyimouapi.push`：开放平台事件推送消息体归一化、报警/状态 `msgType` 分类、IoT `iotEvent` 信封判定、event ref 抽取、`picUrlArray` 辅助函数
+- `pyimouapi.push`：开放平台事件推送消息体归一化、报警/状态 `msgType` 分类、IoT `iotEvent` 信封判定、event ref 抽取、图片 URL 辅助函数（先 `thumbUrl`，再 `picUrlArray` / `picUrlArr` / `picUrl`；可以是数组或字符串）
 - `pyimouapi.push.iot_property_values`：从 `iotProperty` 推送正文抽出 ref→值映射
 - `ImouHaDeviceManager.apply_iot_property_values`：将 `iotProperty` 的 ref 映射写入单台设备
 

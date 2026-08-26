@@ -101,6 +101,28 @@ def test_pic_urls_accepts_pic_url_arr() -> None:
     ]
 
 
+def test_pic_urls_accepts_pic_url_list_and_string() -> None:
+    """picUrl may be a list of URLs or a single string."""
+    assert pic_urls_from_payload(
+        {"picUrl": ["https://example/big.jpg", "https://example/small.jpg"]}
+    ) == ["https://example/big.jpg", "https://example/small.jpg"]
+    assert pic_urls_from_payload({"picUrl": "https://example/only.jpg"}) == [
+        "https://example/only.jpg"
+    ]
+
+
+def test_pic_urls_prefers_thumb_url_over_other_fields() -> None:
+    """thumbUrl is tried first because it is typically the smallest still."""
+    assert pic_urls_from_payload(
+        {
+            "thumbUrl": "https://example/thumb.jpg",
+            "picUrlArray": ["https://example/big.jpg", "https://example/small.jpg"],
+            "picUrlArr": ["https://example/arr.jpg"],
+            "picUrl": ["https://example/pic.jpg"],
+        }
+    ) == ["https://example/thumb.jpg"]
+
+
 def test_normalize_paas_device_id_and_channel() -> None:
     """PaaS aliases deviceId / channelId."""
     event = normalize_push_payload(
