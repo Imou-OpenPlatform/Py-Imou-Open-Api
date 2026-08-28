@@ -21,6 +21,7 @@ from .const import (
     API_ENDPOINT_GET_IOT_DEVICE_DETAIL_INFO,
     API_ENDPOINT_GET_IOT_DEVICE_PROPERTIES,
     API_ENDPOINT_GET_PRODUCT_MODEL,
+    API_ENDPOINT_GET_STREAM_URL,
     API_ENDPOINT_IOT_DEVICE_CONTROL,
     API_ENDPOINT_LIST_DEVICE_DETAILS,
     API_ENDPOINT_MODIFY_DEVICE_ALARM_STATUS,
@@ -601,6 +602,28 @@ class ImouDeviceManager:
         params = {PARAM_DEVICE_ID: device_id, PARAM_CHANNEL_ID: channel_id}
         return await self._imou_api_client.async_request_api(
             API_ENDPOINT_GET_DEVICE_LIVE_INFO, params
+        )
+
+    async def async_get_rtsp_stream_url(
+        self,
+        device_id: str,
+        channel_id: str | None,
+        stream_id: int = 0,
+        product_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Obtain a short-lived cloud RTSP URL (getStreamUrl).
+
+        ``productId`` is only sent for IoT devices that have one.
+        """
+        params: dict[str, Any] = {
+            PARAM_DEVICE_ID: device_id,
+            PARAM_CHANNEL_ID: channel_id,
+            PARAM_STREAM_ID: stream_id,
+        }
+        if product_id:
+            params[PARAM_PRODUCT_ID] = product_id
+        return await self._imou_api_client.async_request_api(
+            API_ENDPOINT_GET_STREAM_URL, params
         )
 
     async def async_get_device_snap(

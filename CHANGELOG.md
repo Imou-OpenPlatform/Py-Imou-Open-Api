@@ -4,6 +4,17 @@
 
 All notable changes to this project will be documented in this file.
 
+### [1.4.1]
+
+#### Added
+
+- `ImouDeviceManager.async_get_rtsp_stream_url()` — OpenAPI `getStreamUrl`. `productId` is sent only when the device has one (IoT).
+- `ImouHaDeviceManager.async_get_device_stream` uses that URL for live view (fetched at pull time, not cached). Shared-account viewers cannot play HLS live addresses; getStreamUrl works for the owner and sharers.
+
+#### Changed
+
+- Ship with Imou Life 1.4.1.
+
 ### [1.4.0]
 
 #### Breaking
@@ -160,6 +171,17 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 ## 中文
 
 本项目的重要变更均记录于此。
+
+### [1.4.1]
+
+#### 新增
+
+- `ImouDeviceManager.async_get_rtsp_stream_url()` — OpenAPI `getStreamUrl`。仅在设备有 `productId` 时才传（IoT）。
+- `ImouHaDeviceManager.async_get_device_stream` 用该 URL 做直播（拉流时现取，不缓存）。分享者无法播放 HLS 直播地址；getStreamUrl 对主账号和分享者都可用。
+
+#### 变更
+
+- 与 Imou Life 1.4.1 一起发布。
 
 ### [1.4.0]
 
