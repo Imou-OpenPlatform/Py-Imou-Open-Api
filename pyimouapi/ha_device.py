@@ -300,6 +300,7 @@ class ImouHaDevice:
         self._parent_product_id: str | None = None
         self._parent_device_id: str | None = None
         self._device_ability = "unknown"
+        self._channel_ability = "unknown"
 
     @property
     def device_id(self) -> str:
@@ -378,6 +379,10 @@ class ImouHaDevice:
         return self._device_ability
 
     @property
+    def channel_ability(self) -> str:
+        return self._channel_ability
+
+    @property
     def device_name(self) -> str:
         return self._device_name
 
@@ -392,6 +397,9 @@ class ImouHaDevice:
 
     def set_device_ability(self, device_ability: str) -> None:
         self._device_ability = device_ability
+
+    def set_channel_ability(self, channel_ability: str) -> None:
+        self._channel_ability = channel_ability
 
     def __str__(self) -> str:
         return (
@@ -1011,6 +1019,7 @@ class ImouHaDeviceManager:
                     imou_ha_device = self.build_device(device)
                     imou_ha_device.set_channel_id(channel.channel_id)
                     imou_ha_device.set_channel_name(channel.channel_name)
+                    imou_ha_device.set_channel_ability(channel.channel_ability)
                     if device.product_id is not None:
                         _LOGGER.debug(
                             "channels and product_id is not none, device_id:%s,product_id:%s",

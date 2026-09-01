@@ -322,6 +322,12 @@ class ImouDeviceManager:
                 return
             self._event_maps[product_id] = _parse_event_ref_map(data)
 
+    def cached_event_map(self, product_id: str) -> dict[str, str]:
+        """Return the cached events ref→identifier map, or {} if not loaded."""
+        if not product_id:
+            return {}
+        return dict(self._event_maps.get(product_id) or {})
+
     async def async_resolve_event_identifier(
         self, product_id: str, ref: str
     ) -> str | None:

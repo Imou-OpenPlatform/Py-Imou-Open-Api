@@ -10,6 +10,8 @@ All notable changes to this project will be documented in this file.
 
 - `ImouDeviceManager.async_get_rtsp_stream_url()` — OpenAPI `getStreamUrl`. `productId` is sent only when the device has one (IoT).
 - `ImouHaDeviceManager.async_get_device_stream` uses that URL for live view (fetched at pull time, not cached). Shared-account viewers cannot play HLS live addresses; getStreamUrl works for the owner and sharers.
+- `ImouHaDevice.channel_ability` copied from the OpenAPI channel when listing devices.
+- `ImouDeviceManager.cached_event_map(product_id)` returns the cached getProductModel events map (empty until `async_ensure_event_map` succeeds).
 
 #### Changed
 
@@ -178,6 +180,8 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 - `ImouDeviceManager.async_get_rtsp_stream_url()` — OpenAPI `getStreamUrl`。仅在设备有 `productId` 时才传（IoT）。
 - `ImouHaDeviceManager.async_get_device_stream` 用该 URL 做直播（拉流时现取，不缓存）。分享者无法播放 HLS 直播地址；getStreamUrl 对主账号和分享者都可用。
+- 列出设备时把通道能力抄到 `ImouHaDevice.channel_ability`。
+- `ImouDeviceManager.cached_event_map(product_id)` 返回已缓存的 getProductModel 事件表（未成功拉取前为空）。
 
 #### 变更
 

@@ -48,8 +48,16 @@ async def test_ensure_event_map_fetches_once_and_caches():
         API_ENDPOINT_GET_PRODUCT_MODEL,
         {PARAM_PRODUCT_ID: "pidA"},
     )
+    assert manager.cached_event_map("pidA") == {"33000": "doorOpen"}
     assert await manager.async_resolve_event_identifier("pidA", "33000") == "doorOpen"
     assert await manager.async_resolve_event_identifier("pidA", "missing") is None
+
+
+def test_cached_event_map_empty_until_fetched() -> None:
+    """Setup-time entity gating must not invent events that were never loaded."""
+    manager = ImouDeviceManager(MagicMock())
+    assert manager.cached_event_map("pidA") == {}
+    assert manager.cached_event_map("") == {}
 
 
 @pytest.mark.asyncio
@@ -64,6 +72,7 @@ async def test_ensure_event_map_failure_does_not_poison_cache():
     manager = ImouDeviceManager(client)
 
     await manager.async_ensure_event_map("pidB")
+    assert manager.cached_event_map("pidB") == {}
     assert await manager.async_resolve_event_identifier("pidB", "1") == "ok"
     assert client.async_request_api.await_count == 2
 
