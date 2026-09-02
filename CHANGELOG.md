@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 #### Changed
 
 - Ship with Imou Life 1.4.1.
+- `async_get_device_stream` and `async_get_device_image` wake a sleeping battery device (`DV1030`) through `wakeUpDevice`, wait `WAKE_UP_WAIT_SECONDS`, and make the request once more. Any other failure is raised as before, without spending a wake-up call.
 
 ### [1.4.0]
 
@@ -186,6 +187,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 #### 变更
 
 - 与 Imou Life 1.4.1 一起发布。
+- `async_get_device_stream` 与 `async_get_device_image` 遇到休眠电池设备（`DV1030`）会调 `wakeUpDevice` 唤醒，等 `WAKE_UP_WAIT_SECONDS` 后重试一次。其他失败照旧抛出，不会白花一次唤醒调用。
 
 ### [1.4.0]
 
