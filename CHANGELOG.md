@@ -10,13 +10,12 @@ All notable changes to this project will be documented in this file.
 
 - `ImouDeviceManager.async_get_rtsp_stream_url()` — OpenAPI `getStreamUrl`. `productId` is sent only when the device has one (IoT).
 - `ImouHaDeviceManager.async_get_device_stream` uses that URL for live view (fetched at pull time, not cached). Shared-account viewers cannot play HLS live addresses; getStreamUrl works for the owner and sharers.
-- `ImouHaDevice.channel_ability` copied from the OpenAPI channel when listing devices.
-- `ImouDeviceManager.cached_event_map(product_id)` returns the cached getProductModel events map (empty until `async_ensure_event_map` succeeds).
+- Listing copies each channel's abilities onto `ImouHaDevice.channel_ability`, so a caller can tell whether that lens supports calling or picture-change / human detection without another ability request.
+- `ImouDeviceManager.async_ensure_event_map` / `cached_event_map(product_id)` cache the getProductModel events for an IoT product, so alarm types can be matched without calling that API again.
 
 #### Changed
 
 - Ship with Imou Life 1.4.1.
-- `async_get_device_stream` and `async_get_device_image` wake a sleeping battery device (`DV1030`) through `wakeUpDevice`, wait `WAKE_UP_WAIT_SECONDS`, and make the request once more. Any other failure is raised as before, without spending a wake-up call.
 
 ### [1.4.0]
 
@@ -181,13 +180,12 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 - `ImouDeviceManager.async_get_rtsp_stream_url()` — OpenAPI `getStreamUrl`。仅在设备有 `productId` 时才传（IoT）。
 - `ImouHaDeviceManager.async_get_device_stream` 用该 URL 做直播（拉流时现取，不缓存）。分享者无法播放 HLS 直播地址；getStreamUrl 对主账号和分享者都可用。
-- 列出设备时把通道能力抄到 `ImouHaDevice.channel_ability`。
-- `ImouDeviceManager.cached_event_map(product_id)` 返回已缓存的 getProductModel 事件表（未成功拉取前为空）。
+- 列出设备时把每路通道的能力写到 `ImouHaDevice.channel_ability`，调用方据此判断该镜头是否支持呼叫、画面变化或人形检测，不必再查一次能力。
+- `ImouDeviceManager.async_ensure_event_map` / `cached_event_map(product_id)` 缓存物模型产品的 getProductModel 事件表，匹配告警类型时不用每次再调接口。
 
 #### 变更
 
 - 与 Imou Life 1.4.1 一起发布。
-- `async_get_device_stream` 与 `async_get_device_image` 遇到休眠电池设备（`DV1030`）会调 `wakeUpDevice` 唤醒，等 `WAKE_UP_WAIT_SECONDS` 后重试一次。其他失败照旧抛出，不会白花一次唤醒调用。
 
 ### [1.4.0]
 
