@@ -22,9 +22,6 @@ from .const import (
     BUTTON_TYPE_ABILITY,
     BUTTON_TYPE_PARAM_VALUE,
     BUTTON_TYPE_REF,
-    ERROR_CODE_DEVICE_SLEEPING,
-    ERROR_CODE_LIVE_ALREADY_EXIST,
-    ERROR_CODE_LIVE_NOT_EXIST,
     ERROR_CODE_NO_STORAGE_MEDIUM,
     PARAM_ABILITY,
     PARAM_ALKELEC,
@@ -42,7 +39,6 @@ from .const import (
     PARAM_EXPRESSION,
     PARAM_FUNCTION_TYPE,
     PARAM_HD,
-    PARAM_HLS,
     PARAM_HUMIDITY_CURRENT,
     PARAM_INPUT_REF,
     PARAM_LITELEC,
@@ -65,8 +61,6 @@ from .const import (
     PARAM_STATE,
     PARAM_STATUS,
     PARAM_STORAGE_USED,
-    PARAM_STREAM_ID,
-    PARAM_STREAMS,
     PARAM_SUPPORTED,
     PARAM_TEMPERATURE_CURRENT,
     PARAM_TOTAL_BYTES,
@@ -305,6 +299,7 @@ class ImouHaDevice:
         self._parent_product_id: str | None = None
         self._parent_device_id: str | None = None
         self._device_ability = "unknown"
+        self._channel_ability = "unknown"
 
     @property
     def device_id(self) -> str:
@@ -383,6 +378,10 @@ class ImouHaDevice:
         return self._device_ability
 
     @property
+    def channel_ability(self) -> str:
+        return self._channel_ability
+
+    @property
     def device_name(self) -> str:
         return self._device_name
 
@@ -397,6 +396,9 @@ class ImouHaDevice:
 
     def set_device_ability(self, device_ability: str) -> None:
         self._device_ability = device_ability
+
+    def set_channel_ability(self, channel_ability: str) -> None:
+        self._channel_ability = channel_ability
 
     def __str__(self) -> str:
         return (
@@ -955,41 +957,29 @@ class ImouHaDeviceManager:
                 apply_sensor_state(device.sensors, PARAM_STORAGE_USED, "e2")
 
     async def async_get_device_stream(
-        self, device: ImouHaDevice, live_resolution: str, live_protocol: str
-    ):
-        try:
-            return await self._async_get_device_exist_stream(
-                device, live_resolution, live_protocol
+        self, device: ImouHaDevice, live_resolution: str, live_protocol: str = ""
+    ) -> str:
+        """Return a fresh cloud RTSP URL from getStreamUrl.
+
+        ``live_protocol`` is unused (kept so Home Assistant callers that
+        still pass https keep working). Shared-account viewers cannot use
+        HLS live addresses; getStreamUrl works for the owner and sharers.
+        """
+        del live_protocol
+        stream_id = 0 if live_resolution == PARAM_HD else 1
+        data = await self.delegate.async_get_rtsp_stream_url(
+            device.device_id,
+            device.channel_id,
+            stream_id,
+            device.product_id,
+        )
+        url = data.get(PARAM_URL) if data else None
+        if not url:
+            raise RequestFailedException(
+                f"device {device.device_id} answered getStreamUrl without a url"
             )
-        except RequestFailedException as exception:
-            if ERROR_CODE_LIVE_NOT_EXIST in exception.message:
-                try:
-                    return await self._async_create_device_stream(
-                        device, live_resolution, live_protocol
-                    )
-                except RequestFailedException as ex:
-                    if ERROR_CODE_LIVE_ALREADY_EXIST in ex.message:
-                        return await self._async_get_device_exist_stream(
-                            device, live_resolution, live_protocol
-                        )
-                    raise ex
-            raise exception
-
-    async def _async_get_device_exist_stream(
-        self, device: ImouHaDevice, resolution: str, protocol: str
-    ):
-        data = await self.delegate.async_get_stream_url(
-            device.device_id, device.channel_id
-        )
-        return await self.async_get_stream_url(data, resolution, protocol)
-
-    async def _async_create_device_stream(
-        self, device: ImouHaDevice, resolution: str, protocol: str
-    ):
-        data = await self.delegate.async_create_stream_url(
-            device.device_id, device.channel_id
-        )
-        return await self.async_get_stream_url(data, resolution, protocol)
+        _LOGGER.debug("get_device_stream %s", url)
+        return url
 
     async def async_get_device_image(
         self, device: ImouHaDevice, wait_seconds: int
@@ -1028,6 +1018,7 @@ class ImouHaDeviceManager:
                     imou_ha_device = self.build_device(device)
                     imou_ha_device.set_channel_id(channel.channel_id)
                     imou_ha_device.set_channel_name(channel.channel_name)
+                    imou_ha_device.set_channel_ability(channel.channel_ability)
                     if device.product_id is not None:
                         _LOGGER.debug(
                             "channels and product_id is not none, device_id:%s,product_id:%s",
@@ -1437,19 +1428,6 @@ class ImouHaDeviceManager:
                         PARAM_FUNCTION_TYPE: ability.get(PARAM_FUNCTION_TYPE),
                     }
 
-    @staticmethod
-    async def async_get_stream_url(data: dict, resolution: str, protocol: str) -> str:
-        if data.get(PARAM_STREAMS):
-            for stream in data[PARAM_STREAMS]:
-                if (
-                    stream[PARAM_HLS].startswith(protocol + ":")
-                    and (0 if resolution == PARAM_HD else 1) == stream[PARAM_STREAM_ID]
-                ):
-                    _LOGGER.debug("get_device_stream %s", stream[PARAM_HLS])
-                    return stream[PARAM_HLS]
-            return data[PARAM_STREAMS][0][PARAM_HLS]
-        return ""
-
     async def _async_configure_device_by_ref(
         self,
         channel_ability_refs: list[str],
@@ -1832,7 +1810,7 @@ class ImouHaDeviceManager:
                 "_async_update_device_binary_sensor_status_by_ref fail:%s", e
             )
 
-    async def _async_update_device_battery(self, device, retry: bool = False):
+    async def _async_update_device_battery(self, device):
         try:
             data = await self.delegate.async_get_device_power_info(device.device_id)
             battery_level = "0"
@@ -1846,17 +1824,8 @@ class ImouHaDeviceManager:
                     battery_level = electricity[PARAM_ELECTRIC]
             apply_sensor_state(device.sensors, PARAM_BATTERY, battery_level)
         except RequestFailedException as exception:
-            # 如果在休眠，则唤醒设备后重试一次
-            if ERROR_CODE_DEVICE_SLEEPING in exception.message and not retry:
-                try:
-                    await self.delegate.async_wake_up_device(device.device_id)
-                    await self._async_update_device_battery(device, True)
-                except RequestFailedException as e:
-                    _LOGGER.error("_async_update_device_battery error:  %s", e)
-                    apply_sensor_state(device.sensors, PARAM_BATTERY, "0")
-            else:
-                _LOGGER.error("_async_update_device_battery error:  %s", exception)
-                apply_sensor_state(device.sensors, PARAM_BATTERY, "0")
+            _LOGGER.error("_async_update_device_battery error:  %s", exception)
+            apply_sensor_state(device.sensors, PARAM_BATTERY, "0")
 
     @staticmethod
     def configure_text_by_ref(

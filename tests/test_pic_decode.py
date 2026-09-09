@@ -3,8 +3,9 @@
 import ctypes
 import hashlib
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from pyimouapi.ha_device import ImouHaDeviceManager
 from pyimouapi.pic_decode import (
     LCOpenPicDecoder,
@@ -29,6 +30,31 @@ def test_build_device_copies_device_ability() -> None:
     src.device_ability = "WLAN,TCM"
     ha = ImouHaDeviceManager.build_device(src)
     assert ha.device_ability == "WLAN,TCM"
+    assert ha.channel_ability == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_ha_get_devices_copies_channel_ability() -> None:
+    """PaaS channel abilities (CallAbility, MobileDetect, …) must reach HA devices."""
+    from pyimouapi.device import ImouChannel
+
+    src = MagicMock()
+    src.device_id = "SN1"
+    src.device_name = "Cam"
+    src.brand = "Imou"
+    src.device_model = "IPC"
+    src.device_version = "1"
+    src.product_id = None
+    src.parent_product_id = None
+    src.parent_device_id = None
+    src.is_ipc = True
+    src.device_ability = "WLAN"
+    src.channels = [ImouChannel("0", "Front", "1", "WLAN,CallAbility,MobileDetect")]
+    delegate = MagicMock()
+    delegate.async_get_devices = AsyncMock(return_value=[src])
+    devices = await ImouHaDeviceManager(delegate).async_get_devices()
+    assert devices[0].channel_ability == "WLAN,CallAbility,MobileDetect"
+    assert devices[0].channel_id == "0"
 
 
 def test_is_tcm_ability_token() -> None:

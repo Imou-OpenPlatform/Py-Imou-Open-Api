@@ -4,6 +4,23 @@
 
 All notable changes to this project will be documented in this file.
 
+### [1.4.1]
+
+#### Breaking
+
+- `ImouHaDeviceManager.async_get_device_stream` now returns a short-lived RTSP URL from `getStreamUrl` instead of an HLS address from `getLiveStreamInfo`. The `live_protocol` argument is ignored (kept only so older callers still pass it).
+
+#### Added
+
+- `ImouDeviceManager.async_get_rtsp_stream_url()` — OpenAPI `getStreamUrl`. `productId` is sent only when the device has one (IoT).
+- `ImouHaDeviceManager.async_get_device_stream` uses that URL for live view (fetched at pull time, not cached). Shared-account viewers cannot play HLS live addresses; getStreamUrl works for the owner and sharers.
+- Listing copies each channel's abilities onto `ImouHaDevice.channel_ability`, so a caller can tell whether that lens supports calling or picture-change / human detection without another ability request.
+- `ImouDeviceManager.async_ensure_event_map` / `cached_event_map(product_id)` cache the getProductModel events for an IoT product, so alarm types can be matched without calling that API again.
+
+#### Changed
+
+- Ship with Imou Life 1.4.1.
+
 ### [1.4.0]
 
 #### Breaking
@@ -160,6 +177,23 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 ## 中文
 
 本项目的重要变更均记录于此。
+
+### [1.4.1]
+
+#### 破坏性变更
+
+- `ImouHaDeviceManager.async_get_device_stream` 现返回 `getStreamUrl` 的短时 RTSP 地址，不再返回 `getLiveStreamInfo` 的 HLS 地址。`live_protocol` 参数会被忽略（仅为兼容旧调用方保留）。
+
+#### 新增
+
+- `ImouDeviceManager.async_get_rtsp_stream_url()` — OpenAPI `getStreamUrl`。仅在设备有 `productId` 时才传（IoT）。
+- `ImouHaDeviceManager.async_get_device_stream` 用该 URL 做直播（拉流时现取，不缓存）。分享者无法播放 HLS 直播地址；getStreamUrl 对主账号和分享者都可用。
+- 列出设备时把每路通道的能力写到 `ImouHaDevice.channel_ability`，调用方据此判断该镜头是否支持呼叫、画面变化或人形检测，不必再查一次能力。
+- `ImouDeviceManager.async_ensure_event_map` / `cached_event_map(product_id)` 缓存物模型产品的 getProductModel 事件表，匹配告警类型时不用每次再调接口。
+
+#### 变更
+
+- 与 Imou Life 1.4.1 一起发布。
 
 ### [1.4.0]
 
