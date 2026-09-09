@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### [1.4.1]
 
+#### Breaking
+
+- `ImouHaDeviceManager.async_get_device_stream` now returns a short-lived RTSP URL from `getStreamUrl` instead of an HLS address from `getLiveStreamInfo`. The `live_protocol` argument is ignored (kept only so older callers still pass it).
+
 #### Added
 
 - `ImouDeviceManager.async_get_rtsp_stream_url()` — OpenAPI `getStreamUrl`. `productId` is sent only when the device has one (IoT).
@@ -16,6 +20,7 @@ All notable changes to this project will be documented in this file.
 #### Changed
 
 - Ship with Imou Life 1.4.1.
+- `async_get_device_stream` and `async_get_device_image` wake a sleeping battery device (`DV1030`) through `wakeUpDevice`, wait `WAKE_UP_WAIT_SECONDS`, and make the request once more. Any other failure is raised as before, without spending a wake-up call.
 
 ### [1.4.0]
 
@@ -176,6 +181,10 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 ### [1.4.1]
 
+#### 破坏性变更
+
+- `ImouHaDeviceManager.async_get_device_stream` 现返回 `getStreamUrl` 的短时 RTSP 地址，不再返回 `getLiveStreamInfo` 的 HLS 地址。`live_protocol` 参数会被忽略（仅为兼容旧调用方保留）。
+
 #### 新增
 
 - `ImouDeviceManager.async_get_rtsp_stream_url()` — OpenAPI `getStreamUrl`。仅在设备有 `productId` 时才传（IoT）。
@@ -186,6 +195,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 #### 变更
 
 - 与 Imou Life 1.4.1 一起发布。
+- `async_get_device_stream` 与 `async_get_device_image` 遇到休眠电池设备（`DV1030`）会调 `wakeUpDevice` 唤醒，等 `WAKE_UP_WAIT_SECONDS` 后重试一次。其他失败照旧抛出，不会白花一次唤醒调用。
 
 ### [1.4.0]
 
