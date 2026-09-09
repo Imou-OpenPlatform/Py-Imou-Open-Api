@@ -4,7 +4,7 @@ import asyncio
 import logging
 from collections.abc import Callable, Coroutine, Mapping, Set
 from enum import Enum
-from typing import Any, NamedTuple, TypeVar
+from typing import Any, NamedTuple
 
 from simpleeval import SimpleEval
 
@@ -22,7 +22,6 @@ from .const import (
     BUTTON_TYPE_ABILITY,
     BUTTON_TYPE_PARAM_VALUE,
     BUTTON_TYPE_REF,
-    ERROR_CODE_DEVICE_SLEEPING,
     ERROR_CODE_NO_STORAGE_MEDIUM,
     PARAM_ABILITY,
     PARAM_ALKELEC,
@@ -85,12 +84,6 @@ from .sensor import apply_sensor_state
 from .siren import build_siren_start_iot_content
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
-
-_T = TypeVar("_T")
-
-# A woken battery device needs a moment before it answers a live or snapshot
-# request. This is the wait before the one retry, not a timeout.
-WAKE_UP_WAIT_SECONDS = 3
 
 
 def _battery_level_from_106200_list(data) -> int:
@@ -963,25 +956,6 @@ class ImouHaDeviceManager:
             else:
                 apply_sensor_state(device.sensors, PARAM_STORAGE_USED, "e2")
 
-    async def _async_wake_up_and_retry(
-        self,
-        device: ImouHaDevice,
-        exception: RequestFailedException,
-        call: Callable[[], Coroutine[Any, Any, _T]],
-    ) -> _T:
-        """Wake a sleeping battery device and make the call once more.
-
-        A battery device answers with ``DV1030`` while it sleeps, and the only
-        thing that clears it is the wake-up the Imou app sends. Anything else
-        is the caller's to report.
-        """
-        if ERROR_CODE_DEVICE_SLEEPING not in (exception.message or ""):
-            raise exception
-        _LOGGER.debug("device %s is asleep, waking it up", device.device_id)
-        await self.delegate.async_wake_up_device(device.device_id)
-        await asyncio.sleep(WAKE_UP_WAIT_SECONDS)
-        return await call()
-
     async def async_get_device_stream(
         self, device: ImouHaDevice, live_resolution: str, live_protocol: str = ""
     ) -> str:
@@ -990,23 +964,15 @@ class ImouHaDeviceManager:
         ``live_protocol`` is unused (kept so Home Assistant callers that
         still pass https keep working). Shared-account viewers cannot use
         HLS live addresses; getStreamUrl works for the owner and sharers.
-        A battery device that answers asleep is woken and asked once more.
         """
         del live_protocol
         stream_id = 0 if live_resolution == PARAM_HD else 1
-
-        def _request() -> Coroutine[Any, Any, dict[str, Any]]:
-            return self.delegate.async_get_rtsp_stream_url(
-                device.device_id,
-                device.channel_id,
-                stream_id,
-                device.product_id,
-            )
-
-        try:
-            data = await _request()
-        except RequestFailedException as exception:
-            data = await self._async_wake_up_and_retry(device, exception, _request)
+        data = await self.delegate.async_get_rtsp_stream_url(
+            device.device_id,
+            device.channel_id,
+            stream_id,
+            device.product_id,
+        )
         url = data.get(PARAM_URL) if data else None
         if not url:
             raise RequestFailedException(
@@ -1023,19 +989,11 @@ class ImouHaDeviceManager:
         Failures are raised rather than logged and turned into no image. The
         caller cannot show one either way, and Home Assistant puts an ImouException
         in front of the user in their own language, where a bare None became
-        "Unable to get image" with nothing to act on. A battery device that
-        answers asleep is woken and asked once more.
+        "Unable to get image" with nothing to act on.
         """
-
-        def _request() -> Coroutine[Any, Any, dict[str, Any]]:
-            return self.delegate.async_get_device_snap(
-                device.device_id, device.channel_id
-            )
-
-        try:
-            data = await _request()
-        except RequestFailedException as exception:
-            data = await self._async_wake_up_and_retry(device, exception, _request)
+        data = await self.delegate.async_get_device_snap(
+            device.device_id, device.channel_id
+        )
         if PARAM_URL not in data:
             raise RequestFailedException(
                 f"device {device.device_id} answered a snapshot request without a url"
@@ -1852,7 +1810,7 @@ class ImouHaDeviceManager:
                 "_async_update_device_binary_sensor_status_by_ref fail:%s", e
             )
 
-    async def _async_update_device_battery(self, device, retry: bool = False):
+    async def _async_update_device_battery(self, device):
         try:
             data = await self.delegate.async_get_device_power_info(device.device_id)
             battery_level = "0"
@@ -1866,17 +1824,8 @@ class ImouHaDeviceManager:
                     battery_level = electricity[PARAM_ELECTRIC]
             apply_sensor_state(device.sensors, PARAM_BATTERY, battery_level)
         except RequestFailedException as exception:
-            # 如果在休眠，则唤醒设备后重试一次
-            if ERROR_CODE_DEVICE_SLEEPING in exception.message and not retry:
-                try:
-                    await self.delegate.async_wake_up_device(device.device_id)
-                    await self._async_update_device_battery(device, True)
-                except RequestFailedException as e:
-                    _LOGGER.error("_async_update_device_battery error:  %s", e)
-                    apply_sensor_state(device.sensors, PARAM_BATTERY, "0")
-            else:
-                _LOGGER.error("_async_update_device_battery error:  %s", exception)
-                apply_sensor_state(device.sensors, PARAM_BATTERY, "0")
+            _LOGGER.error("_async_update_device_battery error:  %s", exception)
+            apply_sensor_state(device.sensors, PARAM_BATTERY, "0")
 
     @staticmethod
     def configure_text_by_ref(
