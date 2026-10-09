@@ -4,6 +4,16 @@
 
 All notable changes to this project will be documented in this file.
 
+### [1.4.2]
+
+#### Added
+
+- PaaS switch `alarm_pir`: abilities `AlarmPIR`, `AlarmPIRV2`, `AlarmPIRV3`, and `AlarmPIRV4` all read and write `alarmPIR`.
+
+#### Changed
+
+- Ship with Imou Life 1.4.3.
+
 ### [1.4.1]
 
 #### Breaking
@@ -177,6 +187,16 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 ## 中文
 
 本项目的重要变更均记录于此。
+
+### [1.4.2]
+
+#### 新增
+
+- PaaS 开关 `alarm_pir`：能力 `AlarmPIR`、`AlarmPIRV2`、`AlarmPIRV3`、`AlarmPIRV4` 都读写 `alarmPIR`。
+
+#### 变更
+
+- 与 Imou Life 1.4.3 一起发布。
 
 ### [1.4.1]
 
