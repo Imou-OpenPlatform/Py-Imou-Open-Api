@@ -39,6 +39,8 @@ From a checkout:
 pip install .
 ```
 
+This package depends on [`pyimouclient`](https://pypi.org/project/pyimouclient/), which implements the Open Platform HTTP client. [Home Assistant](https://www.home-assistant.io/) integrations should continue to depend on and install `pyimouapi`.
+
 ## Quick example (async)
 
 ```python

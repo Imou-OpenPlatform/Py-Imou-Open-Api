@@ -4,6 +4,12 @@
 
 All notable changes to this project will be documented in this file.
 
+### [1.5.0]
+
+#### Changed
+
+- Open Platform calls go through the `pyimouclient` dependency. `pyimouapi` import paths are unchanged.
+
 ### [1.4.3]
 
 #### Added
@@ -187,6 +193,12 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 ## 中文
 
 本项目的重要变更均记录于此。
+
+### [1.5.0]
+
+#### 变更
+
+- 开放平台请求经由依赖包 `pyimouclient` 实现；`pyimouapi` 的导入路径不变。
 
 ### [1.4.3]
 
