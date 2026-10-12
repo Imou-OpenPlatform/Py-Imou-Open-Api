@@ -466,7 +466,7 @@ async def test_debug_log_keeps_credentials_out(
     """
     install_session(client, [token_result("tok-secret"), api_result(data={"ok": True})])
 
-    with caplog.at_level(logging.DEBUG, logger="pyimouapi"):
+    with caplog.at_level(logging.DEBUG, logger="pyimouclient"):
         await client.async_request_api(ENDPOINT, {})
 
     assert "tok-secret" not in caplog.text

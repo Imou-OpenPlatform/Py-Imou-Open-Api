@@ -4,13 +4,13 @@ from setuptools import find_packages, setup
 
 setup(
     name="pyimouapi",
-    version="1.4.3",
+    version="1.5.0",
     packages=find_packages(),
     package_data={"pyimouapi": ["py.typed"]},
     zip_safe=False,
     python_requires=">=3.11",
     install_requires=[
-        "aiohttp>=3.11.9,<4.0",
+        "pyimouclient>=1.0.0,<2",
         "simpleeval>=1.0.3",
     ],
     description="A package for imou open api",
