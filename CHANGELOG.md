@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 #### Added
 
 - PaaS switch `alarm_pir`: abilities `AlarmPIR`, `AlarmPIRV2`, `AlarmPIRV3`, and `AlarmPIRV4` all read and write `alarmPIR`.
-- **Dormant control retry** — user-initiated writes (switches, selects, alarm mode, IoT text/countdown, PaaS camera toggles) that fail with sleep-related platform codes while the device status is **Sleep** wait **10 seconds**, then **retry the same operation once**. No separate wake API is called first.
+- **Dormant control retry** — user-initiated writes (switches, selects, alarm mode, IoT text/countdown, PaaS camera toggles) that fail with sleep-related platform codes while the device status is **Sleep** wait (default **10 seconds**, configurable in Imou Life **Configure → Polling and cameras**), then **retry the same operation once**. No separate wake API is called first.
 
 #### Changed
 

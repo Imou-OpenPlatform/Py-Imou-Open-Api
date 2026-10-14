@@ -49,6 +49,8 @@ def is_dormant_retryable_error(exc: BaseException) -> bool:
 async def async_dormant_write_retry(
     device: Any,
     operation: Callable[[], Awaitable[None]],
+    *,
+    wait_seconds: int = DORMANT_WRITE_RETRY_WAIT_SECONDS,
 ) -> None:
     """Run a control write; on asleep-device failure, wait and retry once."""
     try:
@@ -62,7 +64,7 @@ async def async_dormant_write_retry(
             "Control write for %s failed while asleep (%s); retrying after %ss",
             device.device_name,
             first.message,
-            DORMANT_WRITE_RETRY_WAIT_SECONDS,
+            wait_seconds,
         )
-        await asyncio.sleep(DORMANT_WRITE_RETRY_WAIT_SECONDS)
+        await asyncio.sleep(wait_seconds)
         await operation()

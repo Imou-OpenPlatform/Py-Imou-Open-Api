@@ -78,7 +78,7 @@ from .const import (
     TEXT_TYPE_REF,
 )
 from .device import ImouDevice, ImouDeviceManager, compose_iot_device_id
-from .dormant_retry import async_dormant_write_retry
+from .dormant_retry import DORMANT_WRITE_RETRY_WAIT_SECONDS, async_dormant_write_retry
 from .exceptions import InvalidAppIdOrSecretException, RequestFailedException
 from .select_option import normalize_options, to_friendly, to_raw
 from .sensor import apply_sensor_state
@@ -427,12 +427,33 @@ class ImouHaDeviceManager:
     caller has to be told so it can ask the user to sign in again.
     """
 
-    def __init__(self, device_manager: ImouDeviceManager):
+    def __init__(
+        self,
+        device_manager: ImouDeviceManager,
+        *,
+        dormant_write_retry_wait_seconds: int = DORMANT_WRITE_RETRY_WAIT_SECONDS,
+    ):
         self._delegate = device_manager
+        self._dormant_write_retry_wait_seconds = dormant_write_retry_wait_seconds
 
     @property
     def delegate(self) -> ImouDeviceManager:
         return self._delegate
+
+    def set_dormant_write_retry_wait_seconds(self, wait_seconds: int) -> None:
+        """How long to wait before retrying a control write on a sleeping device."""
+        self._dormant_write_retry_wait_seconds = wait_seconds
+
+    async def _async_dormant_write_retry(
+        self,
+        device: ImouHaDevice,
+        operation: Callable[[], Coroutine[Any, Any, None]],
+    ) -> None:
+        await async_dormant_write_retry(
+            device,
+            operation,
+            wait_seconds=self._dormant_write_retry_wait_seconds,
+        )
 
     async def async_close(self) -> None:
         """Close the underlying Open API HTTP session."""
@@ -1173,7 +1194,7 @@ class ImouHaDeviceManager:
                             payload,
                         )
 
-                await async_dormant_write_retry(device, _write_text)
+                await self._async_dormant_write_retry(device, _write_text)
                 device.texts[text_type][PARAM_STATE] = str(text_value)
 
     async def async_switch_operation(
@@ -1190,7 +1211,7 @@ class ImouHaDeviceManager:
                     device.device_id, device.channel_id, enable
                 )
 
-            await async_dormant_write_retry(device, _modify_motion)
+            await self._async_dormant_write_retry(device, _modify_motion)
         else:
             result = await asyncio.gather(
                 *[
@@ -1248,7 +1269,7 @@ class ImouHaDeviceManager:
                     device.device_id, device.channel_id, option
                 )
 
-            await async_dormant_write_retry(device, _set_night_vision)
+            await self._async_dormant_write_retry(device, _set_night_vision)
             device.selects[PARAM_NIGHT_VISION_MODE][PARAM_CURRENT_OPTION] = to_friendly(
                 PARAM_NIGHT_VISION_MODE, option
             )
@@ -1278,7 +1299,7 @@ class ImouHaDeviceManager:
                 device.device_id, device.channel_id, ability_type, enable
             )
 
-        await async_dormant_write_retry(device, _set)
+        await self._async_dormant_write_retry(device, _set)
 
     async def _async_update_device_select_status_by_type(
         self, device: ImouHaDevice, select_type: str
@@ -1742,7 +1763,7 @@ class ImouHaDeviceManager:
                     device.device_id, None, product_id, payload
                 )
 
-        await async_dormant_write_retry(device, _write)
+        await self._async_dormant_write_retry(device, _write)
 
     async def async_set_alarm_mode(self, device: ImouHaDevice, mode: str) -> None:
         panel = device.alarm_control_panel
@@ -1781,7 +1802,7 @@ class ImouHaDeviceManager:
                     payload,
                 )
 
-        await async_dormant_write_retry(device, _write)
+        await self._async_dormant_write_retry(device, _write)
         device.switches[switch_type][PARAM_STATE] = enable
 
     @staticmethod
@@ -1927,7 +1948,7 @@ class ImouHaDeviceManager:
                 device_id, product_id, "28600", param
             )
 
-        await async_dormant_write_retry(device, _write_countdown)
+        await self._async_dormant_write_retry(device, _write_countdown)
         device.texts["count_down_switch"][PARAM_STATE] = str(text_value)
 
 

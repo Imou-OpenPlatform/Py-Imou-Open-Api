@@ -37,16 +37,9 @@ async def test_sleeping_device_retries_close_camera_after_dv1026() -> None:
     )
     manager = ImouHaDeviceManager(delegate)
 
-    with (
-        patch(
-            "pyimouapi.ha_device.async_dormant_write_retry",
-            wraps=async_dormant_write_retry,
-        ) as retry,
-        patch("pyimouapi.dormant_retry.asyncio.sleep", new=AsyncMock()),
-    ):
+    with patch("pyimouapi.dormant_retry.asyncio.sleep", new=AsyncMock()):
         await manager.async_switch_operation(device, "close_camera", True)
 
-    assert retry.await_count == 1
     assert delegate.async_set_iot_device_properties.await_count == 3
     assert device.switches["close_camera"][PARAM_STATE] is True
 
@@ -88,3 +81,40 @@ async def test_sleeping_device_no_retry_on_unrelated_error() -> None:
 
     sleep.assert_not_awaited()
     assert delegate.async_set_iot_device_properties.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_custom_wait_seconds() -> None:
+    device = _sleeping_device()
+    calls: list[int] = []
+
+    async def _fail_then_ok() -> None:
+        if len(calls) == 0:
+            calls.append(1)
+            raise RequestFailedException("DV1030:sleeping")
+        calls.append(2)
+
+    with patch("pyimouapi.dormant_retry.asyncio.sleep", new=AsyncMock()) as sleep:
+        await async_dormant_write_retry(device, _fail_then_ok, wait_seconds=25)
+
+    sleep.assert_awaited_once_with(25)
+    assert calls == [1, 2]
+
+
+@pytest.mark.asyncio
+async def test_manager_uses_configured_wait_seconds() -> None:
+    device = _sleeping_device()
+    delegate = MagicMock()
+    delegate.async_set_iot_device_properties = AsyncMock(
+        side_effect=[
+            RequestFailedException("DV1030:sleep"),
+            None,
+            None,
+        ]
+    )
+    manager = ImouHaDeviceManager(delegate, dormant_write_retry_wait_seconds=42)
+
+    with patch("pyimouapi.dormant_retry.asyncio.sleep", new=AsyncMock()) as sleep:
+        await manager.async_switch_operation(device, "close_camera", True)
+
+    sleep.assert_awaited_once_with(42)
