@@ -78,6 +78,7 @@ from .const import (
     TEXT_TYPE_REF,
 )
 from .device import ImouDevice, ImouDeviceManager, compose_iot_device_id
+from .dormant_retry import async_dormant_write_retry
 from .exceptions import InvalidAppIdOrSecretException, RequestFailedException
 from .select_option import normalize_options, to_friendly, to_raw
 from .sensor import apply_sensor_state
@@ -1154,19 +1155,25 @@ class ImouHaDeviceManager:
                     value = str(text_value)
                 else:
                     value = text_value
-                await self.delegate.async_set_iot_device_properties(
-                    device_id,
-                    device.channel_id,
-                    self._require_product_id(device),
-                    {ref_id: value},
-                )
-                if device.channel_id is not None and device.channel_id == "0":
+                product_id = self._require_product_id(device)
+                payload = {ref_id: value}
+
+                async def _write_text() -> None:
                     await self.delegate.async_set_iot_device_properties(
-                        device.device_id,
-                        None,
-                        self._require_product_id(device),
-                        {ref_id: value},
+                        device_id,
+                        device.channel_id,
+                        product_id,
+                        payload,
                     )
+                    if device.channel_id is not None and device.channel_id == "0":
+                        await self.delegate.async_set_iot_device_properties(
+                            device.device_id,
+                            None,
+                            product_id,
+                            payload,
+                        )
+
+                await async_dormant_write_retry(device, _write_text)
                 device.texts[text_type][PARAM_STATE] = str(text_value)
 
     async def async_switch_operation(
@@ -1177,9 +1184,13 @@ class ImouHaDeviceManager:
                 device, switch_type, enable, ref_id
             )
         elif switch_type == PARAM_MOTION_DETECT:
-            await self.delegate.async_modify_device_alarm_status(
-                device.device_id, device.channel_id, enable
-            )
+
+            async def _modify_motion() -> None:
+                await self.delegate.async_modify_device_alarm_status(
+                    device.device_id, device.channel_id, enable
+                )
+
+            await async_dormant_write_retry(device, _modify_motion)
         else:
             result = await asyncio.gather(
                 *[
@@ -1231,9 +1242,13 @@ class ImouHaDeviceManager:
             )
             device.selects[select_type][PARAM_CURRENT_OPTION] = option
         elif select_type == PARAM_NIGHT_VISION_MODE:
-            await self.delegate.async_set_device_night_vision_mode(
-                device.device_id, device.channel_id, option
-            )
+
+            async def _set_night_vision() -> None:
+                await self.delegate.async_set_device_night_vision_mode(
+                    device.device_id, device.channel_id, option
+                )
+
+            await async_dormant_write_retry(device, _set_night_vision)
             device.selects[PARAM_NIGHT_VISION_MODE][PARAM_CURRENT_OPTION] = to_friendly(
                 PARAM_NIGHT_VISION_MODE, option
             )
@@ -1257,9 +1272,13 @@ class ImouHaDeviceManager:
     async def _async_set_device_switch_status_by_ability(
         self, device: ImouHaDevice, ability_type: str, enable: bool
     ) -> None:
-        await self.delegate.async_set_device_status(
-            device.device_id, device.channel_id, ability_type, enable
-        )
+
+        async def _set() -> None:
+            await self.delegate.async_set_device_status(
+                device.device_id, device.channel_id, ability_type, enable
+            )
+
+        await async_dormant_write_retry(device, _set)
 
     async def _async_update_device_select_status_by_type(
         self, device: ImouHaDevice, select_type: str
@@ -1711,13 +1730,19 @@ class ImouHaDeviceManager:
             value = int(option)
         else:
             value = option
-        await self.delegate.async_set_iot_device_properties(
-            device_id, device.channel_id, self._require_product_id(device), {ref: value}
-        )
-        if device.channel_id is not None and device.channel_id == "0":
+        product_id = self._require_product_id(device)
+        payload = {ref: value}
+
+        async def _write() -> None:
             await self.delegate.async_set_iot_device_properties(
-                device.device_id, None, self._require_product_id(device), {ref: value}
+                device_id, device.channel_id, product_id, payload
             )
+            if device.channel_id is not None and device.channel_id == "0":
+                await self.delegate.async_set_iot_device_properties(
+                    device.device_id, None, product_id, payload
+                )
+
+        await async_dormant_write_retry(device, _write)
 
     async def async_set_alarm_mode(self, device: ImouHaDevice, mode: str) -> None:
         panel = device.alarm_control_panel
@@ -1738,19 +1763,25 @@ class ImouHaDeviceManager:
         self, device: ImouHaDevice, switch_type: str, enable: bool, ref: str
     ):
         device_id = self._resolve_device_id(device)
-        await self.delegate.async_set_iot_device_properties(
-            device_id,
-            device.channel_id,
-            self._require_product_id(device),
-            {ref: 1 if enable else 0},
-        )
-        if device.channel_id is not None and device.channel_id == "0":
+        product_id = self._require_product_id(device)
+        payload = {ref: 1 if enable else 0}
+
+        async def _write() -> None:
             await self.delegate.async_set_iot_device_properties(
-                device.device_id,
-                None,
-                self._require_product_id(device),
-                {ref: 1 if enable else 0},
+                device_id,
+                device.channel_id,
+                product_id,
+                payload,
             )
+            if device.channel_id is not None and device.channel_id == "0":
+                await self.delegate.async_set_iot_device_properties(
+                    device.device_id,
+                    None,
+                    product_id,
+                    payload,
+                )
+
+        await async_dormant_write_retry(device, _write)
         device.switches[switch_type][PARAM_STATE] = enable
 
     @staticmethod
@@ -1889,9 +1920,14 @@ class ImouHaDeviceManager:
         else:
             # 如果是关的，则倒计时打开
             param["28603"] = 1
-        await self.delegate.async_iot_device_control(
-            device_id, self._require_product_id(device), "28600", param
-        )
+        product_id = self._require_product_id(device)
+
+        async def _write_countdown() -> None:
+            await self.delegate.async_iot_device_control(
+                device_id, product_id, "28600", param
+            )
+
+        await async_dormant_write_retry(device, _write_countdown)
         device.texts["count_down_switch"][PARAM_STATE] = str(text_value)
 
 
