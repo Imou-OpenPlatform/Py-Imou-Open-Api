@@ -1,4 +1,4 @@
-"""Retry user-initiated writes once when a sleep-capable device is dormant."""
+"""Retry user-initiated writes once when the device status is Sleep."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from typing import Any
 from .const import (
     ERROR_CODE_DEVICE_OFFLINE,
     ERROR_CODE_DEVICE_SLEEPING,
-    PARAM_BATTERY,
     PARAM_STATE,
     PARAM_STATUS,
 )
@@ -39,16 +38,6 @@ def device_is_sleeping(device: Any) -> bool:
     return status == DEVICE_STATUS_SLEEP
 
 
-def device_supports_dormant_retry(device: Any) -> bool:
-    """Return True for battery / dormant-capable devices (not mains-only)."""
-    if PARAM_BATTERY in device.sensors:
-        return True
-    for ability in (device.device_ability, device.channel_ability):
-        if isinstance(ability, str) and "Dormant" in ability:
-            return True
-    return False
-
-
 def is_dormant_retryable_error(exc: BaseException) -> bool:
     """Return True when the platform error may clear after a short wait."""
     if not isinstance(exc, RequestFailedException):
@@ -67,11 +56,7 @@ async def async_dormant_write_retry(
     except InvalidAppIdOrSecretException:
         raise
     except RequestFailedException as first:
-        if not (
-            device_is_sleeping(device)
-            and device_supports_dormant_retry(device)
-            and is_dormant_retryable_error(first)
-        ):
+        if not (device_is_sleeping(device) and is_dormant_retryable_error(first)):
             raise
         _LOGGER.debug(
             "Control write for %s failed while asleep (%s); retrying after %ss",
