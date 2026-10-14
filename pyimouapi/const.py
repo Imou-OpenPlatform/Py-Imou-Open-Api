@@ -231,22 +231,12 @@ SWITCH_TYPE_ABILITY: dict[str, list[dict[str, Any]]] = {
     ],
     "alarm_pir": [
         {
-            "ability": "AlarmPIR",
-            "default": False,
-            "function_type": "alarmPIR",
-        },
-        {
             "ability": "AlarmPIRV2",
             "default": False,
             "function_type": "alarmPIR",
         },
         {
             "ability": "AlarmPIRV3",
-            "default": False,
-            "function_type": "alarmPIR",
-        },
-        {
-            "ability": "AlarmPIRV4",
             "default": False,
             "function_type": "alarmPIR",
         },
