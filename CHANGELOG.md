@@ -9,10 +9,11 @@ All notable changes to this project will be documented in this file.
 #### Added
 
 - PaaS switch `alarm_pir`: abilities `AlarmPIR`, `AlarmPIRV2`, `AlarmPIRV3`, and `AlarmPIRV4` all read and write `alarmPIR`.
-- **Dormant control retry** — user-initiated writes (switches, selects, alarm mode, IoT text/countdown, PaaS camera toggles) that fail with sleep-related platform codes while the device status is **Sleep** wait (default **10 seconds**, configurable in Imou Life **Configure → Polling and cameras**), then **retry the same operation once**. No separate wake API is called first.
+- **Dormant control retry** — user-initiated writes (switches, selects, alarm mode, IoT text/countdown, PaaS camera toggles) that fail with sleep-related platform codes while the device status is **Sleep** wait (default **10 seconds**, configurable in Imou Life **Configure → Polling and cameras**, range 5–60), then **retry the same operation once**. No separate wake API is called first.
 
 #### Changed
 
+- `ImouHaDeviceManager` takes `dormant_write_retry_wait_seconds` (default 10); Imou Life sets it from **Configure → Polling and cameras**.
 - Ship with Imou Life 1.4.3.
 
 ### [1.4.1]
@@ -194,10 +195,11 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 #### 新增
 
 - PaaS 开关 `alarm_pir`：能力 `AlarmPIR`、`AlarmPIRV2`、`AlarmPIRV3`、`AlarmPIRV4` 都读写 `alarmPIR`。
-- **休眠设备控制重试**：用户触发的写操作（开关、选择、布防模式、IoT 文本/倒计时、PaaS 摄像头能力开关）在设备状态为 **休眠** 且平台返回与休眠相关的错误码时，**等待 10 秒** 后对**同一操作重试一次**；不先调用单独唤醒接口。
+- **休眠设备控制重试**：用户触发的写操作（开关、选择、布防模式、IoT 文本/倒计时、PaaS 摄像头能力开关）在设备状态为 **休眠** 且平台返回与休眠相关的错误码时，**等待可配置秒数**（默认 **10 秒**，Imou Life **配置 → 轮询与摄像头**，范围 5–60）后对**同一操作重试一次**；不先调用单独唤醒接口。
 
 #### 变更
 
+- `ImouHaDeviceManager` 支持 `dormant_write_retry_wait_seconds`（默认 10）；由 Imou Life 配置页写入。
 - 与 Imou Life 1.4.3 一起发布。
 
 ### [1.4.1]
