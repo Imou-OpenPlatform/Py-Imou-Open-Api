@@ -229,6 +229,18 @@ SWITCH_TYPE_ABILITY: dict[str, list[dict[str, Any]]] = {
             "function_type": "smdHuman",
         },
     ],
+    "alarm_pir": [
+        {
+            "ability": "AlarmPIRV2",
+            "default": False,
+            "function_type": "alarmPIR",
+        },
+        {
+            "ability": "AlarmPIRV3",
+            "default": False,
+            "function_type": "alarmPIR",
+        },
+    ],
     "frame_reverse": [
         {
             "ability": "FrameReverse",
