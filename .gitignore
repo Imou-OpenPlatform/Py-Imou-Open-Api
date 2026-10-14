@@ -72,8 +72,32 @@ instance/
 # Sphinx / local planning docs / Superpowers (canonical copy lives in workspace .doc/)
 docs/
 docs/_build/
-.superpowers
 .superpowers/
+
+# Local release note drafts and runtime logs (never ship)
+releases/
+log/
+
+# Abandoned package name from old experiments
+pyimouapi_core/
+
+# Local Home Assistant / dev config next to this checkout
+config/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*~
+
+# Secrets and local overrides (never commit)
+.env.*
+!.env.example
+*.local
+secrets.json
+**/github_report.secrets.json
+
+# Local release / HACS zips built beside the repo
+*.zip
 
 # PyBuilder
 .pybuilder/
