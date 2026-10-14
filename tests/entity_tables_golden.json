@@ -147,19 +147,11 @@
           "function_type": "abAlarmSound",
           "state": false
         },
-        "alarm_pir@AlarmPIR": {
-          "function_type": "alarmPIR",
-          "state": false
-        },
         "alarm_pir@AlarmPIRV2": {
           "function_type": "alarmPIR",
           "state": false
         },
         "alarm_pir@AlarmPIRV3": {
-          "function_type": "alarmPIR",
-          "state": false
-        },
-        "alarm_pir@AlarmPIRV4": {
           "function_type": "alarmPIR",
           "state": false
         },

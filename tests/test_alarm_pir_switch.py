@@ -3,7 +3,8 @@
 from pyimouapi.const import PARAM_FUNCTION_TYPE, PARAM_STATE
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
-ALARM_PIR_ABILITIES = ("AlarmPIR", "AlarmPIRV2", "AlarmPIRV3", "AlarmPIRV4")
+ALARM_PIR_ABILITIES = ("AlarmPIRV2", "AlarmPIRV3")
+LEGACY_ALARM_PIR_ABILITIES = ("AlarmPIR", "AlarmPIRV4")
 
 
 def _device() -> ImouHaDevice:
@@ -19,6 +20,14 @@ def test_each_alarm_pir_ability_registers_alarm_pir_switch() -> None:
         ImouHaDeviceManager.configure_switch_by_ability([ability], False, [], device)
         assert device.switches["alarm_pir"][PARAM_FUNCTION_TYPE] == "alarmPIR"
         assert device.switches["alarm_pir"][PARAM_STATE] is False
+
+
+def test_legacy_alarm_pir_abilities_do_not_register_switch() -> None:
+    """Older PIR ability names are ignored until mapped explicitly."""
+    for ability in LEGACY_ALARM_PIR_ABILITIES:
+        device = _device()
+        ImouHaDeviceManager.configure_switch_by_ability([ability], False, [], device)
+        assert "alarm_pir" not in device.switches
 
 
 def test_device_without_alarm_pir_ability_has_no_switch() -> None:
