@@ -13,6 +13,7 @@ from .alarm_mode import to_raw as alarm_mode_to_raw
 from .bulb_light import (
     BULB_PROPERTY_REFS,
     REF_MODE,
+    REF_SWITCH,
     apply_bulb_properties,
     empty_bulb_state,
 )
@@ -1998,21 +1999,21 @@ class ImouHaDeviceManager:
         self, device: ImouHaDevice, text_value: str
     ):
         device_id = self._resolve_device_id(device)
-        # 首先查询当前开关状态
-        switch_type = "switch"
-        await self._async_update_device_switch_status_by_ref(
-            device, switch_type, device.switches[switch_type][PARAM_REF]
-        )
+        # 倒计时方向取决于灯或继电器现在是开还是关。
+        if device.bulb_light is not None:
+            is_on = await self._async_refresh_bulb_on(device, device_id)
+        else:
+            switch_type = "switch"
+            await self._async_update_device_switch_status_by_ref(
+                device, switch_type, device.switches[switch_type][PARAM_REF]
+            )
+            is_on = bool(device.switches[switch_type][PARAM_STATE])
         param = {
             "28601": 1,
             "28602": int(text_value) * 60,
+            # 开着则倒计时关闭，关着则倒计时打开。
+            "28603": 0 if is_on else 1,
         }
-        if device.switches[switch_type][PARAM_STATE]:
-            # 如果是开的，则倒计时关闭
-            param["28603"] = 0
-        else:
-            # 如果是关的，则倒计时打开
-            param["28603"] = 1
         product_id = self._require_product_id(device)
 
         async def _write_countdown() -> None:
@@ -2022,6 +2023,29 @@ class ImouHaDeviceManager:
 
         await self._async_dormant_write_retry(device, _write_countdown)
         device.texts["count_down_switch"][PARAM_STATE] = str(text_value)
+
+    async def _async_refresh_bulb_on(
+        self, device: ImouHaDevice, device_id: str
+    ) -> bool:
+        """Read the bulb relay so countdown follows the lamp, not a removed switch."""
+        state = device.bulb_light
+        if state is None:
+            return False
+        try:
+            data = await self.delegate.async_get_iot_device_properties(
+                device_id,
+                device.channel_id,
+                self._require_product_id(device),
+                [REF_SWITCH],
+            )
+            properties = data.get(PARAM_PROPERTIES) or {}
+            if REF_SWITCH in properties:
+                apply_bulb_properties(state, {REF_SWITCH: properties[REF_SWITCH]})
+        except InvalidAppIdOrSecretException:
+            raise
+        except Exception as e:
+            _LOGGER.error("_async_refresh_bulb_on fail:%s", e)
+        return bool(state["on"])
 
 
 class DeviceStatus(Enum):

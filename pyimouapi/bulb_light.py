@@ -124,8 +124,9 @@ def apply_bulb_properties(state: dict[str, Any], values: dict[str, Any]) -> None
         if ref not in values:
             continue
         parsed = _as_int(values[ref])
-        if parsed is not None:
-            state[key] = parsed
+        if parsed is None:
+            continue
+        state[key] = _clamp_read(key, parsed)
 
 
 def properties_for_turn_off() -> dict[str, int]:
@@ -183,5 +184,22 @@ def properties_for_turn_on(
         if int(state["mode"]) == MODE_COLOR:
             payload[REF_VALUE] = level
         else:
+            # A scene (or any non-white mode) does not use the white slider.
+            # Brightness alone moves the bulb back to white so the lamp matches.
+            if int(state["mode"]) != MODE_WHITE:
+                payload[REF_MODE] = MODE_WHITE
             payload[REF_BRIGHTNESS] = level
     return payload
+
+
+def _clamp_read(key: str, value: int) -> int:
+    """Keep a device reading inside the thing-model range."""
+    if key == "brightness":
+        return max(1, min(100, value))
+    if key == "color_temp":
+        return max(MIN_KELVIN, min(MAX_KELVIN, value))
+    if key == "hue":
+        return max(0, min(360, value))
+    if key in ("saturation", "value"):
+        return max(0, min(100, value))
+    return value

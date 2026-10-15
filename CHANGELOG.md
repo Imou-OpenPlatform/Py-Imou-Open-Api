@@ -10,6 +10,12 @@ All notable changes to this project will be documented in this file.
 
 - Color bulbs that report light mode `131800` expose `ImouHaDevice.bulb_light` and `async_set_bulb_light`. The relay ref `11900` is not also registered as the `switch` entity. One property write covers on/off, white brightness and color temperature, hue/saturation/value, or a scene effect.
 
+#### Fixed
+
+- Countdown on a color bulb reads the light relay (`11900`). The relay is no longer a `switch`, so the old lookup raised `KeyError`.
+- A brightness-only write while a scene is active switches the bulb to white mode.
+- Color temperature, hue, saturation, brightness, and color value read from the device are clamped to the thing-model ranges.
+
 #### Changed
 
 - Ship with Imou Life 1.4.4.
@@ -205,6 +211,12 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 #### 新增
 
 - 上报灯光模式 `131800` 的彩色灯泡使用 `ImouHaDevice.bulb_light` 与 `async_set_bulb_light`。继电器 `11900` 不再同时注册为 `switch`。一次属性写入覆盖开关、白光亮度与色温、色调/饱和度/明度，或场景效果。
+
+#### 修复
+
+- 彩色灯泡的倒计时改为读取灯的继电器 `11900`。继电器不再注册为 `switch`，旧查找会 `KeyError`。
+- 场景亮着时若只写亮度，会切回白光模式。
+- 从设备读回的色温、色调、饱和度、白光亮度和颜色明度会钳到物模型范围。
 
 #### 变更
 

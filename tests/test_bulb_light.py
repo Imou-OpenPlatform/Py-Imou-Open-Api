@@ -22,6 +22,7 @@ from pyimouapi.bulb_light import (
     properties_for_turn_on,
     scene_effect_name,
 )
+from pyimouapi.const import PARAM_REF, PARAM_STATE
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
 
@@ -119,6 +120,92 @@ def test_turn_off_only_clears_the_relay() -> None:
     assert properties_for_turn_off() == {REF_SWITCH: 0}
 
 
+def test_brightness_only_while_a_scene_is_active_selects_white() -> None:
+    """A brightness write must leave scene mode, or the slider and the lamp disagree."""
+    state = empty_bulb_state()
+    state["mode"] = MODE_SCENE
+    payload = properties_for_turn_on(state, brightness=128)
+    assert payload[REF_MODE] == MODE_WHITE
+    assert payload[REF_BRIGHTNESS] == brightness_to_percent(128)
+    assert REF_SCENE not in payload
+
+
+def test_brightness_maps_the_ends_of_the_home_assistant_range() -> None:
+    """0 and 1 both become the bulb's minimum. 255 is full."""
+    assert brightness_to_percent(0) == 1
+    assert brightness_to_percent(1) == 1
+    assert brightness_to_percent(255) == 100
+
+
+def test_turn_on_clamps_kelvin_and_hue() -> None:
+    """Values outside the thing model are clamped before they are written."""
+    cold = properties_for_turn_on(empty_bulb_state(), color_temp_kelvin=1000)
+    hot = properties_for_turn_on(empty_bulb_state(), color_temp_kelvin=9000)
+    color = properties_for_turn_on(empty_bulb_state(), hs_color=(-20, 140))
+    assert cold[REF_COLOR_TEMP] == 2700
+    assert hot[REF_COLOR_TEMP] == 6500
+    assert color[REF_HUE] == 0
+    assert color[REF_SATURATION] == 100
+
+
+def test_apply_clamps_color_read_from_the_device() -> None:
+    """A detail payload outside the thing model must not be stored raw."""
+    state = empty_bulb_state()
+    apply_bulb_properties(
+        state,
+        {
+            REF_COLOR_TEMP: 9000,
+            REF_HUE: 400,
+            REF_SATURATION: 140,
+            REF_VALUE: -5,
+            REF_BRIGHTNESS: 0,
+        },
+    )
+    assert state["color_temp"] == 6500
+    assert state["hue"] == 360
+    assert state["saturation"] == 100
+    assert state["value"] == 0
+    assert state["brightness"] == 1
+
+
+async def test_countdown_reads_the_bulb_when_the_relay_switch_is_gone() -> None:
+    """Countdown used to look up the relay switch. A color bulb no longer has one."""
+    delegate = MagicMock()
+    delegate.async_get_iot_device_properties = AsyncMock(
+        return_value={"properties": {REF_SWITCH: 1}}
+    )
+    delegate.async_iot_device_control = AsyncMock()
+    manager = ImouHaDeviceManager(delegate)
+    device = _device()
+    device.bulb_light = empty_bulb_state()
+    device.texts["count_down_switch"] = {PARAM_REF: "28800", PARAM_STATE: "0"}
+
+    await manager.async_set_text_value(device, "count_down_switch", "5")
+
+    sent = delegate.async_iot_device_control.await_args.args[3]
+    assert sent["28602"] == 5 * 60
+    assert sent["28603"] == 0
+    assert device.texts["count_down_switch"][PARAM_STATE] == "5"
+
+
+async def test_channel_zero_writes_the_resolved_id_and_the_raw_id() -> None:
+    """Channel 0 follows the same two-call write as the other property setters."""
+    delegate = MagicMock()
+    delegate.async_set_iot_device_properties = AsyncMock()
+    manager = ImouHaDeviceManager(delegate)
+    device = _device()
+    device.set_channel_id("0")
+    device.bulb_light = empty_bulb_state()
+    payload = properties_for_turn_off()
+
+    await manager.async_set_bulb_light(device, payload)
+
+    assert delegate.async_set_iot_device_properties.await_count == 2
+    first, second = delegate.async_set_iot_device_properties.await_args_list
+    assert first.args == (device.device_id, "0", device.product_id, payload)
+    assert second.args == (device.device_id, None, device.product_id, payload)
+
+
 async def test_set_bulb_light_writes_once_and_updates_local_state() -> None:
     """The cloud call and the cached state use the same property map."""
     delegate = MagicMock()
@@ -130,7 +217,9 @@ async def test_set_bulb_light_writes_once_and_updates_local_state() -> None:
 
     await manager.async_set_bulb_light(device, payload)
 
-    delegate.async_set_iot_device_properties.assert_awaited_once()
+    delegate.async_set_iot_device_properties.assert_awaited_once_with(
+        device.device_id, None, device.product_id, payload
+    )
     assert device.bulb_light["on"] is True
     assert device.bulb_light["mode"] == MODE_SCENE
     assert device.bulb_light["scene"] == 0
