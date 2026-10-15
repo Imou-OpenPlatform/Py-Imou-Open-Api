@@ -4,6 +4,16 @@
 
 All notable changes to this project will be documented in this file.
 
+### [1.4.4]
+
+#### Added
+
+- Color bulbs that report light mode `131800` expose `ImouHaDevice.bulb_light` and `async_set_bulb_light`. The relay ref `11900` is not also registered as the `switch` entity. One property write covers on/off, white brightness and color temperature, hue/saturation/value, or a scene effect.
+
+#### Changed
+
+- Ship with Imou Life 1.4.4.
+
 ### [1.4.3]
 
 #### Added
@@ -189,6 +199,16 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 ## 中文
 
 本项目的重要变更均记录于此。
+
+### [1.4.4]
+
+#### 新增
+
+- 上报灯光模式 `131800` 的彩色灯泡使用 `ImouHaDevice.bulb_light` 与 `async_set_bulb_light`。继电器 `11900` 不再同时注册为 `switch`。一次属性写入覆盖开关、白光亮度与色温、色调/饱和度/明度，或场景效果。
+
+#### 变更
+
+- 与 Imou Life 1.4.4 一起发布。
 
 ### [1.4.3]
 

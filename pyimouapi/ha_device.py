@@ -10,6 +10,12 @@ from simpleeval import SimpleEval
 
 from .alarm_mode import to_friendly as alarm_mode_to_friendly
 from .alarm_mode import to_raw as alarm_mode_to_raw
+from .bulb_light import (
+    BULB_PROPERTY_REFS,
+    REF_MODE,
+    apply_bulb_properties,
+    empty_bulb_state,
+)
 from .collection_point import (
     build_collection_point_options,
     parse_iot_collection_names,
@@ -293,6 +299,7 @@ class ImouHaDevice:
         self._buttons: dict[str, dict[str, Any]] = {}
         self._texts: dict[str, dict[str, Any]] = {}
         self._alarm_control_panel: dict[str, Any] | None = None
+        self._bulb_light: dict[str, Any] | None = None
         self._channel_id: str | None = None
         self._channel_name: str | None = None
         self._is_ipc = False
@@ -361,6 +368,15 @@ class ImouHaDevice:
     @alarm_control_panel.setter
     def alarm_control_panel(self, value: dict[str, Any] | None) -> None:
         self._alarm_control_panel = value
+
+    @property
+    def bulb_light(self) -> dict[str, Any] | None:
+        """Color-bulb state, or None when this device is not that bulb."""
+        return self._bulb_light
+
+    @bulb_light.setter
+    def bulb_light(self, value: dict[str, Any] | None) -> None:
+        self._bulb_light = value
 
     @property
     def product_id(self) -> str | None:
@@ -455,6 +471,27 @@ class ImouHaDeviceManager:
             wait_seconds=self._dormant_write_retry_wait_seconds,
         )
 
+    async def async_set_bulb_light(
+        self, device: ImouHaDevice, properties: dict[str, int]
+    ) -> None:
+        """Write bulb properties in one call and keep local state in step."""
+        if device.bulb_light is None:
+            raise RequestFailedException(f"device {device.device_id} has no color bulb")
+        device_id = self._resolve_device_id(device)
+        product_id = self._require_product_id(device)
+
+        async def _write() -> None:
+            await self.delegate.async_set_iot_device_properties(
+                device_id, device.channel_id, product_id, properties
+            )
+            if device.channel_id is not None and device.channel_id == "0":
+                await self.delegate.async_set_iot_device_properties(
+                    device.device_id, None, product_id, properties
+                )
+
+        await self._async_dormant_write_retry(device, _write)
+        apply_bulb_properties(device.bulb_light, properties)
+
     async def async_close(self) -> None:
         """Close the underlying Open API HTTP session."""
         await self._delegate.async_close()
@@ -535,6 +572,17 @@ class ImouHaDeviceManager:
             )
         return entities
 
+    def _apply_bulb_from_values(
+        self, device: ImouHaDevice, values: Mapping[str, Any]
+    ) -> bool:
+        if device.bulb_light is None:
+            return False
+        present = {ref: values[ref] for ref in BULB_PROPERTY_REFS if ref in values}
+        if not present:
+            return False
+        apply_bulb_properties(device.bulb_light, present)
+        return True
+
     def _apply_property_value(
         self,
         device: ImouHaDevice,
@@ -575,6 +623,8 @@ class ImouHaDeviceManager:
                 continue
             self._apply_property_value(device, kind, key, meta, values[ref])
             changed = True
+        if self._apply_bulb_from_values(device, values):
+            changed = True
         return changed
 
     @staticmethod
@@ -611,6 +661,16 @@ class ImouHaDeviceManager:
                 )
                 continue
             self._apply_property_value(device, kind, key, meta, raw)
+        if device.bulb_light is None:
+            return
+        present: dict[str, Any] = {}
+        for ref in BULB_PROPERTY_REFS:
+            raw = self._lookup_property(detail, device.channel_id, ref)
+            if raw is None:
+                continue
+            present[ref] = raw
+        if present:
+            apply_bulb_properties(device.bulb_light, present)
 
     @staticmethod
     def _reads_through_service(value: dict[str, Any]) -> bool:
@@ -1489,6 +1549,18 @@ class ImouHaDeviceManager:
             device_ability_refs,
             imou_ha_device,
         )
+        if ImouHaDeviceManager.entity_need_add_to_device(
+            REF_MODE,
+            channel_ability_refs,
+            device_ability_refs,
+            is_ipc,
+            imou_ha_device.channel_id,
+            "bulb",
+            {},
+        ):
+            imou_ha_device.bulb_light = empty_bulb_state()
+            # The relay is the light. A second switch would duplicate it.
+            imou_ha_device.switches.pop("switch", None)
 
     @staticmethod
     def entity_need_add_to_device(
