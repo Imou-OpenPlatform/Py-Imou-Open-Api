@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 
 - Countdown on a color bulb reads the light relay (`11900`). The relay is no longer a `switch`, so the old lookup raised `KeyError`.
 - A brightness-only write while a scene is active switches the bulb to white mode.
+- A color-temperature write switches to white mode and does not change either brightness unless brightness is included. A color write switches to color mode and sets hue and saturation without changing the color brightness unless brightness is included.
 - Color temperature, hue, saturation, brightness, and color value read from the device are clamped to the thing-model ranges.
 - A failed switch, battery, storage, or night-vision read keeps the previous value instead of turning the switch off, showing 0% battery, marking storage abnormal, or clearing the night-vision choices.
 - A channel-0 property write repeats at device level with the same resolved device id.
@@ -222,6 +223,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 - 彩色灯泡的倒计时改为读取灯的继电器 `11900`。继电器不再注册为 `switch`，旧查找会 `KeyError`。
 - 场景亮着时若只写亮度，会切回白光模式。
+- 只写色温会切到白光，并且不会改两套亮度，除非同时带了亮度。只写颜色会切到彩光，并写入色调和饱和度；颜色明度只有在同时带了亮度时才改。
 - 从设备读回的色温、色调、饱和度、白光亮度和颜色明度会钳到物模型范围。
 - 开关、电量、存储或夜视模式读取失败时保留上一次的值，不再写成关、0% 电量、存储异常或清空夜视选项。
 - 通道 0 的属性会再用同一解析后的设备 id 写一次设备级属性。

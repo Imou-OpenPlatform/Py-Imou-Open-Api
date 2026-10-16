@@ -144,8 +144,10 @@ def properties_for_turn_on(
 ) -> dict[str, int]:
     """Build one property write for light.turn_on.
 
-    Color temperature selects white mode. A hue selects color mode. An effect
-    selects a scene. Brightness alone stays in the current mode.
+    White mode is brightness plus color temperature. Color mode is hue,
+    saturation, and its own brightness. A write only includes the values the
+    caller passed, so moving color temperature does not copy the color
+    brightness, and moving the color does not copy the white brightness.
     """
     payload: dict[str, int] = {REF_SWITCH: 1}
     if effect is not None:
@@ -160,24 +162,18 @@ def properties_for_turn_on(
         payload[REF_MODE] = MODE_COLOR
         payload[REF_HUE] = max(0, min(360, round(hue)))
         payload[REF_SATURATION] = max(0, min(100, round(saturation)))
-        level = (
-            brightness_to_percent(brightness)
-            if brightness is not None
-            else int(state["value"])
-        )
-        payload[REF_VALUE] = max(1, min(100, level))
+        if brightness is not None:
+            payload[REF_VALUE] = max(1, min(100, brightness_to_percent(brightness)))
         return payload
     if color_temp_kelvin is not None:
         payload[REF_MODE] = MODE_WHITE
         payload[REF_COLOR_TEMP] = max(
             MIN_KELVIN, min(MAX_KELVIN, int(color_temp_kelvin))
         )
-        level = (
-            brightness_to_percent(brightness)
-            if brightness is not None
-            else int(state["brightness"])
-        )
-        payload[REF_BRIGHTNESS] = max(1, min(100, level))
+        if brightness is not None:
+            payload[REF_BRIGHTNESS] = max(
+                1, min(100, brightness_to_percent(brightness))
+            )
         return payload
     if brightness is not None:
         level = brightness_to_percent(brightness)

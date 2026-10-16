@@ -90,6 +90,33 @@ def test_turn_on_color_temperature_selects_white_mode() -> None:
     assert payload[REF_BRIGHTNESS] == 100
 
 
+def test_color_temperature_alone_does_not_write_brightness() -> None:
+    """Moving color temperature leaves both brightnesses where they were."""
+    state = empty_bulb_state()
+    state["mode"] = MODE_COLOR
+    state["brightness"] = 21
+    state["value"] = 3
+    payload = properties_for_turn_on(state, color_temp_kelvin=4000)
+    assert payload[REF_MODE] == MODE_WHITE
+    assert payload[REF_COLOR_TEMP] == 4000
+    assert REF_BRIGHTNESS not in payload
+    assert REF_VALUE not in payload
+
+
+def test_color_alone_does_not_write_color_brightness() -> None:
+    """Moving hue or saturation leaves the color brightness alone."""
+    state = empty_bulb_state()
+    state["mode"] = MODE_WHITE
+    state["brightness"] = 80
+    state["value"] = 15
+    payload = properties_for_turn_on(state, hs_color=(120, 40))
+    assert payload[REF_MODE] == MODE_COLOR
+    assert payload[REF_HUE] == 120
+    assert payload[REF_SATURATION] == 40
+    assert REF_VALUE not in payload
+    assert REF_BRIGHTNESS not in payload
+
+
 def test_turn_on_hs_selects_color_mode() -> None:
     """A hue write is color mode and stores hue, saturation, and color brightness."""
     payload = properties_for_turn_on(
