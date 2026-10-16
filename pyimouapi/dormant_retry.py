@@ -20,7 +20,7 @@ _LOGGER = logging.getLogger(__name__)
 DEVICE_STATUS_SLEEP = "sleep"
 
 # Seconds to wait before retrying a control write on a sleeping device.
-DORMANT_WRITE_RETRY_WAIT_SECONDS = 10
+DORMANT_WRITE_RETRY_WAIT_SECONDS = 5
 
 # Platform codes seen when a dormant device cannot accept a write yet.
 DORMANT_WRITE_RETRY_ERROR_CODES = frozenset(

@@ -25,6 +25,7 @@ All notable changes to this project will be documented in this file.
 
 #### Changed
 
+- Default wait before retrying a control on a sleeping device is 5 seconds.
 - Ship with Imou Life 1.4.4.
 
 ### [1.4.3]
@@ -234,6 +235,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 #### 变更
 
+- 休眠设备控制失败后的默认重试等待改为 5 秒。
 - 与 Imou Life 1.4.4 一起发布。
 
 ### [1.4.3]
