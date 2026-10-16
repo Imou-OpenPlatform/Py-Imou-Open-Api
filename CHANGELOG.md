@@ -15,6 +15,12 @@ All notable changes to this project will be documented in this file.
 - Countdown on a color bulb reads the light relay (`11900`). The relay is no longer a `switch`, so the old lookup raised `KeyError`.
 - A brightness-only write while a scene is active switches the bulb to white mode.
 - Color temperature, hue, saturation, brightness, and color value read from the device are clamped to the thing-model ranges.
+- A failed switch, battery, storage, or night-vision read keeps the previous value instead of turning the switch off, showing 0% battery, marking storage abnormal, or clearing the night-vision choices.
+- A channel-0 property write repeats at device level with the same resolved device id.
+- `deviceOnline` without a channel list uses the device-level status, or offline when that is missing too.
+- JSON null ability or channel lists no longer abort device listing.
+- `ImouOpenApiClient` accepts an injected aiohttp session and does not close it. Session creation is serialized. Snapshot downloads are capped at 8 MiB.
+- Debug logs redact `bindDevice` passwords and strip query strings from stream URLs.
 
 #### Changed
 
@@ -217,6 +223,12 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 - 彩色灯泡的倒计时改为读取灯的继电器 `11900`。继电器不再注册为 `switch`，旧查找会 `KeyError`。
 - 场景亮着时若只写亮度，会切回白光模式。
 - 从设备读回的色温、色调、饱和度、白光亮度和颜色明度会钳到物模型范围。
+- 开关、电量、存储或夜视模式读取失败时保留上一次的值，不再写成关、0% 电量、存储异常或清空夜视选项。
+- 通道 0 的属性会再用同一解析后的设备 id 写一次设备级属性。
+- `deviceOnline` 没有通道列表时使用设备级状态；连这个也没有则标为离线。
+- 能力或通道列表为 JSON null 时不再让整次设备列表失败。
+- `ImouOpenApiClient` 可注入 aiohttp 会话且不会关闭它。会话创建串行化。快照下载上限 8 MiB。
+- 调试日志遮住绑定密码，并去掉拉流地址上的查询参数。
 
 #### 变更
 

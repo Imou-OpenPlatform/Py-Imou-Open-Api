@@ -5,6 +5,7 @@ import logging
 from collections.abc import Callable, Coroutine, Mapping, Set
 from enum import Enum
 from typing import Any, NamedTuple
+from urllib.parse import urlparse
 
 from simpleeval import SimpleEval
 
@@ -92,6 +93,31 @@ from .sensor import apply_sensor_state
 from .siren import build_siren_start_iot_content
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
+
+
+def property_is_on(raw: Any) -> bool | None:
+    """Return True/False for an on/off property, or None when it cannot be read.
+
+    Thing-model values arrive as integers, numeric strings, or booleans.
+    """
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, int):
+        return raw == 1
+    if isinstance(raw, str):
+        text = raw.strip()
+        if text == "1":
+            return True
+        if text == "0":
+            return False
+    return None
+
+
+def split_csv(value: Any) -> list[str]:
+    """Split a comma-separated ability field. Missing or JSON null is empty."""
+    if not isinstance(value, str) or not value:
+        return []
+    return value.split(",")
 
 
 def _battery_level_from_106200_list(data) -> int:
@@ -418,6 +444,57 @@ class ImouHaDevice:
     def set_channel_ability(self, channel_ability: str) -> None:
         self._channel_ability = channel_ability
 
+    def apply_identity(self, other: ImouHaDevice) -> None:
+        """Copy name, model, and firmware from a freshly listed device."""
+        self._device_name = other.device_name
+        self._model = other.model
+        self._swversion = other.swversion
+        if other.channel_name is not None:
+            self._channel_name = other.channel_name
+
+    def replace_capabilities(self, other: ImouHaDevice) -> list[str]:
+        """Take another's entities, keeping state for keys that still exist.
+
+        Returns entity suffixes that disappeared, so the caller can drop them.
+        The online status sensor is never removed.
+        """
+        removed: list[str] = []
+        for attr in (
+            "switches",
+            "sensors",
+            "binary_sensors",
+            "selects",
+            "buttons",
+            "texts",
+        ):
+            current: dict[str, dict[str, Any]] = getattr(self, attr)
+            fresh: dict[str, dict[str, Any]] = getattr(other, attr)
+            for key in list(current):
+                if key in fresh or (attr == "sensors" and key == PARAM_STATUS):
+                    continue
+                del current[key]
+                removed.append(key)
+            for key, value in fresh.items():
+                if key in current and PARAM_STATE in current[key]:
+                    value = {**value, PARAM_STATE: current[key][PARAM_STATE]}
+                current[key] = value
+        if other.bulb_light is None:
+            if self._bulb_light is not None:
+                removed.append("bulb")
+            self._bulb_light = None
+        elif self._bulb_light is None:
+            self._bulb_light = other.bulb_light
+        if other.alarm_control_panel is None:
+            if self._alarm_control_panel is not None:
+                removed.append("alarm_control_panel")
+            self._alarm_control_panel = None
+        elif self._alarm_control_panel is None:
+            self._alarm_control_panel = other.alarm_control_panel
+        self._device_ability = other.device_ability
+        self._channel_ability = other.channel_ability
+        self._is_ipc = other.is_ipc
+        return removed
+
     def __str__(self) -> str:
         return (
             f"device_id: {self._device_id}, product_id:{self._product_id},parent_device_id:{self._parent_product_id},device_name: {self._device_name}, manufacturer: {self._manufacturer}, "
@@ -482,16 +559,33 @@ class ImouHaDeviceManager:
         product_id = self._require_product_id(device)
 
         async def _write() -> None:
-            await self.delegate.async_set_iot_device_properties(
-                device_id, device.channel_id, product_id, properties
+            await self._async_write_iot_properties(
+                device, device_id, product_id, properties
             )
-            if device.channel_id is not None and device.channel_id == "0":
-                await self.delegate.async_set_iot_device_properties(
-                    device.device_id, None, product_id, properties
-                )
 
         await self._async_dormant_write_retry(device, _write)
         apply_bulb_properties(device.bulb_light, properties)
+
+    async def _async_write_iot_properties(
+        self,
+        device: ImouHaDevice,
+        device_id: str,
+        product_id: str,
+        payload: dict[str, Any],
+    ) -> None:
+        """Write properties, and again at device level when the channel is 0.
+
+        Both calls use the resolved device id. A gateway accessory's bare
+        serial names a different device, so the second write must not switch
+        ids. Local state is updated only after both calls succeed.
+        """
+        await self.delegate.async_set_iot_device_properties(
+            device_id, device.channel_id, product_id, payload
+        )
+        if device.channel_id == "0":
+            await self.delegate.async_set_iot_device_properties(
+                device_id, None, product_id, payload
+            )
 
     async def async_close(self) -> None:
         """Close the underlying Open API HTTP session."""
@@ -592,10 +686,12 @@ class ImouHaDeviceManager:
         meta: dict[str, Any],
         raw_value: Any,
     ) -> None:
-        if kind == "switch":
-            device.switches[key][PARAM_STATE] = raw_value == 1
-        elif kind == "binary_sensor":
-            device.binary_sensors[key][PARAM_STATE] = raw_value == 1
+        if kind in ("switch", "binary_sensor"):
+            parsed = property_is_on(raw_value)
+            if parsed is None:
+                return
+            target = device.switches if kind == "switch" else device.binary_sensors
+            target[key][PARAM_STATE] = parsed
         elif kind == "select":
             value = str(raw_value) if isinstance(raw_value, int) else raw_value
             device.selects[key][PARAM_CURRENT_OPTION] = to_friendly(key, value)
@@ -847,25 +943,25 @@ class ImouHaDeviceManager:
     def _apply_online_status(self, device: ImouHaDevice, data: dict[str, Any]) -> None:
         """Write the online sensor from a deviceOnline payload."""
         if device.channel_id is None and device.product_id is not None:
-            apply_sensor_state(
-                device.sensors,
-                PARAM_STATUS,
-                self.get_device_status(data[PARAM_ONLINE]),
-            )
+            self._apply_online_value(device, data.get(PARAM_ONLINE))
             return
+        channels = data.get(PARAM_CHANNELS)
         device_channel_id = (
             str(device.channel_id) if device.channel_id is not None else None
         )
-        for channel in data[PARAM_CHANNELS]:
-            if str(channel[PARAM_CHANNEL_ID]) == device_channel_id:
-                apply_sensor_state(
-                    device.sensors,
-                    PARAM_STATUS,
-                    self.get_device_status(channel[PARAM_ONLINE]),
-                )
-                return
-        # Channel missing from the payload: treat as offline so we do not keep
-        # refreshing detail/entity reads against a stale "online" cache.
+        if isinstance(channels, list):
+            for channel in channels:
+                if not isinstance(channel, dict):
+                    continue
+                if str(channel.get(PARAM_CHANNEL_ID)) == device_channel_id:
+                    self._apply_online_value(device, channel.get(PARAM_ONLINE))
+                    return
+        elif data.get(PARAM_ONLINE) is not None:
+            # No channel list: a device-level onLine is the only status we have.
+            self._apply_online_value(device, data.get(PARAM_ONLINE))
+            return
+        # Channel missing, or the payload has no usable status: treat as offline
+        # so we do not keep refreshing against a stale "online" cache.
         _LOGGER.debug(
             "deviceOnline has no channel %s for %s; marking offline",
             device_channel_id,
@@ -876,6 +972,14 @@ class ImouHaDeviceManager:
             PARAM_STATUS,
             DeviceStatus.OFFLINE.value,
         )
+
+    def _apply_online_value(self, device: ImouHaDevice, online: Any) -> None:
+        """Write one onLine value, or offline when the field is missing."""
+        if online is None:
+            status = DeviceStatus.OFFLINE.value
+        else:
+            status = self.get_device_status(online)
+        apply_sensor_state(device.sensors, PARAM_STATUS, status)
 
     @staticmethod
     async def _async_gather_reads(
@@ -921,14 +1025,25 @@ class ImouHaDeviceManager:
             ],
             return_exceptions=True,
         )
+        confirmed_on = False
+        confirmed_off = False
+        failed = False
         for result in results:
             if isinstance(result, InvalidAppIdOrSecretException):
                 raise result
-        # Gathered exceptions arrive as objects, and every object is
-        # truthy, so a failed read would otherwise show as "on".
-        device.switches[switch_type][PARAM_STATE] = any(
-            result is True for result in results
-        )
+            if isinstance(result, BaseException) or result is None:
+                failed = True
+                continue
+            if result is True:
+                confirmed_on = True
+            else:
+                confirmed_off = True
+        # A failed read must not flip an on switch off. Only an explicit off
+        # from every ability that answered, with none failing, clears it.
+        if confirmed_on:
+            device.switches[switch_type][PARAM_STATE] = True
+        elif confirmed_off and not failed:
+            device.switches[switch_type][PARAM_STATE] = False
 
     async def _async_update_device_select_status(self, device: ImouHaDevice):
         """UPDATE SELECT STATUS"""
@@ -1036,8 +1151,6 @@ class ImouHaDeviceManager:
             _LOGGER.error("_async_update_device_storage error:  %s", exception)
             if ERROR_CODE_NO_STORAGE_MEDIUM in exception.message:
                 apply_sensor_state(device.sensors, PARAM_STORAGE_USED, "e1")
-            else:
-                apply_sensor_state(device.sensors, PARAM_STORAGE_USED, "e2")
 
     async def async_get_device_stream(
         self, device: ImouHaDevice, live_resolution: str, live_protocol: str = ""
@@ -1061,7 +1174,7 @@ class ImouHaDeviceManager:
             raise RequestFailedException(
                 f"device {device.device_id} answered getStreamUrl without a url"
             )
-        _LOGGER.debug("get_device_stream %s", url)
+        _LOGGER.debug("get_device_stream host=%s", urlparse(url).netloc)
         return url
 
     async def async_get_device_image(
@@ -1109,9 +1222,9 @@ class ImouHaDeviceManager:
                             device.product_id,
                         )
                         await self._async_configure_device_by_ref(
-                            channel.channel_ability_refs.split(","),
+                            split_csv(channel.channel_ability_refs),
                             device.is_ipc,
-                            device.device_ability_refs.split(","),
+                            split_csv(device.device_ability_refs),
                             imou_ha_device,
                         )
                     else:
@@ -1119,9 +1232,9 @@ class ImouHaDeviceManager:
                             "channels is not none, device_id:%s", device.device_id
                         )
                         self.configure_device_by_ability(
-                            channel.channel_ability.split(","),
+                            split_csv(channel.channel_ability),
                             device.is_ipc,
-                            device.device_ability.split(","),
+                            split_csv(device.device_ability),
                             imou_ha_device,
                         )
                     devices.append(imou_ha_device)
@@ -1135,7 +1248,7 @@ class ImouHaDeviceManager:
                 await self._async_configure_device_by_ref(
                     [],
                     device.is_ipc,
-                    device.device_ability_refs.split(","),
+                    split_csv(device.device_ability_refs),
                     imou_ha_device,
                 )
                 devices.append(imou_ha_device)
@@ -1178,6 +1291,8 @@ class ImouHaDeviceManager:
     async def async_press_button(
         self, device: ImouHaDevice, button_type: str, duration: int
     ):
+        # Restart and PTZ stay on the camera API even when the button
+        # also carries a thing-model ref.
         if button_type == PARAM_RESTART_DEVICE:
             await self.delegate.async_restart_device(device.device_id)
         elif PARAM_PTZ in button_type:
@@ -1206,12 +1321,12 @@ class ImouHaDeviceManager:
                 content = build_siren_start_iot_content(input_ref)
             await self._async_press_button_by_ref(device, ref, content)
             return
-        if device.is_ipc:
+        if device.channel_id is not None:
+            channels = [int(device.channel_id)]
+        elif device.is_ipc:
             channels = None
         else:
-            if device.channel_id is None:
-                raise RequestFailedException(f"{button_type} requires channel")
-            channels = [int(device.channel_id)]
+            raise RequestFailedException(f"{button_type} requires channel")
         if button_type == PARAM_SIREN_START:
             await self.delegate.async_siren_start(device.device_id, channels)
         elif button_type == PARAM_SIREN_STOP:
@@ -1241,19 +1356,9 @@ class ImouHaDeviceManager:
                 payload = {ref_id: value}
 
                 async def _write_text() -> None:
-                    await self.delegate.async_set_iot_device_properties(
-                        device_id,
-                        device.channel_id,
-                        product_id,
-                        payload,
+                    await self._async_write_iot_properties(
+                        device, device_id, product_id, payload
                     )
-                    if device.channel_id is not None and device.channel_id == "0":
-                        await self.delegate.async_set_iot_device_properties(
-                            device.device_id,
-                            None,
-                            product_id,
-                            payload,
-                        )
 
                 await self._async_dormant_write_retry(device, _write_text)
                 device.texts[text_type][PARAM_STATE] = str(text_value)
@@ -1344,12 +1449,16 @@ class ImouHaDeviceManager:
             data = await self.delegate.async_get_device_status(
                 device.device_id, device.channel_id, ability_type
             )
-            return data[PARAM_STATUS] == PARAM_ON
+            status = data[PARAM_STATUS]
+            parsed = property_is_on(status)
+            if parsed is not None:
+                return parsed
+            return status == PARAM_ON
         except InvalidAppIdOrSecretException:
             raise
         except Exception as e:
             _LOGGER.warning("_async_get_device_switch_status_by_ability fail:%s", e)
-            return False
+            return None
 
     async def _async_set_device_switch_status_by_ability(
         self, device: ImouHaDevice, ability_type: str, enable: bool
@@ -1372,10 +1481,6 @@ class ImouHaDeviceManager:
                 raise
             except Exception as e:
                 _LOGGER.warning("_async_update_device_select_status_by_type fail:%s", e)
-                device.selects[PARAM_NIGHT_VISION_MODE] = {
-                    PARAM_CURRENT_OPTION: "",
-                    PARAM_OPTIONS: [],
-                }
 
     async def _async_update_device_night_vision_mode(self, device: ImouHaDevice):
         data = await self.delegate.async_get_device_night_vision_mode(
@@ -1780,7 +1885,10 @@ class ImouHaDeviceManager:
             result = await self.delegate.async_iot_device_control(
                 device_id, self._require_product_id(device), value[PARAM_REF], {}
             )
-            data = result[PARAM_CONTENT][PARAM_OUTPUT_DATA]
+            content = result.get(PARAM_CONTENT) if isinstance(result, dict) else None
+            data = content.get(PARAM_OUTPUT_DATA) if isinstance(content, dict) else None
+            if data is None:
+                return None
         else:
             ref = value[PARAM_REF]
             result = await self.delegate.async_get_iot_device_properties(
@@ -1828,13 +1936,9 @@ class ImouHaDeviceManager:
         payload = {ref: value}
 
         async def _write() -> None:
-            await self.delegate.async_set_iot_device_properties(
-                device_id, device.channel_id, product_id, payload
+            await self._async_write_iot_properties(
+                device, device_id, product_id, payload
             )
-            if device.channel_id is not None and device.channel_id == "0":
-                await self.delegate.async_set_iot_device_properties(
-                    device.device_id, None, product_id, payload
-                )
 
         await self._async_dormant_write_retry(device, _write)
 
@@ -1861,19 +1965,9 @@ class ImouHaDeviceManager:
         payload = {ref: 1 if enable else 0}
 
         async def _write() -> None:
-            await self.delegate.async_set_iot_device_properties(
-                device_id,
-                device.channel_id,
-                product_id,
-                payload,
+            await self._async_write_iot_properties(
+                device, device_id, product_id, payload
             )
-            if device.channel_id is not None and device.channel_id == "0":
-                await self.delegate.async_set_iot_device_properties(
-                    device.device_id,
-                    None,
-                    product_id,
-                    payload,
-                )
 
         await self._async_dormant_write_retry(device, _write)
         device.switches[switch_type][PARAM_STATE] = enable
@@ -1917,9 +2011,10 @@ class ImouHaDeviceManager:
                 device_id, device.channel_id, self._require_product_id(device), [ref]
             )
             if ref in data[PARAM_PROPERTIES]:
-                device.binary_sensors[binary_sensor_type][PARAM_STATE] = (
-                    data[PARAM_PROPERTIES][ref] == 1
-                )
+                parsed = property_is_on(data[PARAM_PROPERTIES][ref])
+                if parsed is None:
+                    return
+                device.binary_sensors[binary_sensor_type][PARAM_STATE] = parsed
             else:
                 self._debug_missing_property_ref(
                     device,
@@ -1950,7 +2045,6 @@ class ImouHaDeviceManager:
             apply_sensor_state(device.sensors, PARAM_BATTERY, battery_level)
         except RequestFailedException as exception:
             _LOGGER.error("_async_update_device_battery error:  %s", exception)
-            apply_sensor_state(device.sensors, PARAM_BATTERY, "0")
 
     @staticmethod
     def configure_text_by_ref(
@@ -2002,12 +2096,15 @@ class ImouHaDeviceManager:
         # 倒计时方向取决于灯或继电器现在是开还是关。
         if device.bulb_light is not None:
             is_on = await self._async_refresh_bulb_on(device, device_id)
-        else:
-            switch_type = "switch"
+        elif (switch := device.switches.get("switch")) and switch.get(PARAM_REF):
             await self._async_update_device_switch_status_by_ref(
-                device, switch_type, device.switches[switch_type][PARAM_REF]
+                device, "switch", switch[PARAM_REF]
             )
-            is_on = bool(device.switches[switch_type][PARAM_STATE])
+            is_on = bool(switch.get(PARAM_STATE))
+        else:
+            raise RequestFailedException(
+                f"countdown on {device.device_id} has no switch to read"
+            )
         param = {
             "28601": 1,
             "28602": int(text_value) * 60,

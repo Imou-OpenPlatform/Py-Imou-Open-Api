@@ -73,6 +73,10 @@ async def test_ensure_event_map_failure_does_not_poison_cache():
 
     await manager.async_ensure_event_map("pidB")
     assert manager.cached_event_map("pidB") == {}
+    # A failed fetch is not cached as "no events", but it is not retried at once.
+    assert await manager.async_resolve_event_identifier("pidB", "1") is None
+    assert client.async_request_api.await_count == 1
+    manager._event_map_failed_at["pidB"] = 0
     assert await manager.async_resolve_event_identifier("pidB", "1") == "ok"
     assert client.async_request_api.await_count == 2
 

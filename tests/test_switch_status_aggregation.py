@@ -23,10 +23,11 @@ def build_device(
 
 @pytest.mark.asyncio
 async def test_a_failed_read_does_not_report_the_switch_as_on() -> None:
-    """A read that raises must not be mistaken for an "on" reading.
+    """A read that raises keeps the previous state.
 
-    Gathered exceptions come back as objects, and every object is truthy, so
-    combining them without a check would show a switch the user never enabled.
+    Turning the switch off here would show a device as off because the cloud
+    did not answer. An explicit off from every ability that answered still
+    clears it.
     """
     manager = ImouHaDeviceManager(MagicMock())
     device = build_device(["motionDetect", "smartTrack"])
@@ -38,7 +39,7 @@ async def test_a_failed_read_does_not_report_the_switch_as_on() -> None:
 
     await manager._async_update_device_switch_status(device)
 
-    assert device.switches["motion_detect"][PARAM_STATE] is False
+    assert device.switches["motion_detect"][PARAM_STATE] is True
 
 
 @pytest.mark.asyncio
