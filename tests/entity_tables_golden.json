@@ -540,7 +540,7 @@
           "state_variant": "enum"
         },
         "storage_used": {
-          "expression": "('e1' if data['14603']==0 else 'e2') if data['14603'] != 1 else int(data['14602'] / data['14601'] * 100)",
+          "expression": "('e1' if data['14603']==0 else 'e2') if data['14603'] != 1 else ('e2' if not data['14601'] else int(data['14602'] / data['14601'] * 100))",
           "ref": "14600",
           "ref_type": "properties",
           "state": "e2",
@@ -619,7 +619,7 @@
           "state_variant": "numeric"
         },
         "storage_used@14600": {
-          "expression": "('e1' if data['14603']==0 else 'e2') if data['14603'] != 1 else int(data['14602'] / data['14601'] * 100)",
+          "expression": "('e1' if data['14603']==0 else 'e2') if data['14603'] != 1 else ('e2' if not data['14601'] else int(data['14602'] / data['14601'] * 100))",
           "ref": "14600",
           "ref_type": "properties",
           "state": "e2",

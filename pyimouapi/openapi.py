@@ -46,6 +46,7 @@ from .exceptions import (
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 
 CONNECTION_LIMIT = 10
+DOWNLOAD_MAX_BYTES = 8 * 1024 * 1024
 
 REDACTED = "***"
 
@@ -62,6 +63,9 @@ def _redacted_request(body: dict[str, Any]) -> dict[str, Any]:
     params = body[PARAM_PARAMS]
     if PARAM_TOKEN in params:
         params = {**params, PARAM_TOKEN: REDACTED}
+    # bindDevice sends the device password in params.code.
+    if "code" in params:
+        params = {**params, "code": REDACTED}
     return {**body, PARAM_SYSTEM: system, PARAM_PARAMS: params}
 
 
@@ -82,16 +86,28 @@ def _redacted_response(body: dict[str, Any]) -> dict[str, Any]:
 class ImouOpenApiClient:
     """Async client for Imou Open Platform HTTP API."""
 
-    def __init__(self, app_id: str, app_secret: str, api_url: str) -> None:
+    def __init__(
+        self,
+        app_id: str,
+        app_secret: str,
+        api_url: str,
+        session: aiohttp.ClientSession | None = None,
+    ) -> None:
         self._app_id = app_id
         self._app_secret = app_secret
         self._api_url = api_url
         self._access_token: str | None = None
-        self._session: aiohttp.ClientSession | None = None
+        self._session = session
+        self._owns_session = session is None
+        self._session_lock = asyncio.Lock()
         self._token_lock = asyncio.Lock()
 
     async def _async_get_session(self) -> aiohttp.ClientSession:
-        if self._session is None or self._session.closed:
+        async with self._session_lock:
+            if self._session is not None and not self._session.closed:
+                return self._session
+            if not self._owns_session:
+                raise ConnectFailedException("http session is closed")
             self._session = aiohttp.ClientSession(
                 headers={"Client-Type": "HomeAssistant"},
                 # Requests are issued in batches per poll; cap them so a large
@@ -102,7 +118,7 @@ class ImouOpenApiClient:
                 # they hit their own deadline and report a connection failure.
                 connector=aiohttp.TCPConnector(limit_per_host=CONNECTION_LIMIT),
             )
-        return self._session
+            return self._session
 
     async def async_download(self, url: str, timeout: int = 120) -> bytes:  # noqa: ASYNC109
         """GET a binary payload such as a device snapshot.
@@ -122,7 +138,14 @@ class ImouOpenApiClient:
                     raise RequestFailedException(
                         f"request failed,status code {response.status}"
                     )
-                return await response.read()
+                reader = getattr(response, "content", None)
+                if reader is not None and hasattr(reader, "read"):
+                    body = await reader.read(DOWNLOAD_MAX_BYTES + 1)
+                else:
+                    body = await response.read()
+                if len(body) > DOWNLOAD_MAX_BYTES:
+                    raise RequestFailedException("download exceeded size limit")
+                return body
         except ImouException:
             raise
         except Exception as exception:
@@ -131,10 +154,18 @@ class ImouOpenApiClient:
             raise ConnectFailedException(f"connect failed,{exception}") from exception
 
     async def async_close(self) -> None:
-        """Close the HTTP session (call when done with the client)."""
-        if self._session is not None and not self._session.closed:
-            await self._session.close()
+        """Close the HTTP session this client created.
+
+        A session passed in by the caller, such as Home Assistant's shared
+        client, is left open.
+        """
+        async with self._session_lock:
+            if not self._owns_session:
+                return
+            session = self._session
             self._session = None
+            if session is not None and not session.closed:
+                await session.close()
 
     async def async_get_token(self) -> None:
         """Fetch and store accessToken."""
@@ -245,8 +276,13 @@ class ImouOpenApiClient:
                 _redacted_request(body),
                 _redacted_response(response_body),
             )
-        result_code = response_body[PARAM_RESULT][PARAM_CODE]
-        result_message = response_body[PARAM_RESULT][PARAM_MSG]
+        result = (
+            response_body.get(PARAM_RESULT) if isinstance(response_body, dict) else None
+        )
+        if not isinstance(result, dict) or PARAM_CODE not in result:
+            raise RequestFailedException("malformed response,missing result")
+        result_code = result[PARAM_CODE]
+        result_message = result.get(PARAM_MSG) or ""
         if result_code != ERROR_CODE_SUCCESS:
             msg = result_code + ":" + result_message
             if result_code in (ERROR_CODE_INVALID_SIGN, ERROR_CODE_INVALID_APP):
@@ -257,7 +293,9 @@ class ImouOpenApiClient:
                     endpoint, params, refresh_on_expiry=False
                 )
             raise RequestFailedException(msg)
-        response_data = response_body[PARAM_RESULT].get(PARAM_DATA, {})
+        response_data = result.get(PARAM_DATA, {})
+        if response_data is None:
+            response_data = {}
         return response_data
 
     async def async_set_message_callback(

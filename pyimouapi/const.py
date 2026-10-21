@@ -563,7 +563,7 @@ SENSOR_TYPE_REF: dict[str, list[dict[str, Any]]] = {
             "ref": "14600",
             "default": "e2",
             "ref_type": "properties",
-            "expression": "('e1' if data['14603']==0 else 'e2') if data['14603'] != 1 else int(data['14602'] / data['14601'] * 100)",
+            "expression": "('e1' if data['14603']==0 else 'e2') if data['14603'] != 1 else ('e2' if not data['14601'] else int(data['14602'] / data['14601'] * 100))",
         }
     ],
     "battery": [

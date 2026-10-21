@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+from time import monotonic
 from typing import Any
 
 from .const import (
@@ -76,6 +77,16 @@ from .const import (
 from .openapi import ImouOpenApiClient
 
 _LOGGER = logging.getLogger(__name__)
+
+# A failed product-model fetch is retried after this, instead of on every push.
+_EVENT_MAP_RETRY_SECONDS = 60
+
+
+def _text_or_default(value: Any, default: str = "unknown") -> str:
+    """Return a string field, treating JSON null and blanks as the default."""
+    if isinstance(value, str) and value:
+        return value
+    return default
 
 
 def _parse_event_ref_map(data: dict[str, Any] | None) -> dict[str, str]:
@@ -282,6 +293,7 @@ class ImouDeviceManager:
     def __init__(self, imou_api_client: ImouOpenApiClient):
         self._imou_api_client = imou_api_client
         self._event_maps: dict[str, dict[str, str]] = {}
+        self._event_map_failed_at: dict[str, float] = {}
         self._event_map_locks: dict[str, asyncio.Lock] = {}
         self._event_map_locks_guard = asyncio.Lock()
 
@@ -311,15 +323,23 @@ class ImouDeviceManager:
         async with lock:
             if product_id in self._event_maps:
                 return
+            failed_at = self._event_map_failed_at.get(product_id)
+            if (
+                failed_at is not None
+                and monotonic() - failed_at < _EVENT_MAP_RETRY_SECONDS
+            ):
+                return
             try:
                 data = await self.async_get_product_model(product_id)
             except Exception:
+                self._event_map_failed_at[product_id] = monotonic()
                 _LOGGER.warning(
                     "getProductModel failed for product_id=%s",
                     product_id,
                     exc_info=True,
                 )
                 return
+            self._event_map_failed_at.pop(product_id, None)
             self._event_maps[product_id] = _parse_event_ref_map(data)
 
     def cached_event_map(self, product_id: str) -> dict[str, str]:
@@ -364,8 +384,8 @@ class ImouDeviceManager:
         data = await self._imou_api_client.async_request_api(
             API_ENDPOINT_LIST_DEVICE_DETAILS, params
         )
-        device_list = data.get(PARAM_DEVICE_LIST) or []
-        if not device_list:
+        device_list = data.get(PARAM_DEVICE_LIST) if isinstance(data, dict) else None
+        if not isinstance(device_list, list) or not device_list:
             return []
         devices = []
         iot_devices = []
@@ -379,7 +399,9 @@ class ImouDeviceManager:
                 device_id, device_name, device_status, brand, device_model
             )
             if PARAM_DEVICE_ABILITY in device:
-                imou_device.set_device_ability(device[PARAM_DEVICE_ABILITY])
+                imou_device.set_device_ability(
+                    _text_or_default(device[PARAM_DEVICE_ABILITY])
+                )
             if PARAM_DEVICE_VERSION in device:
                 imou_device.set_device_version(device[PARAM_DEVICE_VERSION])
             if PARAM_PARENT_PRODUCT_ID in device:
@@ -393,7 +415,9 @@ class ImouDeviceManager:
             if PARAM_ACCESS_TYPE in device:
                 imou_device.set_access_type(device[PARAM_ACCESS_TYPE])
             if PARAM_CHANNEL_LIST in device:
-                channel_list = device[PARAM_CHANNEL_LIST]
+                channel_list = device[PARAM_CHANNEL_LIST] or []
+                if not isinstance(channel_list, list):
+                    channel_list = []
                 channels = []
                 for channel in channel_list:
                     channel_id = (
@@ -403,7 +427,9 @@ class ImouDeviceManager:
                     )
                     channel_name = channel[PARAM_CHANNEL_NAME]
                     channel_status = channel[PARAM_CHANNEL_STATUS]
-                    channel_ability = channel.get(PARAM_CHANNEL_ABILITY, "unknown")
+                    channel_ability = _text_or_default(
+                        channel.get(PARAM_CHANNEL_ABILITY)
+                    )
                     channel = ImouChannel(
                         channel_id, channel_name, channel_status, channel_ability
                     )
@@ -469,8 +495,8 @@ class ImouDeviceManager:
         data = await self._imou_api_client.async_request_api(
             API_ENDPOINT_LIST_DEVICE_DETAILS, params
         )
-        device_list = data.get(PARAM_DEVICE_LIST) or []
-        if not device_list:
+        device_list = data.get(PARAM_DEVICE_LIST) if isinstance(data, dict) else None
+        if not isinstance(device_list, list) or not device_list:
             return []
         summaries: list[ImouDeviceSummary] = []
         for device in device_list:
@@ -673,7 +699,9 @@ class ImouDeviceManager:
             PARAM_DEVICE_LIST: [
                 {
                     PARAM_DEVICE_ID: device_id,
-                    PARAM_CHANNEL_ID: channel_id,
+                    PARAM_CHANNEL_ID: int(channel_id)
+                    if channel_id is not None
+                    else channel_id,
                     PARAM_PRODUCT_ID: product_id,
                     PARAM_PROPERTIES: properties,
                 }
@@ -815,13 +843,13 @@ class ImouDeviceManager:
             imou_device.product_id,
         )
         imou_device.set_device_ability_refs(
-            device_detail.get(PARAM_ABILITY_REFS, "unknown")
+            _text_or_default(device_detail.get(PARAM_ABILITY_REFS))
         )
         channels_detail = device_detail.get(PARAM_CHANNELS)
         if channels_detail and imou_device.channels:
             channel_detail_map = {
-                str(channel_detail.get(PARAM_CHANNEL_ID)): channel_detail.get(
-                    PARAM_ABILITY_REFS, "unknown"
+                str(channel_detail.get(PARAM_CHANNEL_ID)): _text_or_default(
+                    channel_detail.get(PARAM_ABILITY_REFS)
                 )
                 for channel_detail in channels_detail
                 if channel_detail.get(PARAM_CHANNEL_ID) is not None

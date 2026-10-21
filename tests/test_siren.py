@@ -217,7 +217,7 @@ async def test_press_siren_start_paas() -> None:
 
     await manager.async_press_button(device, PARAM_SIREN_START, 500)
 
-    delegate.async_siren_start.assert_awaited_once_with("DEV001", None)
+    delegate.async_siren_start.assert_awaited_once_with("DEV001", [0])
     delegate.async_iot_device_control.assert_not_called()
 
 
@@ -244,7 +244,7 @@ async def test_press_siren_stop_paas() -> None:
 
     await manager.async_press_button(device, PARAM_SIREN_STOP, 500)
 
-    delegate.async_siren_stop.assert_awaited_once_with("DEV001", None)
+    delegate.async_siren_stop.assert_awaited_once_with("DEV001", [0])
 
 
 @pytest.mark.asyncio
