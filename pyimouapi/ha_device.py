@@ -1335,8 +1335,8 @@ class ImouHaDeviceManager:
     async def async_set_text_value(
         self, device: ImouHaDevice, text_type: str, text_value: str
     ):
-        if device.texts[text_type].get(PARAM_REF):
-            ref_id = device.texts[text_type].get(PARAM_REF)
+        ref_id = device.texts[text_type].get(PARAM_REF)
+        if isinstance(ref_id, str) and ref_id:
             if ref_id == "28800":
                 await self._async_set_count_down_switch_time(device, text_value)
             else:
@@ -1442,7 +1442,7 @@ class ImouHaDeviceManager:
 
     async def _async_get_device_switch_status_by_ability(
         self, device: ImouHaDevice, ability_type: str
-    ) -> bool:
+    ) -> bool | None:
         # Updating the interface requires capturing exceptions for two main purposes:
         # 1. To prevent the updater from failing to load due to exceptions;
         try:
