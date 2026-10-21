@@ -1,10 +1,15 @@
 """Tests for product-model event ref → identifier mapping."""
 
+from time import monotonic
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pyimouapi.const import API_ENDPOINT_GET_PRODUCT_MODEL, PARAM_PRODUCT_ID
-from pyimouapi.device import ImouDeviceManager, _parse_event_ref_map
+from pyimouapi.device import (
+    _EVENT_MAP_RETRY_SECONDS,
+    ImouDeviceManager,
+    _parse_event_ref_map,
+)
 from pyimouapi.exceptions import RequestFailedException
 
 
@@ -76,7 +81,7 @@ async def test_ensure_event_map_failure_does_not_poison_cache():
     # A failed fetch is not cached as "no events", but it is not retried at once.
     assert await manager.async_resolve_event_identifier("pidB", "1") is None
     assert client.async_request_api.await_count == 1
-    manager._event_map_failed_at["pidB"] = 0
+    manager._event_map_failed_at["pidB"] = monotonic() - _EVENT_MAP_RETRY_SECONDS - 1
     assert await manager.async_resolve_event_identifier("pidB", "1") == "ok"
     assert client.async_request_api.await_count == 2
 
