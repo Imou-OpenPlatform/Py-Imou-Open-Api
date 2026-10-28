@@ -1083,7 +1083,11 @@ class ImouHaDeviceManager:
         except InvalidAppIdOrSecretException:
             raise
         except Exception as err:
-            _LOGGER.warning(
+            # A shared device can reject collection points on every refresh.
+            # Keep the options already stored and do not warn each time.
+            detail = getattr(err, "message", None) or str(err)
+            log = _LOGGER.debug if "OP1009" in detail else _LOGGER.warning
+            log(
                 "Failed to fetch collection points for %s: %s",
                 device.device_name,
                 err,

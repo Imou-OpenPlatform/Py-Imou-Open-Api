@@ -4,6 +4,12 @@
 
 All notable changes to this project will be documented in this file.
 
+### [Unreleased]
+
+#### Fixed
+
+- A collection-point read the account is not allowed to make (`OP1009`) is logged at debug and keeps the previous options.
+
 ### [1.4.4]
 
 #### Added
@@ -213,6 +219,12 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 ## 中文
 
 本项目的重要变更均记录于此。
+
+### [Unreleased]
+
+#### 修复
+
+- 账号无权读取收藏点（`OP1009`）时改为 debug 日志，并保留已有选项，不再每次刷新都打 warning。
 
 ### [1.4.4]
 

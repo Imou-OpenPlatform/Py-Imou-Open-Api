@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -22,6 +23,7 @@ from pyimouapi.const import (
     PARAM_TURN_INPUT_REF,
     PARAM_TURN_REF,
 )
+from pyimouapi.exceptions import RequestFailedException
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 
 
@@ -114,6 +116,33 @@ async def test_update_device_collection_points_paas() -> None:
     assert device.selects[PARAM_COLLECTION_POINT][PARAM_CURRENT_OPTION] == (
         PARAM_COLLECTION_POINT_PROMPT
     )
+
+
+@pytest.mark.asyncio
+async def test_collection_point_without_permission_keeps_options(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """OP1009 does not warn on every refresh or clear the stored options."""
+    device = _ha_device()
+    device.selects[PARAM_COLLECTION_POINT] = {
+        PARAM_OPTIONS: [PARAM_COLLECTION_POINT_PROMPT, "door"],
+        PARAM_CURRENT_OPTION: PARAM_COLLECTION_POINT_PROMPT,
+    }
+    delegate = MagicMock()
+    delegate.async_get_device_collection = AsyncMock(
+        side_effect=RequestFailedException("OP1009:No right, cannot operate.")
+    )
+    manager = ImouHaDeviceManager(delegate)
+
+    with caplog.at_level(logging.DEBUG):
+        await manager._async_update_device_collection_points(device)
+
+    assert device.selects[PARAM_COLLECTION_POINT][PARAM_OPTIONS] == [
+        PARAM_COLLECTION_POINT_PROMPT,
+        "door",
+    ]
+    assert "OP1009" in caplog.text
+    assert not any(record.levelno >= logging.WARNING for record in caplog.records)
 
 
 @pytest.mark.asyncio
