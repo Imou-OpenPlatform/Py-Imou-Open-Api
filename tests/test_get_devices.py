@@ -9,6 +9,9 @@ from pyimouapi.const import (
     API_ENDPOINT_LIST_DEVICE_DETAILS,
     PARAM_ABILITY_REFS,
     PARAM_BRAND,
+    PARAM_CHANNEL_ID,
+    PARAM_CHANNEL_LIST,
+    PARAM_CHANNEL_NUM,
     PARAM_COUNT,
     PARAM_DEVICE_ID,
     PARAM_DEVICE_LIST,
@@ -196,3 +199,21 @@ async def test_fetch_ability_refs_set_only_queries_named_devices() -> None:
     assert result[0].device_ability_refs == "unknown"
     assert result[1].device_ability_refs == "1,2,3"
     assert result[2].device_ability_refs == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_channel_list_tolerates_missing_name_and_status() -> None:
+    """Some device details omit channelName / channelStatus on a channel."""
+    entry = make_device("cam1")
+    entry[PARAM_CHANNEL_NUM] = 1
+    entry[PARAM_CHANNEL_LIST] = [{PARAM_CHANNEL_ID: 0}]
+    manager, _ = make_manager({1: {PARAM_COUNT: 1, PARAM_DEVICE_LIST: [entry]}})
+
+    result = await manager.async_get_devices(fetch_ability_refs=False)
+
+    assert len(result) == 1
+    assert len(result[0].channels) == 1
+    channel = result[0].channels[0]
+    assert channel.channel_id == "0"
+    assert channel.channel_name == ""
+    assert channel.channel_status == ""

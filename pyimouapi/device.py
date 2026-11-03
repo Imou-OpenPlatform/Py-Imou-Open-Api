@@ -425,8 +425,8 @@ class ImouDeviceManager:
                         if isinstance(channel[PARAM_CHANNEL_ID], int)
                         else channel[PARAM_CHANNEL_ID]
                     )
-                    channel_name = channel[PARAM_CHANNEL_NAME]
-                    channel_status = channel[PARAM_CHANNEL_STATUS]
+                    channel_name = channel.get(PARAM_CHANNEL_NAME) or ""
+                    channel_status = channel.get(PARAM_CHANNEL_STATUS) or ""
                     channel_ability = _text_or_default(
                         channel.get(PARAM_CHANNEL_ABILITY)
                     )
