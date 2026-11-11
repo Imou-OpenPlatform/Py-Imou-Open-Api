@@ -138,6 +138,19 @@ def test_normalize_paas_device_id_and_channel() -> None:
     assert event["msg_type"] == "human"
 
 
+def test_normalize_includes_ai_copywriting() -> None:
+    payload = {
+        "msgType": "human",
+        "deviceId": "SN1",
+        "channelId": "0",
+        "aiCopyWriting": "Man in dark jacket",
+        "aiTag": ["human", "vehicle"],
+    }
+    event = normalize_push_payload(payload)
+    assert event["ai_copywriting"] == "Man in dark jacket"
+    assert event["ai_tags"] == ["human", "vehicle"]
+
+
 def test_normalize_prefers_cid_over_channel_id() -> None:
     """cid wins when several channel keys are present."""
     event = normalize_push_payload(

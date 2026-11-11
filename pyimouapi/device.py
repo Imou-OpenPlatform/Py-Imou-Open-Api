@@ -13,8 +13,10 @@ from .const import (
     API_ENDPOINT_DEVICE_SD_CARD_STATUS,
     API_ENDPOINT_DEVICE_SNAP_DETECT,
     API_ENDPOINT_DEVICE_STORAGE,
+    API_ENDPOINT_GET_ALARM_MESSAGE_STATISTICS,
     API_ENDPOINT_GET_COLLECTION,
     API_ENDPOINT_GET_DEVICE_ALARM_PARAM,
+    API_ENDPOINT_GET_DEVICE_CLOUD,
     API_ENDPOINT_GET_DEVICE_LIVE_INFO,
     API_ENDPOINT_GET_DEVICE_NIGHT_VISION_MODE,
     API_ENDPOINT_GET_DEVICE_ONLINE,
@@ -27,7 +29,10 @@ from .const import (
     API_ENDPOINT_IOT_DEVICE_CONTROL,
     API_ENDPOINT_LIST_DEVICE_DETAILS,
     API_ENDPOINT_MODIFY_DEVICE_ALARM_STATUS,
+    API_ENDPOINT_QUERY_CLOUD_RECORD_BITMAP,
+    API_ENDPOINT_QUERY_CLOUD_RECORDS,
     API_ENDPOINT_RESTART_DEVICE,
+    API_ENDPOINT_SEARCH_AI_ALARM_MESSAGE,
     API_ENDPOINT_SET_DEVICE_NIGHT_VISION_MODE,
     API_ENDPOINT_SET_DEVICE_SNAP,
     API_ENDPOINT_SET_DEVICE_STATUS,
@@ -679,6 +684,180 @@ class ImouDeviceManager:
         params = {PARAM_DEVICE_ID: device_id, PARAM_CHANNEL_ID: channel_id}
         return await self._imou_api_client.async_request_api(
             API_ENDPOINT_DEVICE_SNAP_DETECT, params
+        )
+
+    async def async_query_cloud_record_bitmap(
+        self, device_id: str, channel_id: str, *, year: int, month: int
+    ) -> dict[str, Any]:
+        """Monthly cloud-recording presence bitmap."""
+        params = {
+            PARAM_DEVICE_ID: device_id,
+            PARAM_CHANNEL_ID: channel_id,
+            "year": year,
+            "month": month,
+        }
+        return await self._imou_api_client.async_request_api(
+            API_ENDPOINT_QUERY_CLOUD_RECORD_BITMAP, params
+        )
+
+    async def async_query_cloud_records(
+        self,
+        device_id: str,
+        channel_id: str,
+        *,
+        begin_time: str,
+        end_time: str,
+        query_range: str | None = "1-100",
+        count: int | None = None,
+    ) -> dict[str, Any]:
+        """List cloud recording segments in a time window."""
+        params: dict[str, Any] = {
+            PARAM_DEVICE_ID: device_id,
+            PARAM_CHANNEL_ID: channel_id,
+            "beginTime": begin_time,
+            "endTime": end_time,
+        }
+        if count is not None:
+            params["count"] = max(1, min(100, int(count)))
+        elif query_range:
+            params["queryRange"] = query_range
+        return await self._imou_api_client.async_request_api(
+            API_ENDPOINT_QUERY_CLOUD_RECORDS, params
+        )
+
+    async def async_create_device_record_hls(
+        self,
+        device_id: str,
+        channel_id: str,
+        *,
+        begin_time: str,
+        end_time: str,
+        record_type: str,
+        stream_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Create an HLS URL for a same-day recording interval."""
+        from .playback.hls import async_create_device_record_hls
+
+        url = await async_create_device_record_hls(
+            self._imou_api_client,
+            device_id=device_id,
+            channel_id=channel_id,
+            begin_time=begin_time,
+            end_time=end_time,
+            record_type=record_type,
+            stream_id=stream_id,
+        )
+        return {"url": url} if url else {}
+
+    async def async_local_record_bitmap(
+        self,
+        device_id: str,
+        channel_id: str,
+        *,
+        year: int,
+        month: int,
+        record_type: str = "0",
+    ) -> dict[str, Any]:
+        """Local recording month bitmap via record.file.bitmap."""
+        from .local_record import async_local_record_bitmap
+
+        return await async_local_record_bitmap(
+            self._imou_api_client,
+            device_id=device_id,
+            channel_id=channel_id,
+            year=year,
+            month=month,
+            record_type=record_type,
+        )
+
+    async def async_local_record_list(
+        self,
+        device_id: str,
+        channel_id: str,
+        *,
+        begin_time: str,
+        end_time: str,
+        limit: int = 50,
+        record_type: str = "0",
+        session_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Local recording list for a time window."""
+        from .local_record import async_local_record_list
+
+        return await async_local_record_list(
+            self._imou_api_client,
+            device_id=device_id,
+            channel_id=channel_id,
+            begin_time=begin_time,
+            end_time=end_time,
+            limit=limit,
+            record_type=record_type,
+            session_id=session_id,
+        )
+
+    async def async_get_device_cloud(
+        self, device_id: str, channel_id: str
+    ) -> dict[str, Any]:
+        """Return the active cloud storage plan for a device channel."""
+        params = {PARAM_DEVICE_ID: device_id, PARAM_CHANNEL_ID: channel_id}
+        return await self._imou_api_client.async_request_api(
+            API_ENDPOINT_GET_DEVICE_CLOUD, params
+        )
+
+    async def async_search_ai_alarm_message(
+        self,
+        device_id: str,
+        channel_id: str,
+        *,
+        search_content: str,
+        begin_time: str,
+        end_time: str,
+        page_size: int = 32,
+        sort_type: str = "0",
+        next_index_id: str | None = None,
+        product_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Keyword search over AI alarm messages."""
+        params: dict[str, Any] = {
+            PARAM_DEVICE_ID: device_id,
+            PARAM_CHANNEL_ID: channel_id,
+            "searchContent": search_content[:50],
+            "pageSize": str(max(1, min(32, page_size))),
+            "sortType": sort_type,
+        }
+        if product_id:
+            params[PARAM_PRODUCT_ID] = product_id
+        if next_index_id:
+            params["nextIndexId"] = next_index_id
+        else:
+            params["beginTime"] = begin_time
+            params["endTime"] = end_time
+        return await self._imou_api_client.async_request_api(
+            API_ENDPOINT_SEARCH_AI_ALARM_MESSAGE, params
+        )
+
+    async def async_get_alarm_message_statistics(
+        self,
+        device_id: str,
+        channel_id: str,
+        *,
+        start_day: str,
+        end_day: str,
+        product_id: str | None = None,
+        ai_statistics_analysis_enable: bool = True,
+    ) -> dict[str, Any]:
+        """Daily AI alarm statistics for a channel."""
+        params: dict[str, Any] = {
+            PARAM_DEVICE_ID: device_id,
+            PARAM_CHANNEL_ID: channel_id,
+            "startDay": start_day,
+            "endDay": end_day,
+            "aiStatisticsAnalysisEnable": ai_statistics_analysis_enable,
+        }
+        if product_id:
+            params[PARAM_PRODUCT_ID] = product_id
+        return await self._imou_api_client.async_request_api(
+            API_ENDPOINT_GET_ALARM_MESSAGE_STATISTICS, params
         )
 
     async def async_create_stream_url(

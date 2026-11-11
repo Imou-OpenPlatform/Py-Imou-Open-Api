@@ -205,6 +205,17 @@ def normalize_push_payload(payload: dict[str, Any]) -> dict[str, Any]:
         if isinstance(monitor, dict) and "channel" in monitor:
             channel_id = monitor.get("channel")
 
+    ai_copy = payload.get("aiCopyWriting")
+    if not ai_copy and isinstance(content, dict):
+        ai_copy = content.get("aiCopyWriting")
+    ai_copywriting = str(ai_copy).strip() if ai_copy else None
+    ai_tags_raw = payload.get("aiTag")
+    if ai_tags_raw is None and isinstance(content, dict):
+        ai_tags_raw = content.get("aiTag")
+    ai_tags: list[str] = []
+    if isinstance(ai_tags_raw, list):
+        ai_tags = [str(tag).strip() for tag in ai_tags_raw if str(tag).strip()]
+
     return {
         "msg_type": msg_type,
         "msg_type_name": msg_type,
@@ -218,6 +229,8 @@ def normalize_push_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "alarm_id": payload.get("id") or payload.get("alarmId"),
         "token": payload.get("token"),
         "desc": payload.get("desc"),
+        "ai_copywriting": ai_copywriting,
+        "ai_tags": ai_tags,
         "outputData": output_data,
         "raw": payload,
     }

@@ -25,6 +25,9 @@ All notable changes to this project will be documented in this file.
 - `pyimouapi/data/v2_target_map.yaml` — authoritative `ha_key` → V2 `target_id` bindings for Imou Life.
 - Push helpers: V2 `eventId` normalization, `legacy_msg_type_from_v2_event`, capability event gating helpers.
 - V2 bulb, outlet countdown, collection point, PTZ, restart (`device.reboot.execute`), and composite outlet metrics via capability services.
+- Cloud and local recording helpers (`cloud_record`, `local_record`, `playback.hls`) and `createDeviceRecordHls` wrapper.
+- AI Insight helpers (`insight.cloud`, `insight.search`, `insight.statistics`) and push AI copy/tag fields.
+- `deviceSnapDetect` client and result parsing.
 
 #### Changed
 
@@ -262,6 +265,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 - `v2_target_map.yaml` — Imou Life 已支持功能的 V2 绑定表。
 - 推送：V2 `eventId` 归一化、与 legacy 告警键映射、能力事件门控辅助函数。
 - 彩灯、插座倒计时、收藏点、云台、重启及插座计量等 V2 读写路径。
+- 云/本地录像与 HLS 播放封装；智见云存、搜索、简报解析；`deviceSnapDetect`；推送 AI 文案字段。
 
 #### 变更
 
