@@ -1490,8 +1490,6 @@ class ImouHaDeviceManager:
                         device.device_id,
                     )
                 devices.append(imou_ha_device)
-        for ha_device in devices:
-            _LOGGER.debug("device is  %s", ha_device)
         return devices
 
     @staticmethod
