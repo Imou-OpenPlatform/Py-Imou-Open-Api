@@ -11,6 +11,7 @@ from .const import (
     API_ENDPOINT_BIND_DEVICE_LIVE,
     API_ENDPOINT_CONTROL_DEVICE_PTZ,
     API_ENDPOINT_DEVICE_SD_CARD_STATUS,
+    API_ENDPOINT_DEVICE_SNAP_DETECT,
     API_ENDPOINT_DEVICE_STORAGE,
     API_ENDPOINT_GET_COLLECTION,
     API_ENDPOINT_GET_DEVICE_ALARM_PARAM,
@@ -669,6 +670,15 @@ class ImouDeviceManager:
         params = {PARAM_DEVICE_ID: device_id, PARAM_CHANNEL_ID: channel_id}
         return await self._imou_api_client.async_request_api(
             API_ENDPOINT_SET_DEVICE_SNAP, params
+        )
+
+    async def async_device_snap_detect(
+        self, device_id: str, channel_id: str | None
+    ) -> dict[str, Any]:
+        """Capture a still and run on-device detection (human / vehicle / animal)."""
+        params = {PARAM_DEVICE_ID: device_id, PARAM_CHANNEL_ID: channel_id}
+        return await self._imou_api_client.async_request_api(
+            API_ENDPOINT_DEVICE_SNAP_DETECT, params
         )
 
     async def async_create_stream_url(
