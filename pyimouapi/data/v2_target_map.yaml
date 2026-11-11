@@ -1,0 +1,282 @@
+# Ha V2 target map — imou_life entities only. Authority: HA detailed design §6.
+# kind: property | service | event | named_api | composite
+# scope: device | channel | resolve (ptz)
+
+version: 1
+
+bindings:
+  - ha_key: ab_alarm_sound
+    target_id: detection.sound.enabled
+    kind: property
+    ha_platform: switch
+    scope: channel
+
+  - ha_key: motion_detect
+    target_id: detection.motion.enabled
+    kind: property
+    ha_platform: switch
+    scope: channel
+
+  - ha_key: close_camera
+    target_id: privacy.cover.enabled
+    kind: property
+    ha_platform: switch
+    scope: channel
+
+  - ha_key: white_light
+    target_id: light.white.enabled
+    kind: property
+    ha_platform: light
+    scope: channel
+
+  - ha_key: header_detect
+    target_id: detection.person.enabled
+    kind: property
+    ha_platform: switch
+    scope: channel
+
+  - ha_key: pet_detect
+    target_id: detection.pet.enabled
+    kind: property
+    ha_platform: switch
+    scope: channel
+
+  - ha_key: frame_reverse
+    target_id: image.orient.enabled
+    kind: property
+    ha_platform: switch
+    scope: channel
+
+  - ha_key: wide_dynamic
+    target_id: image.wdr.mode
+    kind: property
+    ha_platform: select
+    scope: channel
+
+  - ha_key: smart_track
+    target_id: detection.person.tracking
+    kind: property
+    ha_platform: switch
+    scope: channel
+
+  - ha_key: play_sound
+    target_id: audio.prompt.enabled
+    kind: property
+    ha_platform: switch
+    scope: channel
+
+  - ha_key: linkage_siren
+    target_id: detection.siren.linkage
+    kind: property
+    ha_platform: switch
+    scope: channel
+
+  - ha_key: linkage_white_light
+    target_id: light.white.linkage
+    kind: property
+    ha_platform: switch
+    scope: channel
+
+  - ha_key: audio_encode_control
+    target_id: audio.mic.enabled
+    kind: property
+    ha_platform: switch
+    scope: channel
+
+  - ha_key: light
+    target_id: light.indicator.enabled
+    kind: property
+    ha_platform: switch
+    scope: device
+
+  - ha_key: switch
+    target_id: control.outlet.enabled
+    kind: property
+    ha_platform: switch
+    scope: device
+
+  - ha_key: overcharge_switch
+    target_id: control.outlet.overchargeProtection
+    kind: property
+    ha_platform: switch
+    scope: device
+
+  - ha_key: night_vision_mode
+    target_id: image.night.mode
+    kind: property
+    ha_platform: select
+    scope: channel
+
+  - ha_key: device_volume
+    target_id: audio.volume.level
+    kind: property
+    ha_platform: select
+    scope: channel
+
+  - ha_key: alarm_control_panel
+    target_id: detection.arming.mode
+    kind: property
+    ha_platform: alarm_control_panel
+    scope: channel
+
+  - ha_key: battery
+    target_id: power.battery.level
+    kind: property
+    ha_platform: sensor
+    scope: device
+
+  - ha_key: storage_used
+    target_id: storage.local.capacity
+    kind: property
+    ha_platform: sensor
+    scope: device
+
+  - ha_key: door_contact_status
+    target_id: detection.door.contactState
+    kind: property
+    ha_platform: binary_sensor
+    scope: device
+
+  - ha_key: temperature_current
+    target_id: detection.environment.temperature
+    kind: property
+    ha_platform: sensor
+    scope: device
+
+  - ha_key: humidity_current
+    target_id: detection.environment.humidity
+    kind: property
+    ha_platform: sensor
+    scope: device
+
+  - ha_key: power
+    target_id: power.outlet.read
+    kind: service
+    ha_platform: sensor
+    scope: device
+    output_field: power
+
+  - ha_key: voltage
+    target_id: power.outlet.read
+    kind: service
+    ha_platform: sensor
+    scope: device
+    output_field: voltage
+
+  - ha_key: current
+    target_id: power.outlet.read
+    kind: service
+    ha_platform: sensor
+    scope: device
+    output_field: current
+
+  - ha_key: switch_cnt
+    target_id: power.outlet.read
+    kind: service
+    ha_platform: sensor
+    scope: device
+    output_field: switch_cnt
+
+  - ha_key: use_electricity
+    target_id: power.outlet.energy
+    kind: property
+    ha_platform: sensor
+    scope: device
+    struct_field: electricity
+
+  - ha_key: use_time
+    target_id: power.outlet.energy
+    kind: property
+    ha_platform: sensor
+    scope: device
+    struct_field: times
+
+  - ha_key: count_down_switch
+    target_id: control.outlet.countdownGet
+    write_target_id: control.outlet.countdownSet
+    kind: service
+    ha_platform: number
+    scope: device
+
+  - ha_key: restart_device
+    target_id: device.reboot.execute
+    kind: named_api
+    ha_platform: button
+    scope: device
+
+  - ha_key: siren_start
+    target_id: detection.siren.start
+    kind: service
+    ha_platform: button
+    scope: channel
+
+  - ha_key: siren_stop
+    target_id: detection.siren.stop
+    kind: service
+    ha_platform: button
+    scope: channel
+
+  - ha_key: mute
+    target_id: detection.siren.stop
+    kind: service
+    ha_platform: button
+    scope: channel
+
+  - ha_key: ptz_up
+    target_id: ptz.aim.step
+    alternate_target_id: ptz.aim.relative
+    kind: service
+    ha_platform: button
+    scope: channel
+    resolve: ptz_prefer_step
+
+  - ha_key: ptz_down
+    target_id: ptz.aim.step
+    alternate_target_id: ptz.aim.relative
+    kind: service
+    ha_platform: button
+    scope: channel
+    resolve: ptz_prefer_step
+
+  - ha_key: ptz_left
+    target_id: ptz.aim.step
+    alternate_target_id: ptz.aim.relative
+    kind: service
+    ha_platform: button
+    scope: channel
+    resolve: ptz_prefer_step
+
+  - ha_key: ptz_right
+    target_id: ptz.aim.step
+    alternate_target_id: ptz.aim.relative
+    kind: service
+    ha_platform: button
+    scope: channel
+    resolve: ptz_prefer_step
+
+  - ha_key: collection_point
+    target_id: ptz.preset.goto
+    kind: service
+    ha_platform: select
+    scope: channel
+    extra_services:
+      - ptz.preset.add
+      - ptz.preset.delete
+      - ptz.preset.list
+      - ptz.preset.rename
+      - ptz.preset.set
+
+  - ha_key: bulb
+    kind: composite
+    ha_platform: light
+    scope: device
+    gate_property: light.white.mode
+    properties:
+      - control.outlet.enabled
+      - light.white.mode
+      - light.white.level
+      - light.white.colorTemperature
+      - light.white.hue
+      - light.white.saturation
+      - light.white.colorLevel
+      - light.white.scene

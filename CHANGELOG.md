@@ -10,6 +10,27 @@ All notable changes to this project will be documented in this file.
 
 - A collection-point read the account is not allowed to make (`OP1009`) is logged at debug and keeps the previous options.
 
+### [2.0.0]
+
+#### Breaking
+
+- **Entity registration** uses Open API **`device.capability.list`** intersected with packaged `v2_target_map.yaml` for IoT and PaaS devices. Thing-model **ability refs** and PaaS **ability-name** registration are no longer used on the discovery path.
+- **`ImouHaDeviceManager.async_get_devices`** always lists devices with `fetch_ability_refs=False`; the `fetch_ability_refs` argument on `ImouDeviceManager` is deprecated for entity setup.
+- Reads and writes on entities with a **`capability_set`** use **`device.property.get/set`** and **`device.service.invoke`** only (no ref / `iotDeviceControl` on that path).
+- **`wide_dynamic`** maps to property `image.wdr.mode` and is exposed as a **select** when registered via capabilities (not a bool switch).
+
+#### Added
+
+- Package `pyimouapi.capability` — `CapabilitySet`, `async_capability_list`, `async_property_get/set`, `async_service_invoke`, `configure_imou_ha_device_from_capability`.
+- `pyimouapi/data/v2_target_map.yaml` — authoritative `ha_key` → V2 `target_id` bindings for Imou Life.
+- Push helpers: V2 `eventId` normalization, `legacy_msg_type_from_v2_event`, capability event gating helpers.
+- V2 bulb, outlet countdown, collection point, PTZ, restart (`device.reboot.execute`), and composite outlet metrics via capability services.
+
+#### Changed
+
+- Event push ingestion remains **dual-track** (legacy `msgType` and V2 `eventId`). All **device control** paths target V2 capabilities when a `capability_set` is present.
+- Ships with Imou Life 2.0.0.
+
 ### [1.4.4]
 
 #### Added
@@ -225,6 +246,27 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 #### 修复
 
 - 账号无权读取收藏点（`OP1009`）时改为 debug 日志，并保留已有选项，不再每次刷新都打 warning。
+
+### [2.0.0]
+
+#### 破坏性变更
+
+- **实体注册**统一为 **`device.capability.list`** 与包内 `v2_target_map.yaml` 的交集（IoT 与 PaaS）。发现路径不再使用物模型 **ability refs** 或 PaaS **能力名** 注册表。
+- **`ImouHaDeviceManager.async_get_devices`** 列举时固定 `fetch_ability_refs=False`；`ImouDeviceManager` 上的 `fetch_ability_refs` 对实体搭建已废弃。
+- 带 **`capability_set`** 的实体读写仅走 **`device.property.get/set`**、**`device.service.invoke`**（该路径下不用 ref / `iotDeviceControl`）。
+- **`wide_dynamic`** 对应能力 `image.wdr.mode`，经能力门控后注册为 **select**（不再是 bool 开关）。
+
+#### 新增
+
+- `pyimouapi.capability` — `CapabilitySet`、能力列表与属性/服务客户端、基于 map 的实体注册。
+- `v2_target_map.yaml` — Imou Life 已支持功能的 V2 绑定表。
+- 推送：V2 `eventId` 归一化、与 legacy 告警键映射、能力事件门控辅助函数。
+- 彩灯、插座倒计时、收藏点、云台、重启及插座计量等 V2 读写路径。
+
+#### 变更
+
+- **事件推送**仍为 **双轨**（legacy `msgType` + V2 `eventId`）；**设备操作**在具备能力集时统一走 V2。
+- 与 Imou Life 2.0.0 一起发布。
 
 ### [1.4.4]
 

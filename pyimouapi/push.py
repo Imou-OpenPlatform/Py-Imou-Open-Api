@@ -1,7 +1,12 @@
-"""Imou Open Platform event-push payload helpers."""
+"""Imou Open Platform event-push payload helpers.
+
+Legacy alarm msg types and V2 capability ``eventId`` values are both accepted
+here (dual-track ingestion). Device control uses Open API v2 capabilities only.
+"""
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 # Status / ops types that are not security alarms.
@@ -65,8 +70,41 @@ def is_alarm_msg_type(msg_type: str | None) -> bool:
 _IOT_PUSH_ENVELOPES = frozenset({"iotEvent", "iotProperty"})
 
 
+def is_v2_capability_event_id(msg_type: str | None) -> bool:
+    """Return True when msg_type looks like a standard capability eventId."""
+    return isinstance(msg_type, str) and "." in msg_type
+
+
+# V2 capability eventId → legacy PaaS msg_type for motion, labels, and automations.
+V2_EVENT_LEGACY_MSG_TYPE: dict[str, str] = {
+    "detection.motion.detected": "videoMotion",
+    "detection.person.detected": "human",
+    "detection.pet.detected": "mobileDetect",
+    "detection.sound.detected": "abAlarmSound",
+}
+
+
+def legacy_msg_type_from_v2_event(msg_type: str | None) -> str | None:
+    """Map a V2 eventId to the legacy msg_type Home Assistant already understands."""
+    if not msg_type:
+        return msg_type
+    return V2_EVENT_LEGACY_MSG_TYPE.get(msg_type, msg_type)
+
+
+def v2_capability_event_permitted(
+    events: frozenset[str] | None,
+    event_id: str,
+) -> bool:
+    """Return True when the event is allowed for this device's capability list."""
+    if events is None:
+        return True
+    return event_id in events
+
+
 def is_iot_non_event(product_id: Any, msg_type: str | None) -> bool:
     """Return True when an IoT device sent an envelope this integration ignores."""
+    if is_v2_capability_event_id(msg_type):
+        return False
     return bool(product_id) and msg_type not in _IOT_PUSH_ENVELOPES
 
 
@@ -102,6 +140,33 @@ def event_ref_lookup_key(msg_type: str | None, raw: dict[str, Any]) -> str | Non
     return None
 
 
+def parse_callback_flag(value: str | Iterable[str] | None) -> frozenset[str]:
+    """Split Imou ``callbackFlag`` (comma-separated) into a flag set."""
+    if value is None or value == "":
+        return frozenset()
+    parts = value.split(",") if isinstance(value, str) else list(value)
+    return frozenset(part.strip() for part in parts if str(part).strip())
+
+
+def is_capability_event_payload(raw: dict[str, Any]) -> bool:
+    """Return True when the body matches V2 capabilityEvent shape."""
+    msg_type = raw.get("msgType")
+    if not isinstance(msg_type, str) or "." not in msg_type:
+        return False
+    device_id = raw.get("deviceId") or raw.get("msgDeviceId")
+    return bool(device_id)
+
+
+def event_id_from_push(raw: dict[str, Any]) -> str | None:
+    """Return a capability eventId or legacy digit ref, else None."""
+    if is_capability_event_payload(raw):
+        msg_type = raw.get("msgType")
+        return str(msg_type) if msg_type is not None else None
+    msg_type = raw.get("msgType")
+    key = msg_type if isinstance(msg_type, str) else None
+    return event_ref_lookup_key(key, raw)
+
+
 def _channel_id_from_payload(payload: dict[str, Any]) -> Any:
     """Return a scalar channel id from the push payload, if present."""
     for key in ("cid", "channelId", "msgChannelId"):
@@ -133,10 +198,12 @@ def normalize_push_payload(payload: dict[str, Any]) -> dict[str, Any]:
     output_data = None
     if isinstance(content, dict):
         output_data = content.get("outputData")
-        if channel_id is None:
-            monitor = content.get("monitor")
-            if isinstance(monitor, dict) and "channel" in monitor:
-                channel_id = monitor.get("channel")
+    if output_data is None and "outputData" in payload:
+        output_data = payload.get("outputData")
+    if isinstance(content, dict) and channel_id is None:
+        monitor = content.get("monitor")
+        if isinstance(monitor, dict) and "channel" in monitor:
+            channel_id = monitor.get("channel")
 
     return {
         "msg_type": msg_type,

@@ -1,37 +1,79 @@
 """Multi-channel devices must share online and detail reads within one poll."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pyimouapi.capability.catalog import CapabilitySet, PropertyCapability
 from pyimouapi.const import (
     PARAM_CHANNEL_ID,
     PARAM_CHANNELS,
     PARAM_ONLINE,
     PARAM_PROPERTIES,
-    PARAM_REF,
     PARAM_STATE,
     PARAM_STATUS,
+    PARAM_V2_TARGET_ID,
 )
 from pyimouapi.exceptions import RequestFailedException
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice, ImouHaDeviceManager
 
 
-def _channel_device(channel_id: str, *, switch_ref: str = "10001") -> ImouHaDevice:
+def _channel_device(
+    channel_id: str,
+    *,
+    target_id: str = "control.outlet.enabled",
+) -> ImouHaDevice:
     device = ImouHaDevice("nvr1", f"Cam {channel_id}", "Imou", "NVR", "1.0")
     device.set_product_id("pid1")
     device.set_channel_id(channel_id)
     device.sensors[PARAM_STATUS][PARAM_STATE] = DeviceStatus.ONLINE.value
-    device.switches["relay"] = {PARAM_REF: switch_ref, PARAM_STATE: False}
+    device.set_capability_set(
+        CapabilitySet(
+            properties={
+                target_id: PropertyCapability(
+                    property_id=target_id,
+                    access_mode="rw",
+                    data_type="int",
+                )
+            },
+            services=frozenset(),
+            events=frozenset(),
+        )
+    )
+    device.switches["relay"] = {PARAM_V2_TARGET_ID: target_id, PARAM_STATE: False}
+    return device
+
+
+def _v2_device(device_id: str, product_id: str) -> ImouHaDevice:
+    target = "control.outlet.enabled"
+    device = ImouHaDevice(device_id, device_id, "Imou", "IPC", "1.0")
+    device.set_product_id(product_id)
+    device.set_channel_id("0")
+    device.sensors[PARAM_STATUS][PARAM_STATE] = DeviceStatus.ONLINE.value
+    device.set_capability_set(
+        CapabilitySet(
+            properties={
+                target: PropertyCapability(
+                    property_id=target,
+                    access_mode="rw",
+                    data_type="int",
+                )
+            },
+            services=frozenset(),
+            events=frozenset(),
+        )
+    )
+    device.switches["relay"] = {PARAM_V2_TARGET_ID: target, PARAM_STATE: False}
     return device
 
 
 @pytest.mark.asyncio
 async def test_update_devices_status_shares_online_and_detail_across_channels() -> None:
-    """Two channels of one NVR cost one online and one detail call, not two each."""
-    ch0 = _channel_device("0", switch_ref="10001")
-    ch1 = _channel_device("1", switch_ref="10002")
+    """One online call per NVR; each channel reads v2 properties."""
+    ch0 = _channel_device("0")
+    ch1 = _channel_device("1")
 
     delegate = MagicMock()
+    delegate.api_client = MagicMock()
     delegate.async_get_device_online_status = AsyncMock(
         return_value={
             PARAM_ONLINE: "1",
@@ -41,27 +83,16 @@ async def test_update_devices_status_shares_online_and_detail_across_channels() 
             ],
         }
     )
-    delegate.async_get_iot_device_detail_info = AsyncMock(
-        return_value={
-            PARAM_PROPERTIES: {},
-            PARAM_CHANNELS: [
-                {
-                    PARAM_CHANNEL_ID: 0,
-                    PARAM_PROPERTIES: {"10001": 1},
-                },
-                {
-                    PARAM_CHANNEL_ID: 1,
-                    PARAM_PROPERTIES: {"10002": 1},
-                },
-            ],
-        }
-    )
 
     manager = ImouHaDeviceManager(delegate)
-    await manager.async_update_devices_status([ch0, ch1])
+    with patch(
+        "pyimouapi.ha_device.async_property_get",
+        AsyncMock(return_value={"control.outlet.enabled": 1}),
+    ) as prop_get:
+        await manager.async_update_devices_status([ch0, ch1])
 
     assert delegate.async_get_device_online_status.await_count == 1
-    assert delegate.async_get_iot_device_detail_info.await_count == 1
+    assert prop_get.await_count == 2
     assert ch0.switches["relay"][PARAM_STATE] is True
     assert ch1.switches["relay"][PARAM_STATE] is True
 
@@ -69,43 +100,37 @@ async def test_update_devices_status_shares_online_and_detail_across_channels() 
 @pytest.mark.asyncio
 async def test_update_devices_status_still_calls_once_per_physical_device() -> None:
     """Distinct device ids still each get their own online call."""
-    a = ImouHaDevice("cam_a", "Cam A", "Imou", "IPC", "1.0")
-    a.set_product_id("pid_a")
-    a.set_channel_id("0")
-    a.sensors[PARAM_STATUS][PARAM_STATE] = DeviceStatus.ONLINE.value
-    a.switches["relay"] = {PARAM_REF: "10001", PARAM_STATE: False}
-
-    b = ImouHaDevice("cam_b", "Cam B", "Imou", "IPC", "1.0")
-    b.set_product_id("pid_b")
-    b.set_channel_id("0")
-    b.sensors[PARAM_STATUS][PARAM_STATE] = DeviceStatus.ONLINE.value
-    b.switches["relay"] = {PARAM_REF: "10001", PARAM_STATE: False}
+    a = _v2_device("cam_a", "pid_a")
+    b = _v2_device("cam_b", "pid_b")
 
     delegate = MagicMock()
+    delegate.api_client = MagicMock()
     delegate.async_get_device_online_status = AsyncMock(
         return_value={
             PARAM_ONLINE: "1",
             PARAM_CHANNELS: [{PARAM_CHANNEL_ID: 0, PARAM_ONLINE: "1"}],
         }
     )
-    delegate.async_get_iot_device_detail_info = AsyncMock(
-        return_value={PARAM_PROPERTIES: {"10001": 0}, PARAM_CHANNELS: []}
-    )
 
     manager = ImouHaDeviceManager(delegate)
-    await manager.async_update_devices_status([a, b])
+    with patch(
+        "pyimouapi.ha_device.async_property_get",
+        AsyncMock(return_value={"control.outlet.enabled": 0}),
+    ) as prop_get:
+        await manager.async_update_devices_status([a, b])
 
     assert delegate.async_get_device_online_status.await_count == 2
-    assert delegate.async_get_iot_device_detail_info.await_count == 2
+    assert prop_get.await_count == 2
 
 
 @pytest.mark.asyncio
 async def test_update_devices_status_skips_offline_channel_detail() -> None:
-    """One offline channel still shares online, but must not refresh detail."""
-    ch0 = _channel_device("0", switch_ref="10001")
-    ch1 = _channel_device("1", switch_ref="10002")
+    """One offline channel still shares online, but must not refresh properties."""
+    ch0 = _channel_device("0")
+    ch1 = _channel_device("1")
 
     delegate = MagicMock()
+    delegate.api_client = MagicMock()
     delegate.async_get_device_online_status = AsyncMock(
         return_value={
             PARAM_ONLINE: "1",
@@ -115,21 +140,16 @@ async def test_update_devices_status_skips_offline_channel_detail() -> None:
             ],
         }
     )
-    delegate.async_get_iot_device_detail_info = AsyncMock(
-        return_value={
-            PARAM_PROPERTIES: {},
-            PARAM_CHANNELS: [
-                {PARAM_CHANNEL_ID: 0, PARAM_PROPERTIES: {"10001": 1}},
-                {PARAM_CHANNEL_ID: 1, PARAM_PROPERTIES: {"10002": 1}},
-            ],
-        }
-    )
 
     manager = ImouHaDeviceManager(delegate)
-    await manager.async_update_devices_status([ch0, ch1])
+    with patch(
+        "pyimouapi.ha_device.async_property_get",
+        AsyncMock(return_value={"control.outlet.enabled": 1}),
+    ) as prop_get:
+        await manager.async_update_devices_status([ch0, ch1])
 
     assert delegate.async_get_device_online_status.await_count == 1
-    assert delegate.async_get_iot_device_detail_info.await_count == 1
+    assert prop_get.await_count == 1
     assert ch0.switches["relay"][PARAM_STATE] is True
     assert ch1.switches["relay"][PARAM_STATE] is False
     assert ch1.sensors[PARAM_STATUS][PARAM_STATE] == DeviceStatus.OFFLINE.value

@@ -33,5 +33,5 @@ def test_py_typed_is_declared_as_package_data() -> None:
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     setup_py = (ROOT / "setup.py").read_text(encoding="utf-8")
 
-    assert 'pyimouapi = ["py.typed"]' in pyproject
-    assert '"pyimouapi": ["py.typed"]' in setup_py
+    assert 'pyimouapi = ["py.typed", "data/*.yaml"]' in pyproject
+    assert '"pyimouapi": ["py.typed", "data/*.yaml"]' in setup_py

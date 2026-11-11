@@ -297,6 +297,10 @@ class ImouDeviceManager:
         self._event_map_locks: dict[str, asyncio.Lock] = {}
         self._event_map_locks_guard = asyncio.Lock()
 
+    @property
+    def api_client(self) -> ImouOpenApiClient:
+        return self._imou_api_client
+
     async def async_close(self) -> None:
         """Close the underlying Open API HTTP session."""
         await self._imou_api_client.async_close()
@@ -370,8 +374,9 @@ class ImouDeviceManager:
         """GET DEVICE LIST.
 
         ``fetch_ability_refs`` controls the per-IoT ``getIotDeviceDetailInfo``
-        calls that resolve ability refs (needed to register entities, not to
-        notice that a device appeared or vanished):
+        calls that resolve legacy ability refs (**deprecated** in 2.x; Imou Life
+        and ``ImouHaDeviceManager`` always pass ``False`` and register entities
+        from ``device.capability.list`` only):
 
         - ``True`` (default): fetch for every IoT device on the page
         - ``False``: skip every detail call (list-only discovery)

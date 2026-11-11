@@ -3,7 +3,10 @@
 from unittest.mock import AsyncMock
 
 import pytest
-from pyimouapi.const import API_ENDPOINT_SET_MESSAGE_CALLBACK
+from pyimouapi.const import (
+    API_ENDPOINT_GET_MESSAGE_CALLBACK,
+    API_ENDPOINT_SET_MESSAGE_CALLBACK,
+)
 from pyimouapi.openapi import ImouOpenApiClient
 
 
@@ -41,6 +44,23 @@ async def test_set_message_callback_off(client: ImouOpenApiClient) -> None:
             "status": "off",
             "basePush": "2",
         },
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_message_callback(client: ImouOpenApiClient) -> None:
+    client.async_request_api = AsyncMock(
+        return_value={
+            "status": "on",
+            "callbackUrl": "https://example.com/webhook",
+            "callbackFlag": "alarm,deviceStatus,capabilityEvent",
+        }
+    )
+    data = await client.async_get_message_callback()
+    assert data["callbackFlag"] == "alarm,deviceStatus,capabilityEvent"
+    client.async_request_api.assert_awaited_once_with(
+        API_ENDPOINT_GET_MESSAGE_CALLBACK,
+        {},
     )
 
 

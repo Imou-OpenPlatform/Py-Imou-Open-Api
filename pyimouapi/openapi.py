@@ -15,6 +15,7 @@ import aiohttp
 
 from .const import (
     API_ENDPOINT_ACCESS_TOKEN,
+    API_ENDPOINT_GET_MESSAGE_CALLBACK,
     API_ENDPOINT_SET_MESSAGE_CALLBACK,
     ERROR_CODE_INVALID_APP,
     ERROR_CODE_INVALID_SIGN,
@@ -322,6 +323,11 @@ class ImouOpenApiClient:
             else:
                 params["callbackFlag"] = ",".join(callback_flag)
         return await self.async_request_api(API_ENDPOINT_SET_MESSAGE_CALLBACK, params)
+
+    async def async_get_message_callback(self) -> dict[str, Any]:
+        """Return the developer account message callback settings."""
+        data = await self.async_request_api(API_ENDPOINT_GET_MESSAGE_CALLBACK, {})
+        return data if isinstance(data, dict) else {}
 
     @property
     def access_token(self) -> str | None:

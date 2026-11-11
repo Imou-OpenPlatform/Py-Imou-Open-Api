@@ -4,9 +4,9 @@ from setuptools import find_packages, setup
 
 setup(
     name="pyimouapi",
-    version="1.4.4",
+    version="2.0.0",
     packages=find_packages(),
-    package_data={"pyimouapi": ["py.typed"]},
+    package_data={"pyimouapi": ["py.typed", "data/*.yaml"]},
     zip_safe=False,
     python_requires=">=3.11",
     install_requires=[

@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import pytest
 from pyimouapi.push import (
+    event_id_from_push,
     event_ref_lookup_key,
     iot_property_values,
     is_alarm_msg_type,
+    is_capability_event_payload,
     is_iot_non_event,
+    legacy_msg_type_from_v2_event,
     normalize_push_payload,
+    parse_callback_flag,
     pic_urls_from_payload,
     preferred_pic_url,
+    v2_capability_event_permitted,
 )
 
 
@@ -157,6 +162,7 @@ def test_normalize_skips_list_channel_keys() -> None:
 def test_is_iot_non_event() -> None:
     """Drop non-event/property envelopes only when product_id is truthy."""
     assert is_iot_non_event("mhpf7Dsz", "videoMotion") is True
+    assert is_iot_non_event("mhpf7Dsz", "detection.motion.detected") is False
     assert is_iot_non_event("mhpf7Dsz", "iotEvent") is False
     assert is_iot_non_event("mhpf7Dsz", "iotProperty") is False
     assert is_iot_non_event("mhpf7Dsz", "iotAction") is True
@@ -196,6 +202,77 @@ def test_iot_property_values_from_content() -> None:
 def test_iot_property_values_from_top_level() -> None:
     """Fall back to top-level properties when content has none."""
     assert iot_property_values({"properties": {"10001": 0}}) == {"10001": 0}
+
+
+def test_parse_callback_flag() -> None:
+    """callbackFlag splits on commas and trims whitespace."""
+    assert parse_callback_flag("alarm,deviceStatus,capabilityEvent") == frozenset(
+        {"alarm", "deviceStatus", "capabilityEvent"}
+    )
+    assert parse_callback_flag("") == frozenset()
+    assert parse_callback_flag(["iot", "alarm"]) == frozenset({"iot", "alarm"})
+
+
+def test_legacy_msg_type_from_v2_event() -> None:
+    """V2 motion/person events map to legacy alarm keys."""
+    assert legacy_msg_type_from_v2_event("detection.motion.detected") == "videoMotion"
+    assert legacy_msg_type_from_v2_event("detection.person.detected") == "human"
+    assert legacy_msg_type_from_v2_event("videoMotion") == "videoMotion"
+    assert legacy_msg_type_from_v2_event(None) is None
+
+
+def test_v2_capability_event_permitted() -> None:
+    """Gate V2 events against a device's event id set."""
+    allowed = frozenset({"detection.motion.detected"})
+    assert v2_capability_event_permitted(allowed, "detection.motion.detected") is True
+    assert v2_capability_event_permitted(allowed, "detection.person.detected") is False
+    assert v2_capability_event_permitted(None, "detection.motion.detected") is True
+
+
+def test_legacy_and_v2_motion_share_normalize_fields() -> None:
+    """Webhook compares the same device/channel after Legacy or V2 motion."""
+    legacy = {
+        "msgType": "videoMotion",
+        "did": "IPC1",
+        "cid": "0",
+        "time": "20230111T111629",
+    }
+    v2 = {
+        "msgType": "detection.motion.detected",
+        "deviceId": "IPC1",
+        "channelId": 0,
+        "time": "20230111T111629",
+    }
+    leg = normalize_push_payload(legacy)
+    v2n = normalize_push_payload(v2)
+    assert leg["device_id"] == v2n["device_id"] == "IPC1"
+    assert str(leg["channel_id"]) == str(v2n["channel_id"])
+    assert leg["time"] == v2n["time"]
+
+
+def test_capability_event_v2_normalize() -> None:
+    """V2 capabilityEvent exposes top-level outputData and deviceId."""
+    payload = {
+        "msgType": "detection.motion.detected",
+        "deviceId": "IPC123",
+        "channelId": 0,
+        "outputData": {"score": 0.9},
+        "time": "20230111T111629",
+    }
+    assert is_capability_event_payload(payload) is True
+    event = normalize_push_payload(payload)
+    assert event["msg_type"] == "detection.motion.detected"
+    assert event["device_id"] == "IPC123"
+    assert event["channel_id"] == 0
+    assert event["outputData"] == {"score": 0.9}
+    assert event_id_from_push(payload) == "detection.motion.detected"
+
+
+def test_legacy_human_not_capability_event() -> None:
+    """Legacy alarm types must not classify as V2 capability events."""
+    payload = {"msgType": "human", "did": "IPC123"}
+    assert is_capability_event_payload(payload) is False
+    assert event_id_from_push(payload) is None
 
 
 def test_iot_property_values_empty() -> None:

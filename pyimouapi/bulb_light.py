@@ -35,6 +35,20 @@ BULB_PROPERTY_REFS = (
     REF_SCENE,
 )
 
+# Open API v2 property ids (§6.6 composite bulb).
+BULB_V2_PROPERTY_BY_REF: dict[str, str] = {
+    REF_SWITCH: "control.outlet.enabled",
+    REF_MODE: "light.white.mode",
+    REF_BRIGHTNESS: "light.white.level",
+    REF_COLOR_TEMP: "light.white.colorTemperature",
+    REF_HUE: "light.white.hue",
+    REF_SATURATION: "light.white.saturation",
+    REF_VALUE: "light.white.colorLevel",
+    REF_SCENE: "light.white.scene",
+}
+
+BULB_V2_PROPERTY_IDS = tuple(BULB_V2_PROPERTY_BY_REF.values())
+
 # Effect name shown on the light, and the scene enum the bulb stores.
 BULB_SCENES: tuple[tuple[str, int], ...] = (
     ("Daylight", 0),
@@ -100,6 +114,27 @@ def _as_int(raw: Any) -> int | None:
         if text.lstrip("-").isdigit():
             return int(text)
     return None
+
+
+def ref_payload_to_v2(payload: dict[str, int]) -> dict[str, Any]:
+    """Map legacy ref keys from HA helpers to v2 property ids."""
+    return {
+        BULB_V2_PROPERTY_BY_REF[ref]: value
+        for ref, value in payload.items()
+        if ref in BULB_V2_PROPERTY_BY_REF
+    }
+
+
+def apply_bulb_v2_properties(state: dict[str, Any], values: dict[str, Any]) -> None:
+    """Apply a v2 propertyId→value map onto bulb state."""
+    legacy: dict[str, Any] = {}
+    ref_by_v2 = {v: k for k, v in BULB_V2_PROPERTY_BY_REF.items()}
+    for property_id, raw in values.items():
+        ref = ref_by_v2.get(str(property_id))
+        if ref is not None:
+            legacy[ref] = raw
+    if legacy:
+        apply_bulb_properties(state, legacy)
 
 
 def apply_bulb_properties(state: dict[str, Any], values: dict[str, Any]) -> None:

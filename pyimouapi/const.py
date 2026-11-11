@@ -27,6 +27,13 @@ API_ENDPOINT_GET_PRODUCT_MODEL = "/openapi/getProductModel"
 API_ENDPOINT_GET_IOT_DEVICE_DETAIL_INFO = "/openapi/getIotDeviceDetailInfo"
 API_ENDPOINT_WAKE_UP_DEVICE = "/openapi/wakeUpDevice"
 API_ENDPOINT_SET_MESSAGE_CALLBACK = "/openapi/setMessageCallback"
+API_ENDPOINT_GET_MESSAGE_CALLBACK = "/openapi/getMessageCallback"
+
+# Open API v2 — standard capabilities
+API_V2_DEVICE_CAPABILITY_LIST = "/openapi/v2/device.capability.list"
+API_V2_DEVICE_PROPERTY_GET = "/openapi/v2/device.property.get"
+API_V2_DEVICE_PROPERTY_SET = "/openapi/v2/device.property.set"
+API_V2_DEVICE_SERVICE_INVOKE = "/openapi/v2/device.service.invoke"
 API_ENDPOINT_GET_COLLECTION = "/openapi/getCollection"
 API_ENDPOINT_TURN_COLLECTION = "/openapi/turnCollection"
 API_ENDPOINT_SIREN_START = "/openapi/sirenStart"
@@ -102,6 +109,11 @@ PARAM_URL = "url"
 PARAM_KEY = "key"
 PARAM_DEFAULT = "default"
 PARAM_REF = "ref"
+PARAM_V2_TARGET_ID = "v2_target_id"
+PARAM_V2_WRITE_TARGET_ID = "v2_write_target_id"
+PARAM_V2_LIST_SERVICE_ID = "v2_list_service_id"
+PARAM_V2_OUTPUT_FIELD = "v2_output_field"
+PARAM_V2_STRUCT_FIELD = "v2_struct_field"
 PARAM_EVENTS = "events"
 PARAM_IDENTIFIER = "identifier"
 PARAM_CONTENT = "content"
@@ -665,6 +677,14 @@ BUTTON_TYPE_PARAM_VALUE = {
     "ptz_down": 1,
     "ptz_left": 2,
     "ptz_right": 3,
+}
+
+# Open API v2 ``ptz.aim.step`` operator enum (up/down/left/right).
+V2_PTZ_STEP_OPERATOR = {
+    "ptz_up": "3",
+    "ptz_down": "4",
+    "ptz_left": "1",
+    "ptz_right": "2",
 }
 
 NIGHT_VISION_MODE_MAP = {
