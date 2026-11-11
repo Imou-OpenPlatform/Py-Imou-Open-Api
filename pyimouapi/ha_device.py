@@ -1450,12 +1450,11 @@ class ImouHaDeviceManager:
         return await self.delegate.async_download(data[PARAM_URL])
 
     async def async_get_devices(
-        self, *, fetch_ability_refs: bool | set[str] = False
+        self,
+        *,
+        fetch_ability_refs: bool | set[str] = False,
     ) -> list[ImouHaDevice]:
-        """Return Imou HA devices whose entities are registered from capability.list only.
-
-        ``fetch_ability_refs`` is ignored (legacy IoT ability refs are not used in 2.x).
-        """
+        """Return Imou HA devices registered from ``device.capability.list`` only."""
         devices = []
         for device in await self.delegate.async_get_devices(fetch_ability_refs=False):
             # Prioritize whether it's a video device.
