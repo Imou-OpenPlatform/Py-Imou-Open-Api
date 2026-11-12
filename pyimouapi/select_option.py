@@ -11,9 +11,13 @@ from pyimouapi.const import (
     PARAM_NIGHT_VISION_MODE,
 )
 
+PARAM_WIDE_DYNAMIC = "wide_dynamic"
+
 _LOGGER = logging.getLogger(__name__)
 
-MAPPED_SELECT_TYPES = frozenset({PARAM_DEVICE_VOLUME, PARAM_NIGHT_VISION_MODE})
+MAPPED_SELECT_TYPES = frozenset(
+    {PARAM_DEVICE_VOLUME, PARAM_NIGHT_VISION_MODE, PARAM_WIDE_DYNAMIC}
+)
 
 # raw string -> friendly
 _VOLUME_RAW_TO_FRIENDLY = {
@@ -58,6 +62,27 @@ for _k in (
 ):
     _NIGHT_VISION_RAW_TO_FRIENDLY.setdefault(_k, _k)
 
+_WDR_RAW_TO_FRIENDLY = {
+    "0": "off",
+    "1": "on",
+    "2": "adaptive",
+}
+_WDR_FRIENDLY_TO_RAW = {
+    "off": "0",
+    "on": "1",
+    "adaptive": "2",
+}
+for _k in ("off", "on", "adaptive"):
+    _WDR_RAW_TO_FRIENDLY.setdefault(_k, _k)
+
+
+def enum_desc_to_option_key(desc: str, raw_value: Any) -> str:
+    """Turn a capability enum label into a stable select option key."""
+    label = (desc or "").strip()
+    if label:
+        return label.lower().replace(" ", "_").replace("-", "_")
+    return _as_raw_str(raw_value)
+
 
 def _as_raw_str(raw: Any) -> str:
     if raw is None:
@@ -73,6 +98,8 @@ def to_friendly(select_type: str, raw: Any) -> str:
     key = _as_raw_str(raw)
     if select_type == PARAM_DEVICE_VOLUME:
         table = _VOLUME_RAW_TO_FRIENDLY
+    elif select_type == PARAM_WIDE_DYNAMIC:
+        table = _WDR_RAW_TO_FRIENDLY
     else:
         key_l = key.lower()
         mapped = _NIGHT_VISION_RAW_TO_FRIENDLY.get(key_l)
@@ -100,6 +127,8 @@ def to_raw(select_type: str, friendly: str) -> str:
     key = friendly.strip().lower()
     if select_type == PARAM_DEVICE_VOLUME:
         table = _VOLUME_FRIENDLY_TO_RAW
+    elif select_type == PARAM_WIDE_DYNAMIC:
+        table = _WDR_FRIENDLY_TO_RAW
     else:
         table = _NIGHT_VISION_FRIENDLY_TO_RAW
 

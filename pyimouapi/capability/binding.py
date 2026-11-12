@@ -82,6 +82,10 @@ def cached_v2_target_map() -> tuple[TargetBinding, ...]:
     return tuple(load_v2_target_map())
 
 
+# Load once at import so discovery does not read yaml on the event loop.
+cached_v2_target_map()
+
+
 def resolve_ptz_target_id(
     capability_services: set[str],
     primary: str = "ptz.aim.step",
@@ -101,11 +105,12 @@ def bulb_gate_satisfied(
     capability_properties: set[str],
     binding: TargetBinding,
 ) -> bool:
-    """True when the bulb composite gate property is on the device."""
+    """True when the bulb composite gate and every listed property are on the device."""
     gate = binding.gate_property
-    if not gate:
+    if not gate or gate not in capability_properties:
         return False
-    return gate in capability_properties
+    required = binding.properties or (gate,)
+    return all(prop in capability_properties for prop in required)
 
 
 def binding_by_ha_key(bindings: list[TargetBinding]) -> dict[str, TargetBinding]:

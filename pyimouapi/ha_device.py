@@ -13,11 +13,13 @@ from .alarm_mode import to_friendly as alarm_mode_to_friendly
 from .alarm_mode import to_raw as alarm_mode_to_raw
 from .bulb_light import (
     BULB_PROPERTY_REFS,
+    BULB_V2_PROPERTY_BY_REF,
     BULB_V2_PROPERTY_IDS,
     REF_MODE,
     REF_SWITCH,
     apply_bulb_properties,
     apply_bulb_v2_properties,
+    bulb_v2_property_ids_for_device,
     empty_bulb_state,
     ref_payload_to_v2,
 )
@@ -90,6 +92,7 @@ from .const import (
     PARAM_USED_BYTES,
     PARAM_V2_LIST_SERVICE_ID,
     PARAM_V2_OUTPUT_FIELD,
+    PARAM_V2_RAW_BY_OPTION,
     PARAM_V2_STRUCT_FIELD,
     PARAM_V2_TARGET_ID,
     PARAM_V2_WRITE_TARGET_ID,
@@ -763,8 +766,15 @@ class ImouHaDeviceManager:
             target = device.switches if kind == "switch" else device.binary_sensors
             target[key][PARAM_STATE] = parsed
         elif kind == "select":
+            select_state = device.selects[key]
+            raw_by_option = select_state.get(PARAM_V2_RAW_BY_OPTION)
+            if isinstance(raw_by_option, dict):
+                for friendly, raw in raw_by_option.items():
+                    if raw == raw_value or str(raw) == str(raw_value):
+                        select_state[PARAM_CURRENT_OPTION] = friendly
+                        return
             value = str(raw_value) if isinstance(raw_value, int) else raw_value
-            device.selects[key][PARAM_CURRENT_OPTION] = to_friendly(key, value)
+            select_state[PARAM_CURRENT_OPTION] = to_friendly(key, value)
         elif kind in ("sensor", "text"):
             if meta.get(PARAM_EXPRESSION) and isinstance(raw_value, dict | list):
                 state = self.get_expression_value(meta[PARAM_EXPRESSION], raw_value)
@@ -900,13 +910,19 @@ class ImouHaDeviceManager:
     async def _async_update_v2_bulb_state(self, device: ImouHaDevice) -> None:
         if device.bulb_light is None or not device.bulb_v2:
             return
+        capability = device.capability_set
+        if capability is None:
+            return
+        property_ids = list(bulb_v2_property_ids_for_device(set(capability.properties)))
+        if not property_ids:
+            return
         try:
             values = await async_property_get(
                 self.delegate.api_client,
                 device_id=device.device_id,
                 channel_id=device.channel_id,
                 product_id=device.product_id,
-                properties=list(BULB_V2_PROPERTY_IDS),
+                properties=property_ids,
             )
         except InvalidAppIdOrSecretException:
             raise
@@ -1682,9 +1698,8 @@ class ImouHaDeviceManager:
             return
         if target_id := device.selects[select_type].get(PARAM_V2_TARGET_ID):
             value_type = device.selects[select_type].get(PARAM_VALUE_TYPE, "str")
-            write_option = to_raw(select_type, option)
             await self._async_select_option_by_v2(
-                device, write_option, str(target_id), value_type
+                device, select_type, option, str(target_id), value_type
             )
             device.selects[select_type][PARAM_CURRENT_OPTION] = option
             return
@@ -1948,6 +1963,14 @@ class ImouHaDeviceManager:
             return False
         imou_ha_device.set_capability_set(capability)
         configure_imou_ha_device_from_capability(imou_ha_device, capability)
+        _LOGGER.debug(
+            "device.capability.list ok for %s ch%s (%s properties, %s services, %s events)",
+            device.device_id,
+            channel_id,
+            len(capability.properties),
+            len(capability.services),
+            len(capability.events),
+        )
         return True
 
     async def _async_configure_device_by_ref(
@@ -2268,6 +2291,7 @@ class ImouHaDeviceManager:
         if target_id := panel.get(PARAM_V2_TARGET_ID):
             await self._async_select_option_by_v2(
                 device,
+                "",
                 write_option,
                 str(target_id),
                 panel.get(PARAM_VALUE_TYPE, "int"),
@@ -2309,12 +2333,22 @@ class ImouHaDeviceManager:
     async def _async_select_option_by_v2(
         self,
         device: ImouHaDevice,
+        select_type: str,
         option: str,
         target_id: str,
         value_type: str,
     ) -> None:
-        if value_type == "int":
-            value: int | str = int(option)
+        if select_type:
+            select_state = device.selects.get(select_type, {})
+            raw_by_option = select_state.get(PARAM_V2_RAW_BY_OPTION)
+            if isinstance(raw_by_option, dict) and option in raw_by_option:
+                value: int | str = raw_by_option[option]
+            elif value_type == "int":
+                value = int(to_raw(select_type, option))
+            else:
+                value = option
+        elif value_type == "int":
+            value = int(option)
         else:
             value = option
         payload = {target_id: value}
@@ -2609,12 +2643,16 @@ class ImouHaDeviceManager:
             return False
         try:
             if device.bulb_v2:
+                capability = device.capability_set
+                outlet_id = BULB_V2_PROPERTY_BY_REF[REF_SWITCH]
+                if capability is None or outlet_id not in capability.properties:
+                    return bool(state["on"])
                 properties = await async_property_get(
                     self.delegate.api_client,
                     device_id=device.device_id,
                     channel_id=device.channel_id,
                     product_id=self._require_product_id(device),
-                    properties=["control.outlet.enabled"],
+                    properties=[outlet_id],
                 )
                 if properties:
                     apply_bulb_v2_properties(state, properties)

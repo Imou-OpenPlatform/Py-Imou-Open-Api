@@ -15,12 +15,19 @@ from ..const import (
     PARAM_SUPPORTED,
     PARAM_V2_LIST_SERVICE_ID,
     PARAM_V2_OUTPUT_FIELD,
+    PARAM_V2_RAW_BY_OPTION,
     PARAM_V2_STRUCT_FIELD,
     PARAM_V2_TARGET_ID,
     PARAM_V2_WRITE_TARGET_ID,
     PARAM_VALUE_TYPE,
 )
 from ..property_on import property_is_on
+from ..select_option import (
+    MAPPED_SELECT_TYPES,
+    enum_desc_to_option_key,
+    normalize_options,
+    to_friendly,
+)
 from .binding import (
     TargetBinding,
     binding_applies_to_device,
@@ -93,11 +100,42 @@ def _add_property_select(
     entities: dict[str, Any], binding: TargetBinding, prop: PropertyCapability
 ) -> None:
     options, current, value_type = _select_options(prop)
+    raw_by_option: dict[str, Any] = {}
+    if prop.enum_options:
+        friendly_options: list[str] = []
+        for opt in prop.enum_options:
+            if binding.ha_key in MAPPED_SELECT_TYPES:
+                key = to_friendly(binding.ha_key, opt.value)
+            else:
+                key = enum_desc_to_option_key(opt.desc, opt.value)
+            friendly_options.append(key)
+            raw_by_option[key] = opt.value
+        options = friendly_options
+        current = next(
+            (
+                (
+                    to_friendly(binding.ha_key, opt.value)
+                    if binding.ha_key in MAPPED_SELECT_TYPES
+                    else enum_desc_to_option_key(opt.desc, opt.value)
+                )
+                for opt in prop.enum_options
+                if opt.value == current
+            ),
+            (
+                to_friendly(binding.ha_key, current)
+                if binding.ha_key in MAPPED_SELECT_TYPES
+                else enum_desc_to_option_key("", current)
+            ),
+        )
+    elif binding.ha_key in MAPPED_SELECT_TYPES:
+        options = normalize_options(binding.ha_key, [str(item) for item in options])
+        current = to_friendly(binding.ha_key, current)
     entities[binding.ha_key] = {
         PARAM_V2_TARGET_ID: binding.target_id,
         PARAM_OPTIONS: options,
         PARAM_CURRENT_OPTION: current,
         PARAM_VALUE_TYPE: value_type,
+        **({PARAM_V2_RAW_BY_OPTION: raw_by_option} if raw_by_option else {}),
     }
 
 

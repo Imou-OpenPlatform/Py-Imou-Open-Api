@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -13,6 +14,70 @@ SERVICE_RECORD_FILE_BITMAP = "record.file.bitmap"
 SERVICE_RECORD_FILE_LIST = "record.file.list"
 LOCAL_RECORD_TYPE_ALL = "0"
 DEFAULT_LOCAL_LIST_LIMIT = 50
+
+_HLS_TIME = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
+_DAV_CLIP_RANGE = re.compile(
+    r"(?P<bh>\d{2})\.(?P<bm>\d{2})\.(?P<bs>\d{2})-(?P<eh>\d{2})\.(?P<em>\d{2})\.(?P<es>\d{2})"
+)
+_DATE_IN_PATH = re.compile(r"(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})")
+
+
+def _is_hls_window_time(value: str) -> bool:
+    """True when value matches createDeviceRecordHls beginTime/endTime."""
+    return bool(_HLS_TIME.match(value)) and ".dav" not in value.lower()
+
+
+def _format_hls_time(
+    year: int, month: int, day: int, hour: int, minute: int, second: int
+) -> str:
+    return f"{year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}"
+
+
+def coerce_local_playback_times(
+    file_name: str, begin_time: str, end_time: str
+) -> tuple[str, str] | None:
+    """Map list fields to same-day begin/end strings for createDeviceRecordHls."""
+    if _is_hls_window_time(begin_time) and _is_hls_window_time(end_time):
+        return begin_time, end_time
+    path = file_name or begin_time
+    if not path:
+        return None
+    clip = _DAV_CLIP_RANGE.search(path)
+    date_match = _DATE_IN_PATH.search(path)
+    if clip is None or date_match is None:
+        return None
+    year = int(date_match.group("y"))
+    month = int(date_match.group("m"))
+    day = int(date_match.group("d"))
+    begin = _format_hls_time(
+        year,
+        month,
+        day,
+        int(clip.group("bh")),
+        int(clip.group("bm")),
+        int(clip.group("bs")),
+    )
+    end = _format_hls_time(
+        year,
+        month,
+        day,
+        int(clip.group("eh")),
+        int(clip.group("em")),
+        int(clip.group("es")),
+    )
+    return begin, end
+
+
+def local_record_display_title(file_name: str, begin_time: str, end_time: str) -> str:
+    """Short browse label instead of a full SD-card path."""
+    window = coerce_local_playback_times(file_name, begin_time, end_time)
+    if window is not None:
+        begin, end = window
+        return f"{begin[11:19]} - {end[11:19]}"
+    if file_name:
+        leaf = file_name.rsplit("/", 1)[-1]
+        return leaf or file_name
+    return begin_time or end_time
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,10 +121,14 @@ def parse_local_record_list(output_data: Any) -> list[LocalRecordSegment]:
         file_name = str(item.get("fileName") or "").strip()
         begin_time = str(item.get("beginTime") or "").strip()
         end_time = str(item.get("endTime") or "").strip()
-        if not begin_time or not end_time:
+        if not file_name and (not begin_time or not end_time):
             continue
         if not file_name:
             file_name = f"{begin_time}_{end_time}"
+        window = coerce_local_playback_times(file_name, begin_time, end_time)
+        if window is None:
+            continue
+        begin_time, end_time = window
         length_raw = item.get("fileLength")
         file_length = None
         if length_raw is not None and str(length_raw).strip() != "":

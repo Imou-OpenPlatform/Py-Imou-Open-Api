@@ -49,6 +49,14 @@ BULB_V2_PROPERTY_BY_REF: dict[str, str] = {
 
 BULB_V2_PROPERTY_IDS = tuple(BULB_V2_PROPERTY_BY_REF.values())
 
+
+def bulb_v2_property_ids_for_device(
+    supported_property_ids: set[str] | frozenset[str],
+) -> tuple[str, ...]:
+    """Property ids to read for a v2 bulb, limited to what capability.list reported."""
+    return tuple(pid for pid in BULB_V2_PROPERTY_IDS if pid in supported_property_ids)
+
+
 # Effect name shown on the light, and the scene enum the bulb stores.
 BULB_SCENES: tuple[tuple[str, int], ...] = (
     ("Daylight", 0),

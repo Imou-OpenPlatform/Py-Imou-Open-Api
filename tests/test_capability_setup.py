@@ -73,6 +73,41 @@ def test_v2_gate_registers_wide_dynamic_select() -> None:
     assert device.selects["wide_dynamic"][PARAM_V2_TARGET_ID] == "image.wdr.mode"
 
 
+def test_v2_wide_dynamic_enum_uses_friendly_option_keys() -> None:
+    from pyimouapi.capability.catalog import EnumOption, PropertyCapability
+    from pyimouapi.const import (
+        PARAM_CURRENT_OPTION,
+        PARAM_OPTIONS,
+        PARAM_V2_RAW_BY_OPTION,
+    )
+
+    device = ImouHaDevice("IPC1", "Cam", "Imou", "IPC", "1.0")
+    device.set_channel_id("0")
+    device.set_is_ipc(True)
+    cap = CapabilitySet(
+        properties={
+            "image.wdr.mode": PropertyCapability(
+                property_id="image.wdr.mode",
+                access_mode="rw",
+                data_type="enum",
+                enum_options=(
+                    EnumOption(0, "Off"),
+                    EnumOption(1, "On"),
+                    EnumOption(2, "Adaptive"),
+                ),
+                default_data=2,
+            ),
+        },
+        services=frozenset(),
+        events=frozenset(),
+    )
+    configure_imou_ha_device_from_capability(device, cap)
+    wdr = device.selects["wide_dynamic"]
+    assert wdr[PARAM_OPTIONS] == ["off", "on", "adaptive"]
+    assert wdr[PARAM_CURRENT_OPTION] == "adaptive"
+    assert wdr[PARAM_V2_RAW_BY_OPTION]["adaptive"] == 2
+
+
 def test_v2_gate_registers_outlet_countdown() -> None:
     device = ImouHaDevice("PLUG1", "Plug", "Imou", "SP", "1.0")
     device.set_product_id("pid")

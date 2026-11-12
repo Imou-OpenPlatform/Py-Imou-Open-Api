@@ -725,6 +725,38 @@ class ImouDeviceManager:
             API_ENDPOINT_QUERY_CLOUD_RECORDS, params
         )
 
+    async def async_list_cloud_record_segments(
+        self,
+        device_id: str,
+        channel_id: str,
+        *,
+        begin_time: str,
+        end_time: str,
+    ) -> list:
+        """List all cloud segments in a window, paging queryCloudRecords."""
+        from .cloud_record import RECORD_QUERY_PAGE_SIZE, parse_cloud_records_data
+
+        segments: list = []
+        cursor_begin = begin_time
+        while True:
+            data = await self.async_query_cloud_records(
+                device_id,
+                channel_id,
+                begin_time=cursor_begin,
+                end_time=end_time,
+                count=RECORD_QUERY_PAGE_SIZE,
+            )
+            batch = parse_cloud_records_data(data)
+            if not batch:
+                break
+            segments.extend(batch)
+            if len(batch) < RECORD_QUERY_PAGE_SIZE:
+                break
+            cursor_begin = batch[-1].end_time
+            if cursor_begin >= end_time:
+                break
+        return segments
+
     async def async_create_device_record_hls(
         self,
         device_id: str,
@@ -734,6 +766,7 @@ class ImouDeviceManager:
         end_time: str,
         record_type: str,
         stream_id: int | None = None,
+        file_name: str | None = None,
     ) -> dict[str, Any]:
         """Create an HLS URL for a same-day recording interval."""
         from .playback.hls import async_create_device_record_hls
@@ -746,6 +779,33 @@ class ImouDeviceManager:
             end_time=end_time,
             record_type=record_type,
             stream_id=stream_id,
+            file_name=file_name,
+        )
+        return {"url": url} if url else {}
+
+    async def async_create_device_record_flv(
+        self,
+        device_id: str,
+        channel_id: str,
+        *,
+        begin_time: str,
+        end_time: str,
+        record_type: str,
+        prefer_hd: bool = True,
+        speed: int | None = None,
+    ) -> dict[str, Any]:
+        """Create an HTTP-FLV URL for a recording interval (createDeviceFlvLive)."""
+        from .playback.flv import async_create_device_record_flv
+
+        url = await async_create_device_record_flv(
+            self._imou_api_client,
+            device_id=device_id,
+            channel_id=channel_id,
+            begin_time=begin_time,
+            end_time=end_time,
+            record_type=record_type,
+            prefer_hd=prefer_hd,
+            speed=speed,
         )
         return {"url": url} if url else {}
 
