@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pyimouapi.capability.catalog import CapabilitySet
 from pyimouapi.const import PARAM_MOTION_DETECT, PARAM_V2_TARGET_ID
-from pyimouapi.device import ImouChannel, ImouDevice
+from pyimouapi.device import ImouChannel, ImouDevice, ImouDeviceManager
 from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDeviceManager
 
@@ -18,6 +18,63 @@ def _iot_channel_device() -> ImouDevice:
     device.set_device_ability_refs("11900,28800")
     device.set_channels([ImouChannel("0", "", "1", "11900")])
     return device
+
+
+@pytest.mark.asyncio
+async def test_device_listing_does_not_fetch_iot_detail_by_default() -> None:
+    delegate = MagicMock()
+    delegate.async_request_api = AsyncMock(
+        side_effect=[
+            {
+                "deviceList": [
+                    {
+                        "deviceId": "PLUG1",
+                        "deviceName": "Plug",
+                        "deviceStatus": "1",
+                        "brand": "Imou",
+                        "deviceModel": "SP",
+                        "productId": "pid",
+                    }
+                ]
+            },
+            {"item": [{"productId": "pid", "deviceType": "Plug"}]},
+        ]
+    )
+    manager = ImouDeviceManager(delegate)
+    manager._async_update_device_ability_refs = AsyncMock()
+
+    devices = await manager.async_get_devices()
+
+    manager._async_update_device_ability_refs.assert_not_awaited()
+    assert devices[0].product_device_type == "Plug"
+
+
+@pytest.mark.asyncio
+async def test_device_listing_can_explicitly_fetch_legacy_ability_refs() -> None:
+    delegate = MagicMock()
+    delegate.async_request_api = AsyncMock(
+        side_effect=[
+            {
+                "deviceList": [
+                    {
+                        "deviceId": "PLUG1",
+                        "deviceName": "Plug",
+                        "deviceStatus": "1",
+                        "brand": "Imou",
+                        "deviceModel": "SP",
+                        "productId": "pid",
+                    }
+                ]
+            },
+            {"item": [{"productId": "pid", "deviceType": "Plug"}]},
+        ]
+    )
+    manager = ImouDeviceManager(delegate)
+    manager._async_update_device_ability_refs = AsyncMock()
+
+    await manager.async_get_devices(fetch_ability_refs=True)
+
+    manager._async_update_device_ability_refs.assert_awaited_once()
 
 
 @pytest.mark.asyncio

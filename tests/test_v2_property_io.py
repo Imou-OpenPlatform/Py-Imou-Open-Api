@@ -51,5 +51,31 @@ async def test_update_v2_property_entities_reads_batch(
     ) as mock_get:
         mock_get.return_value = {"detection.motion.enabled": 1}
         await ha_manager._async_update_v2_property_entities(device)
-    mock_get.assert_awaited_once()
+    mock_get.assert_awaited_once_with(
+        ha_manager.delegate.api_client,
+        device_id="IPC1",
+        channel_id="0",
+        product_id="pid",
+        properties=["detection.motion.enabled"],
+    )
     assert device.switches["motion_detect"][PARAM_STATE] is True
+
+
+@pytest.mark.asyncio
+async def test_update_paas_v2_property_entities_omits_product_id(
+    ha_manager: ImouHaDeviceManager,
+) -> None:
+    device = _switch_device()
+    device.set_product_id(None)
+    with patch(
+        "pyimouapi.ha_device.async_property_get", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"detection.motion.enabled": 1}
+        await ha_manager._async_update_v2_property_entities(device)
+    mock_get.assert_awaited_once_with(
+        ha_manager.delegate.api_client,
+        device_id="IPC1",
+        channel_id="0",
+        product_id=None,
+        properties=["detection.motion.enabled"],
+    )

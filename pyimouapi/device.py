@@ -406,17 +406,17 @@ class ImouDeviceManager:
         page: int = 1,
         page_size: int = 10,
         *,
-        fetch_ability_refs: bool | set[str] = True,
+        fetch_ability_refs: bool | set[str] = False,
     ) -> list[ImouDevice]:
         """GET DEVICE LIST.
 
         ``fetch_ability_refs`` controls the per-IoT ``getIotDeviceDetailInfo``
-        calls that resolve legacy ability refs (**deprecated** in 2.x; Imou Life
-        and ``ImouHaDeviceManager`` always pass ``False`` and register entities
-        from ``device.capability.list`` only):
+        calls that resolve legacy ability refs. This compatibility lookup is
+        deprecated and will be removed in the next major version; normal
+        discovery registers capabilities from ``device.capability.list``:
 
-        - ``True`` (default): fetch for every IoT device on the page
-        - ``False``: skip every detail call (list-only discovery)
+        - ``False`` (default): skip every detail call
+        - ``True``: fetch for every IoT device on the page
         - a set of device ids: fetch only for those ids
         """
         return await self._async_get_devices(

@@ -87,7 +87,7 @@ async def test_iot_detail_requests_run_concurrently() -> None:
     devices = [make_device(f"dev{i}", f"prod{i}") for i in range(4)]
     manager, tracker = make_manager({1: {PARAM_COUNT: 4, PARAM_DEVICE_LIST: devices}})
 
-    result = await manager.async_get_devices()
+    result = await manager.async_get_devices(fetch_ability_refs=True)
 
     assert len(result) == 4
     assert len(tracker.calls) == 4
@@ -101,7 +101,7 @@ async def test_non_iot_devices_skip_detail_requests() -> None:
     devices = [make_device("dev0"), make_device("dev1", "prod1")]
     manager, tracker = make_manager({1: {PARAM_COUNT: 2, PARAM_DEVICE_LIST: devices}})
 
-    result = await manager.async_get_devices()
+    result = await manager.async_get_devices(fetch_ability_refs=True)
 
     assert len(result) == 2
     assert tracker.calls == [("dev1", "prod1")]
@@ -128,7 +128,7 @@ async def test_one_failing_detail_does_not_cost_the_whole_account(
     manager.async_get_iot_device_detail_info = detail
 
     with caplog.at_level(logging.WARNING):
-        result = await manager.async_get_devices()
+        result = await manager.async_get_devices(fetch_ability_refs=True)
 
     assert [device.device_id for device in result] == ["dev0", "dev1", "dev2"]
     assert result[0].device_ability_refs == "1,2,3"
@@ -174,7 +174,7 @@ async def test_pagination_fetches_details_for_every_page() -> None:
         }
     )
 
-    result = await manager.async_get_devices()
+    result = await manager.async_get_devices(fetch_ability_refs=True)
 
     assert len(result) == 11
     assert len(tracker.calls) == 11
