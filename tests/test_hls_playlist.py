@@ -6,6 +6,7 @@ import pytest
 from pyimouapi.device import ImouDeviceManager
 from pyimouapi.playback.hls import (
     async_create_device_record_hls,
+    is_hls_playback_url,
     normalize_imou_hls_segment_url,
     parse_hls_media_segment_urls,
     pick_hls_variant_playlist_url,
@@ -208,3 +209,30 @@ def test_pick_hls_variant_playlist_url() -> None:
         body, "https://cdn.example.test/vod/master.m3u8"
     )
     assert variant == "https://cdn.example.test/vod/chunks.m3u8"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "ftp://media.example/record.m3u8",
+        "https://user:secret@media.example/record.m3u8",
+        "https:///record.m3u8",
+        "https://media.example:invalid/record.m3u8",
+        "https://media.example:0/record.m3u8",
+        "https://media.example/record.m3u8\nHost: internal",
+    ],
+)
+def test_hls_playback_url_rejects_unsafe_syntax(url: str) -> None:
+    assert is_hls_playback_url(url) is False
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://media.example/record.m3u8",
+        "https://media.example:7080/record.m3u8?token=signed",
+        "https://[2001:4860:4860::8888]/record.m3u8",
+    ],
+)
+def test_hls_playback_url_accepts_valid_http_urls(url: str) -> None:
+    assert is_hls_playback_url(url) is True

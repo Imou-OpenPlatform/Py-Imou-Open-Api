@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 from ..const import (
     API_ENDPOINT_CREATE_DEVICE_RECORD_HLS,
@@ -92,10 +92,21 @@ def parse_hls_media_segment_urls(
 def is_hls_playback_url(url: str) -> bool:
     """Reject SD paths or other non-stream urls from createDeviceRecordHls."""
     candidate = url.strip()
-    if not candidate.startswith(("http://", "https://")):
+    if candidate != url or any(ord(character) < 32 for character in candidate):
         return False
-    lowered = candidate.lower()
-    return not lowered.endswith(".dav")
+    try:
+        parsed = urlsplit(candidate)
+        port = parsed.port
+    except ValueError:
+        return False
+    return (
+        parsed.scheme.lower() in {"http", "https"}
+        and parsed.hostname is not None
+        and parsed.username is None
+        and parsed.password is None
+        and port != 0
+        and not parsed.path.lower().endswith(".dav")
+    )
 
 
 def parse_record_hls_url(data: Any) -> str | None:
