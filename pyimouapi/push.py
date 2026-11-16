@@ -7,7 +7,11 @@ here (dual-track ingestion). Device control uses Open API v2 capabilities only.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, Literal
+
+from .push_dispatch_allowlist import PUSH_DISPATCH_MSG_TYPES_LOWER
+
+V2_PROPERTY_REPORT_MSG_TYPE = "device.property.report"
 
 # Status / ops types that are not security alarms.
 # Official Imou "Device alarm" list also includes privacy-mask and lifecycle
@@ -58,6 +62,7 @@ NON_ALARM_MSG_TYPES = frozenset(
         "home",
         "leave",
         "no_defend",
+        V2_PROPERTY_REPORT_MSG_TYPE,
     }
 )
 
@@ -69,9 +74,30 @@ def is_alarm_msg_type(msg_type: str | None) -> bool:
 
 _IOT_PUSH_ENVELOPES = frozenset({"iotEvent", "iotProperty"})
 
+_IOT_PUSH_ENVELOPES_LOWER = frozenset(k.lower() for k in _IOT_PUSH_ENVELOPES)
+
+_DEVICE_STATUS_MSG_TYPES_LOWER = frozenset({"online", "offline"})
+
+_ARMING_MSG_TYPES_LOWER = frozenset({"home", "leave", "no_defend"})
+
+PushSubscriptionKind = Literal[
+    "iot",
+    "capability",
+    "alarm",
+    "device_status",
+    "lifecycle",
+]
+
+
+def is_v2_property_report(msg_type: str | None) -> bool:
+    """Return True for V2 property change pushes (``device.property.report``)."""
+    return msg_type == V2_PROPERTY_REPORT_MSG_TYPE
+
 
 def is_v2_capability_event_id(msg_type: str | None) -> bool:
     """Return True when msg_type looks like a standard capability eventId."""
+    if is_v2_property_report(msg_type):
+        return False
     return isinstance(msg_type, str) and "." in msg_type
 
 
@@ -101,11 +127,50 @@ def v2_capability_event_permitted(
     return event_id in events
 
 
+def push_dispatch_permitted(msg_type: str | None) -> bool:
+    """Return True only for msg_type values the integration knows how to handle."""
+    if not isinstance(msg_type, str) or not msg_type.strip():
+        return False
+    stripped = msg_type.strip()
+    if is_v2_property_report(stripped) or is_v2_capability_event_id(stripped):
+        return True
+    if _is_digit_str(stripped):
+        return True
+    lower = stripped.lower()
+    if lower in PUSH_DISPATCH_MSG_TYPES_LOWER:
+        return True
+    return lower.startswith("e_") and lower[2:] in PUSH_DISPATCH_MSG_TYPES_LOWER
+
+
+def push_subscription_kind(msg_type: str | None) -> PushSubscriptionKind:
+    """Map an allowed push msg_type to a Configure event_push_types bucket."""
+    if not isinstance(msg_type, str):
+        return "lifecycle"
+    if is_v2_property_report(msg_type) or is_v2_capability_event_id(msg_type):
+        return "capability"
+    lower = msg_type.strip().lower()
+    if lower in _IOT_PUSH_ENVELOPES_LOWER:
+        return "iot"
+    if lower in _DEVICE_STATUS_MSG_TYPES_LOWER:
+        return "device_status"
+    if lower in _ARMING_MSG_TYPES_LOWER or is_alarm_msg_type(msg_type):
+        return "alarm"
+    return "lifecycle"
+
+
 def is_iot_non_event(product_id: Any, msg_type: str | None) -> bool:
     """Return True when an IoT device sent an envelope this integration ignores."""
-    if is_v2_capability_event_id(msg_type):
+    if is_v2_capability_event_id(msg_type) or is_v2_property_report(msg_type):
         return False
     return bool(product_id) and msg_type not in _IOT_PUSH_ENVELOPES
+
+
+def v2_property_report_values(raw: dict[str, Any]) -> dict[str, Any]:
+    """Return propertyId→value from a ``device.property.report`` body."""
+    props = raw.get("properties")
+    if not isinstance(props, dict):
+        return {}
+    return {str(key): value for key, value in props.items()}
 
 
 def iot_property_values(raw: dict[str, Any]) -> dict[str, Any]:
@@ -151,6 +216,8 @@ def parse_callback_flag(value: str | Iterable[str] | None) -> frozenset[str]:
 def is_capability_event_payload(raw: dict[str, Any]) -> bool:
     """Return True when the body matches V2 capabilityEvent shape."""
     msg_type = raw.get("msgType")
+    if is_v2_property_report(msg_type):
+        return False
     if not isinstance(msg_type, str) or "." not in msg_type:
         return False
     device_id = raw.get("deviceId") or raw.get("msgDeviceId")
@@ -221,7 +288,7 @@ def normalize_push_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "msg_type_name": msg_type,
         "device_id": device_id,
         "channel_id": channel_id,
-        "product_id": payload.get("pid"),
+        "product_id": payload.get("productId") or payload.get("pid"),
         "time": (
             payload.get("time") or payload.get("localTime") or payload.get("utcTime")
         ),

@@ -4,18 +4,24 @@ from __future__ import annotations
 
 import pytest
 from pyimouapi.push import (
+    V2_PROPERTY_REPORT_MSG_TYPE,
     event_id_from_push,
     event_ref_lookup_key,
     iot_property_values,
     is_alarm_msg_type,
     is_capability_event_payload,
     is_iot_non_event,
+    is_v2_capability_event_id,
+    is_v2_property_report,
     legacy_msg_type_from_v2_event,
     normalize_push_payload,
     parse_callback_flag,
     pic_urls_from_payload,
     preferred_pic_url,
+    push_dispatch_permitted,
+    push_subscription_kind,
     v2_capability_event_permitted,
+    v2_property_report_values,
 )
 
 
@@ -281,6 +287,22 @@ def test_capability_event_v2_normalize() -> None:
     assert event_id_from_push(payload) == "detection.motion.detected"
 
 
+def test_push_dispatch_rejects_unknown_msg_type() -> None:
+    assert push_dispatch_permitted("human") is True
+    assert push_dispatch_permitted("detection.person.detected") is True
+    assert push_dispatch_permitted("iotProperty") is True
+    assert push_dispatch_permitted("totallyUnknownType") is False
+    assert push_dispatch_permitted(None) is False
+
+
+def test_push_subscription_kind_buckets() -> None:
+    assert push_subscription_kind("iotProperty") == "iot"
+    assert push_subscription_kind("detection.motion.detected") == "capability"
+    assert push_subscription_kind("human") == "alarm"
+    assert push_subscription_kind("online") == "device_status"
+    assert push_subscription_kind("storageEmpty") == "lifecycle"
+
+
 def test_legacy_human_not_capability_event() -> None:
     """Legacy alarm types must not classify as V2 capability events."""
     payload = {"msgType": "human", "did": "IPC123"}
@@ -293,3 +315,28 @@ def test_iot_property_values_empty() -> None:
     assert iot_property_values({}) == {}
     assert iot_property_values({"content": "x"}) == {}
     assert iot_property_values({"content": {"properties": []}}) == {}
+
+
+def test_v2_property_report_helpers() -> None:
+    """device.property.report is capability subscription, not an alarm event."""
+    assert is_v2_property_report(V2_PROPERTY_REPORT_MSG_TYPE) is True
+    assert is_v2_capability_event_id(V2_PROPERTY_REPORT_MSG_TYPE) is False
+    assert is_alarm_msg_type(V2_PROPERTY_REPORT_MSG_TYPE) is False
+    assert push_dispatch_permitted(V2_PROPERTY_REPORT_MSG_TYPE) is True
+    assert push_subscription_kind(V2_PROPERTY_REPORT_MSG_TYPE) == "capability"
+    assert is_iot_non_event("mhpf7Dsz", V2_PROPERTY_REPORT_MSG_TYPE) is False
+
+
+def test_v2_property_report_values_top_level() -> None:
+    payload = {
+        "msgType": V2_PROPERTY_REPORT_MSG_TYPE,
+        "deviceId": "IPC1",
+        "properties": {"privacy.cover.enabled": {"enabled": 1}},
+    }
+    assert is_capability_event_payload(payload) is False
+    assert v2_property_report_values(payload) == {
+        "privacy.cover.enabled": {"enabled": 1}
+    }
+    event = normalize_push_payload(payload)
+    assert event["msg_type"] == V2_PROPERTY_REPORT_MSG_TYPE
+    assert event["device_id"] == "IPC1"

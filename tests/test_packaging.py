@@ -1,5 +1,6 @@
 """Tests for packaging metadata that is maintained by hand."""
 
+import importlib
 import re
 from pathlib import Path
 
@@ -21,6 +22,11 @@ def test_version_is_declared_consistently() -> None:
     setup_py = declared_version(ROOT / "setup.py", r'version="([^"]+)"')
 
     assert pyimouapi.__version__ == pyproject == setup_py
+
+
+def test_push_dispatch_allowlist_is_packaged() -> None:
+    module = importlib.import_module("pyimouapi.push_dispatch_allowlist")
+    assert "iotproperty" in module.PUSH_DISPATCH_MSG_TYPES_LOWER
 
 
 def test_py_typed_marker_is_present() -> None:
