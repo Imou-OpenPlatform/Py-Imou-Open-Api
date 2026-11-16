@@ -5,9 +5,17 @@ import traceback
 
 
 class ImouException(Exception):
-    def __init__(self, message: str = "") -> None:
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        status_code: int | None = None,
+        api_code: str | None = None,
+    ) -> None:
         """Initialize."""
         self.message = message
+        self.status_code = status_code
+        self.api_code = api_code
         super().__init__(self.message)
 
     def to_string(self) -> str:

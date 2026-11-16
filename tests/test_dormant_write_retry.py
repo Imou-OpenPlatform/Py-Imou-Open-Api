@@ -30,7 +30,9 @@ async def test_sleeping_device_retries_close_camera_after_dv1026() -> None:
     delegate = MagicMock()
     delegate.async_set_iot_device_properties = AsyncMock(
         side_effect=[
-            RequestFailedException("DV1026:The device does not support the call"),
+            RequestFailedException(
+                "The device does not support the call", api_code="DV1026"
+            ),
             None,
             None,
         ]
@@ -50,7 +52,7 @@ async def test_online_device_does_not_retry() -> None:
     apply_sensor_state(device.sensors, PARAM_STATUS, "online")
     delegate = MagicMock()
     delegate.async_set_iot_device_properties = AsyncMock(
-        side_effect=RequestFailedException("DV1026:unsupported")
+        side_effect=RequestFailedException("unsupported", api_code="DV1026")
     )
     manager = ImouHaDeviceManager(delegate)
 
@@ -69,7 +71,7 @@ async def test_sleeping_device_no_retry_on_unrelated_error() -> None:
     device = _sleeping_device()
     delegate = MagicMock()
     delegate.async_set_iot_device_properties = AsyncMock(
-        side_effect=RequestFailedException("OP9999:other")
+        side_effect=RequestFailedException("other", api_code="OP9999")
     )
     manager = ImouHaDeviceManager(delegate)
 
@@ -91,7 +93,7 @@ async def test_custom_wait_seconds() -> None:
     async def _fail_then_ok() -> None:
         if len(calls) == 0:
             calls.append(1)
-            raise RequestFailedException("DV1030:sleeping")
+            raise RequestFailedException("sleeping", api_code="DV1030")
         calls.append(2)
 
     with patch("pyimouapi.dormant_retry.asyncio.sleep", new=AsyncMock()) as sleep:
@@ -107,7 +109,7 @@ async def test_manager_uses_configured_wait_seconds() -> None:
     delegate = MagicMock()
     delegate.async_set_iot_device_properties = AsyncMock(
         side_effect=[
-            RequestFailedException("DV1030:sleep"),
+            RequestFailedException("sleep", api_code="DV1030"),
             None,
             None,
         ]

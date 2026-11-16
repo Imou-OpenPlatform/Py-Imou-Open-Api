@@ -11,6 +11,8 @@ from pyimouapi.const import (
     API_ENDPOINT_ACCESS_TOKEN,
     ERROR_CODE_INVALID_APP,
     ERROR_CODE_INVALID_SIGN,
+    ERROR_CODE_NO_PERMISSION,
+    ERROR_CODE_OPEN_API_QUOTA_EXCEEDED,
     ERROR_CODE_SUCCESS,
     ERROR_CODE_TOKEN_OVERDUE,
 )
@@ -22,6 +24,20 @@ from pyimouapi.exceptions import (
 from pyimouapi.openapi import CONNECTION_LIMIT, ImouOpenApiClient
 
 ENDPOINT = "/openapi/deviceBaseList"
+
+
+def test_exception_metadata_keeps_legacy_constructor_compatible() -> None:
+    """Structured fields are optional for callers constructing old exceptions."""
+    legacy = RequestFailedException("legacy")
+    structured = RequestFailedException(
+        "denied", status_code=403, api_code=ERROR_CODE_NO_PERMISSION
+    )
+
+    assert str(legacy) == "legacy"
+    assert legacy.status_code is None
+    assert legacy.api_code is None
+    assert structured.status_code == 403
+    assert structured.api_code == ERROR_CODE_NO_PERMISSION
 
 
 def api_result(
@@ -293,8 +309,11 @@ async def test_invalid_credentials_raise(client: ImouOpenApiClient, code: str) -
     """Signature / app errors surface as InvalidAppIdOrSecretException."""
     install_session(client, [api_result(code=code, msg="bad app")])
 
-    with pytest.raises(InvalidAppIdOrSecretException):
+    with pytest.raises(InvalidAppIdOrSecretException) as caught:
         await client.async_get_token()
+
+    assert caught.value.api_code == code
+    assert caught.value.status_code == 200
 
 
 @pytest.mark.asyncio
@@ -304,8 +323,50 @@ async def test_other_error_code_raises_request_failed(
     """Unmapped business error codes surface as RequestFailedException."""
     install_session(client, [token_result(), api_result(code="DV1007", msg="offline")])
 
-    with pytest.raises(RequestFailedException, match="DV1007"):
+    with pytest.raises(RequestFailedException, match="DV1007") as caught:
         await client.async_request_api(ENDPOINT, {})
+
+    assert caught.value.api_code == "DV1007"
+    assert caught.value.status_code == 200
+
+
+@pytest.mark.parametrize(
+    "code", [ERROR_CODE_NO_PERMISSION, ERROR_CODE_OPEN_API_QUOTA_EXCEEDED]
+)
+@pytest.mark.asyncio
+async def test_named_account_error_codes_are_structured(
+    client: ImouOpenApiClient, code: str
+) -> None:
+    """Permission and quota errors expose their documented API code."""
+    install_session(client, [api_result(code=code, msg="denied")])
+
+    with pytest.raises(RequestFailedException) as caught:
+        await client.async_get_token()
+
+    assert caught.value.api_code == code
+    assert caught.value.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_repeated_expired_token_exposes_structured_code(
+    client: ImouOpenApiClient,
+) -> None:
+    """A token still rejected after refresh identifies the stable auth error."""
+    install_session(
+        client,
+        [
+            token_result("tok-1"),
+            api_result(code=ERROR_CODE_TOKEN_OVERDUE, msg="expired"),
+            token_result("tok-2"),
+            api_result(code=ERROR_CODE_TOKEN_OVERDUE, msg="expired"),
+        ],
+    )
+
+    with pytest.raises(RequestFailedException) as caught:
+        await client.async_request_api(ENDPOINT, {})
+
+    assert caught.value.api_code == ERROR_CODE_TOKEN_OVERDUE
+    assert caught.value.status_code == 200
 
 
 @pytest.mark.asyncio
@@ -358,8 +419,11 @@ async def test_download_raises_on_error_status(client: ImouOpenApiClient) -> Non
     """A non-200 download surfaces as RequestFailedException."""
     install_session(client, [], download_status=404)
 
-    with pytest.raises(RequestFailedException, match="404"):
+    with pytest.raises(RequestFailedException, match="404") as caught:
         await client.async_download("https://cdn.example.com/missing.jpg")
+
+    assert caught.value.status_code == 404
+    assert caught.value.api_code is None
 
 
 @pytest.mark.asyncio
@@ -407,8 +471,11 @@ async def test_a_gateway_error_reads_as_not_getting_through(
     """
     install_session(client, [FakeResponse.raw(502, "<html>Bad Gateway</html>")])
 
-    with pytest.raises(ConnectFailedException, match="502"):
+    with pytest.raises(ConnectFailedException, match="502") as caught:
         await client.async_get_token()
+
+    assert caught.value.status_code == 502
+    assert caught.value.api_code is None
 
 
 @pytest.mark.asyncio
@@ -416,8 +483,11 @@ async def test_a_refused_request_names_its_status(client: ImouOpenApiClient) -> 
     """A 4xx is this request being turned away, not a connection problem."""
     install_session(client, [FakeResponse.raw(403, "<html>Forbidden</html>")])
 
-    with pytest.raises(RequestFailedException, match="403"):
+    with pytest.raises(RequestFailedException, match="403") as caught:
         await client.async_get_token()
+
+    assert caught.value.status_code == 403
+    assert caught.value.api_code is None
 
 
 @pytest.mark.asyncio

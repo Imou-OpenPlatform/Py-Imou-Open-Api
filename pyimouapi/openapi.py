@@ -137,7 +137,8 @@ class ImouOpenApiClient:
             ) as response:
                 if response.status != 200:
                     raise RequestFailedException(
-                        f"request failed,status code {response.status}"
+                        f"request failed,status code {response.status}",
+                        status_code=response.status,
                     )
                 reader = getattr(response, "content", None)
                 if reader is not None and hasattr(reader, "read"):
@@ -261,14 +262,18 @@ class ImouOpenApiClient:
         # body first used to report either as a connection failure, because an
         # error page is not JSON.
         if status >= 500:
-            raise ConnectFailedException(f"connect failed,status code {status}")
+            raise ConnectFailedException(
+                f"connect failed,status code {status}", status_code=status
+            )
         if status != 200:
-            raise RequestFailedException(f"request failed,status code {status}")
+            raise RequestFailedException(
+                f"request failed,status code {status}", status_code=status
+            )
         try:
             response_body = json.loads(text)
         except ValueError as exception:
             raise RequestFailedException(
-                f"malformed response,{exception}"
+                f"malformed response,{exception}", status_code=status
             ) from exception
         if _LOGGER.isEnabledFor(logging.DEBUG):
             _LOGGER.debug(
@@ -281,19 +286,23 @@ class ImouOpenApiClient:
             response_body.get(PARAM_RESULT) if isinstance(response_body, dict) else None
         )
         if not isinstance(result, dict) or PARAM_CODE not in result:
-            raise RequestFailedException("malformed response,missing result")
-        result_code = result[PARAM_CODE]
+            raise RequestFailedException(
+                "malformed response,missing result", status_code=status
+            )
+        result_code = str(result[PARAM_CODE])
         result_message = result.get(PARAM_MSG) or ""
         if result_code != ERROR_CODE_SUCCESS:
             msg = result_code + ":" + result_message
             if result_code in (ERROR_CODE_INVALID_SIGN, ERROR_CODE_INVALID_APP):
-                raise InvalidAppIdOrSecretException(msg)
+                raise InvalidAppIdOrSecretException(
+                    msg, status_code=status, api_code=result_code
+                )
             if result_code == ERROR_CODE_TOKEN_OVERDUE and refresh_on_expiry:
                 await self._async_ensure_token(stale_token=token_used)
                 return await self._async_request_api(
                     endpoint, params, refresh_on_expiry=False
                 )
-            raise RequestFailedException(msg)
+            raise RequestFailedException(msg, status_code=status, api_code=result_code)
         response_data = result.get(PARAM_DATA, {})
         if response_data is None:
             response_data = {}

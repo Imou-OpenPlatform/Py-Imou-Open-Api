@@ -13,6 +13,7 @@ from pyimouapi.collection_point import (
     unique_preserve_order,
 )
 from pyimouapi.const import (
+    ERROR_CODE_NO_PERMISSION,
     PARAM_COLLECTION_POINT,
     PARAM_COLLECTION_POINT_PROMPT,
     PARAM_CURRENT_OPTION,
@@ -130,7 +131,9 @@ async def test_collection_point_without_permission_keeps_options(
     }
     delegate = MagicMock()
     delegate.async_get_device_collection = AsyncMock(
-        side_effect=RequestFailedException("OP1009:No right, cannot operate.")
+        side_effect=RequestFailedException(
+            "No right, cannot operate.", api_code=ERROR_CODE_NO_PERMISSION
+        )
     )
     manager = ImouHaDeviceManager(delegate)
 
@@ -141,7 +144,7 @@ async def test_collection_point_without_permission_keeps_options(
         PARAM_COLLECTION_POINT_PROMPT,
         "door",
     ]
-    assert "OP1009" in caplog.text
+    assert "No right" in caplog.text
     assert not any(record.levelno >= logging.WARNING for record in caplog.records)
 
 

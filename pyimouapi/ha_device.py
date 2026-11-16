@@ -46,6 +46,7 @@ from .const import (
     BUTTON_TYPE_ABILITY,
     BUTTON_TYPE_PARAM_VALUE,
     BUTTON_TYPE_REF,
+    ERROR_CODE_NO_PERMISSION,
     ERROR_CODE_NO_STORAGE_MEDIUM,
     PARAM_ABILITY,
     PARAM_ALKELEC,
@@ -1540,8 +1541,12 @@ class ImouHaDeviceManager:
         except Exception as err:
             # A shared device can reject collection points on every refresh.
             # Keep the options already stored and do not warn each time.
-            detail = getattr(err, "message", None) or str(err)
-            log = _LOGGER.debug if "OP1009" in detail else _LOGGER.warning
+            log = (
+                _LOGGER.debug
+                if isinstance(err, RequestFailedException)
+                and err.api_code == ERROR_CODE_NO_PERMISSION
+                else _LOGGER.warning
+            )
             log(
                 "Failed to fetch collection points for %s: %s",
                 device.device_name,
@@ -1626,7 +1631,7 @@ class ImouHaDeviceManager:
                 apply_sensor_state(device.sensors, PARAM_STORAGE_USED, "e2")
         except RequestFailedException as exception:
             _LOGGER.error("_async_update_device_storage error:  %s", exception)
-            if ERROR_CODE_NO_STORAGE_MEDIUM in exception.message:
+            if exception.api_code == ERROR_CODE_NO_STORAGE_MEDIUM:
                 apply_sensor_state(device.sensors, PARAM_STORAGE_USED, "e1")
 
     async def async_get_device_stream(
