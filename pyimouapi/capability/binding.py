@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from functools import lru_cache
 from importlib.resources import files
@@ -9,6 +10,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+from ..bulb_light import BULB_V2_PROPERTY_BY_REF, REF_SWITCH
 
 PACKAGE_DATA = files("pyimouapi").joinpath("data")
 MAP_FILE = "v2_target_map.yaml"
@@ -102,15 +105,15 @@ def resolve_ptz_target_id(
 
 
 def bulb_gate_satisfied(
-    capability_properties: set[str],
-    binding: TargetBinding,
+    device_type: str | None,
+    property_ids: AbstractSet[str],
 ) -> bool:
-    """True when the bulb composite gate and every listed property are on the device."""
-    gate = binding.gate_property
-    if not gate or gate not in capability_properties:
-        return False
-    required = binding.properties or (gate,)
-    return all(prop in capability_properties for prop in required)
+    """True for a Lamp that exposes its controllable power property."""
+    return (
+        isinstance(device_type, str)
+        and device_type.casefold() == "lamp"
+        and BULB_V2_PROPERTY_BY_REF[REF_SWITCH] in property_ids
+    )
 
 
 def binding_by_ha_key(bindings: list[TargetBinding]) -> dict[str, TargetBinding]:
@@ -146,12 +149,14 @@ def binding_supported(
     capability_properties: set[str],
     capability_services: set[str],
     capability_events: set[str],
+    *,
+    device_type: str | None = None,
 ) -> bool:
     """True when the device list contains the binding's required target."""
     if binding.kind == "named_api":
         return True
     if binding.kind == "composite":
-        return bulb_gate_satisfied(capability_properties, binding)
+        return bulb_gate_satisfied(device_type, capability_properties)
     if binding.kind == "property":
         return bool(binding.target_id and binding.target_id in capability_properties)
     if binding.kind == "service":

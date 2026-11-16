@@ -338,6 +338,7 @@ class ImouHaDevice:
         self._channel_name: str | None = None
         self._is_ipc = False
         self._product_id: str | None = None
+        self._product_device_type: str | None = None
         self._parent_product_id: str | None = None
         self._parent_device_id: str | None = None
         self._device_ability = "unknown"
@@ -419,6 +420,10 @@ class ImouHaDevice:
         return self._product_id
 
     @property
+    def product_device_type(self) -> str | None:
+        return self._product_device_type
+
+    @property
     def parent_product_id(self) -> str | None:
         return self._parent_product_id
 
@@ -440,6 +445,9 @@ class ImouHaDevice:
 
     def set_product_id(self, product_id: str) -> None:
         self._product_id = product_id
+
+    def set_product_device_type(self, value: str | None) -> None:
+        self._product_device_type = value
 
     def set_parent_product_id(self, parent_product_id: str) -> None:
         self._parent_product_id = parent_product_id
@@ -583,6 +591,18 @@ class ImouHaDeviceManager:
 
         if device.bulb_v2:
             v2_payload = ref_payload_to_v2(properties)
+            supported_property_ids = (
+                set(device.capability_set.properties)
+                if device.capability_set is not None
+                else set()
+            )
+            v2_payload = {
+                property_id: value
+                for property_id, value in v2_payload.items()
+                if property_id in supported_property_ids
+            }
+            if not v2_payload:
+                return
 
             async def _write_v2() -> None:
                 await async_property_set(
@@ -1531,6 +1551,7 @@ class ImouHaDeviceManager:
         )
         if device.product_id is not None:
             imou_ha_device.set_product_id(device.product_id)
+        imou_ha_device.set_product_device_type(device.product_device_type)
         if device.parent_product_id is not None:
             imou_ha_device.set_parent_product_id(device.parent_product_id)
         if device.parent_device_id is not None:

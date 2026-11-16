@@ -6,6 +6,7 @@ light itself, not a separate switch.
 
 from __future__ import annotations
 
+from collections.abc import Set as AbstractSet
 from typing import Any
 
 REF_SWITCH = "11900"
@@ -51,7 +52,7 @@ BULB_V2_PROPERTY_IDS = tuple(BULB_V2_PROPERTY_BY_REF.values())
 
 
 def bulb_v2_property_ids_for_device(
-    supported_property_ids: set[str] | frozenset[str],
+    supported_property_ids: AbstractSet[str],
 ) -> tuple[str, ...]:
     """Property ids to read for a v2 bulb, limited to what capability.list reported."""
     return tuple(pid for pid in BULB_V2_PROPERTY_IDS if pid in supported_property_ids)

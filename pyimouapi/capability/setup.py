@@ -273,6 +273,12 @@ def configure_imou_ha_device_from_capability(
             binding, ha_device.channel_id, is_ipc=ha_device.is_ipc
         ):
             continue
-        if not binding_supported(binding, property_ids, service_ids, event_ids):
+        if not binding_supported(
+            binding,
+            property_ids,
+            service_ids,
+            event_ids,
+            device_type=ha_device.product_device_type,
+        ):
             continue
         _configure_binding(ha_device, binding, capability)
