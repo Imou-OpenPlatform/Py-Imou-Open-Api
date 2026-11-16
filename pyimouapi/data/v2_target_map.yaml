@@ -121,6 +121,7 @@ bindings:
 
   - ha_key: battery
     target_id: power.battery.level
+    fallback_target_id: power.battery.info
     kind: property
     ha_platform: sensor
     scope: device
@@ -172,6 +173,7 @@ bindings:
 
   - ha_key: switch_cnt
     target_id: power.outlet.read
+    fallback_target_id: control.outlet.switchCount
     kind: service
     ha_platform: sensor
     scope: device

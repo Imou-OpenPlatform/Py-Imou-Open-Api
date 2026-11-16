@@ -1,12 +1,16 @@
 """V2 capability list ∩ map entity registration."""
 
+import pytest
 from pyimouapi.capability.catalog import CapabilitySet, PropertyCapability
 from pyimouapi.capability.setup import configure_imou_ha_device_from_capability
 from pyimouapi.const import (
+    PARAM_BATTERY,
     PARAM_COLLECTION_POINT,
     PARAM_RESTART_DEVICE,
     PARAM_STATE,
+    PARAM_V2_FALLBACK_TARGET_ID,
     PARAM_V2_LIST_SERVICE_ID,
+    PARAM_V2_SOURCE_TARGET_IDS,
     PARAM_V2_TARGET_ID,
     PARAM_V2_WRITE_TARGET_ID,
 )
@@ -123,6 +127,81 @@ def test_v2_gate_registers_outlet_countdown() -> None:
     meta = device.texts["count_down_switch"]
     assert meta[PARAM_V2_TARGET_ID] == "control.outlet.countdownGet"
     assert meta[PARAM_V2_WRITE_TARGET_ID] == "control.outlet.countdownSet"
+
+
+def test_v2_gate_registers_overcharge_as_switch_only() -> None:
+    device = ImouHaDevice("PLUG1", "Plug", "Imou", "SP", "1.0")
+    device.set_product_id("pid")
+    cap = CapabilitySet(
+        properties={
+            "control.outlet.overchargeProtection": PropertyCapability(
+                property_id="control.outlet.overchargeProtection",
+                access_mode="rw",
+                data_type="int",
+            ),
+        },
+        services=frozenset(),
+        events=frozenset(),
+    )
+
+    configure_imou_ha_device_from_capability(device, cap)
+
+    assert "overcharge_switch" in device.switches
+    assert "overcharge_switch" not in device.texts
+
+
+@pytest.mark.parametrize(
+    "source_ids",
+    [
+        ("power.battery.level",),
+        ("power.battery.info",),
+        ("power.battery.level", "power.battery.info"),
+    ],
+)
+def test_v2_battery_records_available_sources_on_one_entity(
+    source_ids: tuple[str, ...],
+) -> None:
+    device = ImouHaDevice("BAT1", "Battery", "Imou", "Sensor", "1.0")
+    device.set_product_id("pid")
+    cap = CapabilitySet(
+        properties={
+            target: PropertyCapability(
+                property_id=target,
+                access_mode="r",
+                data_type="int" if target.endswith(".level") else "array",
+            )
+            for target in source_ids
+        },
+        services=frozenset(),
+        events=frozenset(),
+    )
+
+    configure_imou_ha_device_from_capability(device, cap)
+
+    assert [key for key in device.sensors if key == PARAM_BATTERY] == [PARAM_BATTERY]
+    assert device.sensors[PARAM_BATTERY][PARAM_V2_SOURCE_TARGET_IDS] == list(source_ids)
+
+
+def test_v2_switch_count_records_property_fallback() -> None:
+    device = ImouHaDevice("PLUG1", "Plug", "Imou", "SP", "1.0")
+    device.set_product_id("pid")
+    cap = CapabilitySet(
+        properties={
+            "control.outlet.switchCount": PropertyCapability(
+                property_id="control.outlet.switchCount",
+                access_mode="r",
+                data_type="int",
+            )
+        },
+        services=frozenset({"power.outlet.read"}),
+        events=frozenset(),
+    )
+
+    configure_imou_ha_device_from_capability(device, cap)
+
+    assert device.sensors["switch_cnt"][PARAM_V2_FALLBACK_TARGET_ID] == (
+        "control.outlet.switchCount"
+    )
 
 
 def test_v2_gate_registers_collection_point_when_list_present() -> None:

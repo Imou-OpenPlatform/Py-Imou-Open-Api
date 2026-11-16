@@ -28,6 +28,7 @@ class TargetBinding:
     target_id: str | None = None
     write_target_id: str | None = None
     alternate_target_id: str | None = None
+    fallback_target_id: str | None = None
     resolve: str | None = None
     output_field: str | None = None
     struct_field: str | None = None
@@ -53,6 +54,7 @@ def _parse_binding(raw: dict[str, Any]) -> TargetBinding:
         target_id=raw.get("target_id"),
         write_target_id=raw.get("write_target_id"),
         alternate_target_id=raw.get("alternate_target_id"),
+        fallback_target_id=raw.get("fallback_target_id"),
         resolve=raw.get("resolve"),
         output_field=raw.get("output_field"),
         struct_field=raw.get("struct_field"),
@@ -158,7 +160,13 @@ def binding_supported(
     if binding.kind == "composite":
         return bulb_gate_satisfied(device_type, capability_properties)
     if binding.kind == "property":
-        return bool(binding.target_id and binding.target_id in capability_properties)
+        return bool(
+            (binding.target_id and binding.target_id in capability_properties)
+            or (
+                binding.fallback_target_id
+                and binding.fallback_target_id in capability_properties
+            )
+        )
     if binding.kind == "service":
         target = binding.target_id
         if binding.resolve:

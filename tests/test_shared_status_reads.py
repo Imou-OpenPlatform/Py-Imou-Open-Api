@@ -5,12 +5,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pyimouapi.capability.catalog import CapabilitySet, PropertyCapability
 from pyimouapi.const import (
+    PARAM_BATTERY,
     PARAM_CHANNEL_ID,
     PARAM_CHANNELS,
     PARAM_ONLINE,
+    PARAM_OUTPUT_DATA,
     PARAM_PROPERTIES,
     PARAM_STATE,
     PARAM_STATUS,
+    PARAM_V2_FALLBACK_TARGET_ID,
+    PARAM_V2_OUTPUT_FIELD,
+    PARAM_V2_SOURCE_TARGET_IDS,
     PARAM_V2_TARGET_ID,
 )
 from pyimouapi.exceptions import RequestFailedException
@@ -64,6 +69,174 @@ def _v2_device(device_id: str, product_id: str) -> ImouHaDevice:
     )
     device.switches["relay"] = {PARAM_V2_TARGET_ID: target, PARAM_STATE: False}
     return device
+
+
+def _battery_device(*source_ids: str) -> ImouHaDevice:
+    device = ImouHaDevice("battery1", "Battery", "Imou", "Sensor", "1.0")
+    device.set_product_id("pid")
+    device.set_capability_set(
+        CapabilitySet(
+            properties={
+                target: PropertyCapability(target, "r", "array")
+                for target in source_ids
+            },
+            services=frozenset(),
+            events=frozenset(),
+        )
+    )
+    device.sensors[PARAM_BATTERY] = {
+        PARAM_V2_TARGET_ID: source_ids[0],
+        PARAM_V2_SOURCE_TARGET_IDS: list(source_ids),
+    }
+    return device
+
+
+@pytest.mark.asyncio
+async def test_switch_count_prefers_service_output_over_property_fallback() -> None:
+    device = ImouHaDevice("plug1", "Plug", "Imou", "Plug", "1.0")
+    device.set_product_id("pid")
+    device.sensors["switch_cnt"] = {
+        PARAM_V2_TARGET_ID: "power.outlet.read",
+        PARAM_V2_OUTPUT_FIELD: "switch_cnt",
+        PARAM_V2_FALLBACK_TARGET_ID: "control.outlet.switchCount",
+    }
+    manager = ImouHaDeviceManager(MagicMock())
+
+    with (
+        patch(
+            "pyimouapi.ha_device.async_service_invoke",
+            AsyncMock(return_value={PARAM_OUTPUT_DATA: {"switch_cnt": 7}}),
+        ),
+        patch(
+            "pyimouapi.ha_device.async_property_get",
+            AsyncMock(return_value={"control.outlet.switchCount": 3}),
+        ) as prop_get,
+    ):
+        await manager._async_update_v2_service_entities(device)
+
+    assert device.sensors["switch_cnt"][PARAM_STATE] == 7
+    prop_get.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_switch_count_falls_back_when_service_field_is_missing() -> None:
+    device = ImouHaDevice("plug1", "Plug", "Imou", "Plug", "1.0")
+    device.set_product_id("pid")
+    device.sensors["switch_cnt"] = {
+        PARAM_V2_TARGET_ID: "power.outlet.read",
+        PARAM_V2_OUTPUT_FIELD: "switch_cnt",
+        PARAM_V2_FALLBACK_TARGET_ID: "control.outlet.switchCount",
+    }
+    manager = ImouHaDeviceManager(MagicMock())
+
+    with (
+        patch(
+            "pyimouapi.ha_device.async_service_invoke",
+            AsyncMock(return_value={PARAM_OUTPUT_DATA: {"power": 10}}),
+        ),
+        patch(
+            "pyimouapi.ha_device.async_property_get",
+            AsyncMock(return_value={"control.outlet.switchCount": 3}),
+        ) as prop_get,
+    ):
+        await manager._async_update_v2_service_entities(device)
+
+    assert device.sensors["switch_cnt"][PARAM_STATE] == 3
+    prop_get.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("source_ids", "values", "expected"),
+    [
+        (("power.battery.level",), {"power.battery.level": 83}, 83),
+        (
+            ("power.battery.info",),
+            {
+                "power.battery.info": [
+                    {
+                        "state": 1,
+                        "type": 0,
+                        "elecPercent": 72,
+                        "localTime": "20261116T100000",
+                        "mAh": 2400,
+                        "category": 1,
+                    }
+                ]
+            },
+            72,
+        ),
+        (
+            ("power.battery.level", "power.battery.info"),
+            {
+                "power.battery.level": 83,
+                "power.battery.info": [{"category": 1, "type": 0, "elecPercent": 72}],
+            },
+            83,
+        ),
+    ],
+)
+async def test_battery_source_precedence(
+    source_ids: tuple[str, ...],
+    values: dict[str, object],
+    expected: int,
+) -> None:
+    device = _battery_device(*source_ids)
+    manager = ImouHaDeviceManager(MagicMock())
+
+    with patch(
+        "pyimouapi.ha_device.async_property_get",
+        AsyncMock(return_value=values),
+    ):
+        await manager._async_update_v2_property_entities(device)
+
+    assert device.sensors[PARAM_BATTERY][PARAM_STATE] == expected
+
+
+@pytest.mark.asyncio
+async def test_battery_info_prefers_type_zero_then_first_active() -> None:
+    device = _battery_device("power.battery.info")
+    manager = ImouHaDeviceManager(MagicMock())
+    values = {
+        "power.battery.info": [
+            {"category": 0, "type": 0, "elecPercent": 99},
+            {"category": 1, "type": 2, "elecPercent": 61},
+            {"category": 1, "type": 0, "elecPercent": 74},
+        ]
+    }
+
+    with patch(
+        "pyimouapi.ha_device.async_property_get",
+        AsyncMock(return_value=values),
+    ):
+        await manager._async_update_v2_property_entities(device)
+
+    assert device.sensors[PARAM_BATTERY][PARAM_STATE] == 74
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        None,
+        {},
+        "bad",
+        [None, "bad", {"category": 0, "type": 0, "elecPercent": 99}],
+        [{"category": 1, "type": 0}],
+        [{"category": 1, "type": 0, "elecPercent": "bad"}],
+    ],
+)
+async def test_battery_info_ignores_malformed_values(malformed: object) -> None:
+    device = _battery_device("power.battery.info")
+    manager = ImouHaDeviceManager(MagicMock())
+
+    with patch(
+        "pyimouapi.ha_device.async_property_get",
+        AsyncMock(return_value={"power.battery.info": malformed}),
+    ):
+        await manager._async_update_v2_property_entities(device)
+
+    assert PARAM_STATE not in device.sensors[PARAM_BATTERY]
 
 
 @pytest.mark.asyncio

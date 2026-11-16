@@ -90,9 +90,11 @@ from .const import (
     PARAM_TURN_REF,
     PARAM_URL,
     PARAM_USED_BYTES,
+    PARAM_V2_FALLBACK_TARGET_ID,
     PARAM_V2_LIST_SERVICE_ID,
     PARAM_V2_OUTPUT_FIELD,
     PARAM_V2_RAW_BY_OPTION,
+    PARAM_V2_SOURCE_TARGET_IDS,
     PARAM_V2_STRUCT_FIELD,
     PARAM_V2_TARGET_ID,
     PARAM_V2_WRITE_TARGET_ID,
@@ -125,6 +127,23 @@ def split_csv(value: Any) -> list[str]:
     if not isinstance(value, str) or not value:
         return []
     return value.split(",")
+
+
+def _battery_level_from_v2_info(data: Any) -> int | float | None:
+    """Select one active battery percentage from power.battery.info."""
+    if not isinstance(data, list):
+        return None
+    active = [
+        item for item in data if isinstance(item, dict) and item.get("category") == 1
+    ]
+    preferred = next((item for item in active if item.get("type") == 0), None)
+    selected = preferred or (active[0] if active else None)
+    if selected is None:
+        return None
+    level = selected.get("elecPercent")
+    if isinstance(level, bool) or not isinstance(level, int | float):
+        return None
+    return level
 
 
 def _battery_level_from_106200_list(data) -> int:
@@ -771,6 +790,24 @@ class ImouHaDeviceManager:
         apply_bulb_properties(device.bulb_light, present)
         return True
 
+    @staticmethod
+    def _v2_entity_raw_value(
+        key: str, meta: dict[str, Any], values: Mapping[str, Any]
+    ) -> tuple[bool, Any]:
+        if key == PARAM_BATTERY:
+            scalar = values.get("power.battery.level")
+            if not isinstance(scalar, bool) and isinstance(scalar, int | float):
+                return True, scalar
+            if "power.battery.info" in values:
+                level = _battery_level_from_v2_info(values["power.battery.info"])
+                if level is not None:
+                    return True, level
+            return False, None
+        target_id = str(meta[PARAM_V2_TARGET_ID])
+        if target_id not in values:
+            return False, None
+        return True, values[target_id]
+
     def _apply_property_value(
         self,
         device: ImouHaDevice,
@@ -779,6 +816,15 @@ class ImouHaDeviceManager:
         meta: dict[str, Any],
         raw_value: Any,
     ) -> None:
+        struct_field = meta.get(PARAM_V2_STRUCT_FIELD)
+        if struct_field and isinstance(raw_value, dict):
+            raw_value = raw_value.get(struct_field)
+        elif (
+            isinstance(raw_value, dict)
+            and kind in ("switch", "binary_sensor")
+            and "enabled" in raw_value
+        ):
+            raw_value = raw_value.get("enabled")
         if kind in ("switch", "binary_sensor"):
             parsed = property_is_on(raw_value)
             if parsed is None:
@@ -816,10 +862,10 @@ class ImouHaDeviceManager:
         if device.capability_set is not None:
             changed = False
             for kind, key, meta in self._collect_v2_property_entities(device):
-                target_id = str(meta[PARAM_V2_TARGET_ID])
-                if target_id not in values:
+                found, raw = self._v2_entity_raw_value(key, meta, values)
+                if not found:
                     continue
-                self._apply_property_value(device, kind, key, meta, values[target_id])
+                self._apply_property_value(device, kind, key, meta, raw)
                 changed = True
             if device.bulb_v2 and device.bulb_light is not None:
                 present = {
@@ -919,10 +965,14 @@ class ImouHaDeviceManager:
             if not isinstance(output, dict):
                 complete = False
                 continue
+            fallback_items: list[tuple[str, dict[str, Any]]] = []
             for sensor_type, meta in items:
                 field = meta[PARAM_V2_OUTPUT_FIELD]
                 if field not in output:
-                    complete = False
+                    if meta.get(PARAM_V2_FALLBACK_TARGET_ID):
+                        fallback_items.append((sensor_type, meta))
+                    else:
+                        complete = False
                     continue
                 raw = output[field]
                 if meta.get(PARAM_EXPRESSION) and isinstance(raw, dict | list):
@@ -930,6 +980,37 @@ class ImouHaDeviceManager:
                 else:
                     state = raw
                 apply_sensor_state(device.sensors, sensor_type, state)
+            if not fallback_items:
+                continue
+            fallback_ids = [
+                str(meta[PARAM_V2_FALLBACK_TARGET_ID]) for _, meta in fallback_items
+            ]
+            try:
+                fallback_values = await async_property_get(
+                    self.delegate.api_client,
+                    device_id=device.device_id,
+                    channel_id=device.channel_id,
+                    product_id=device.product_id,
+                    properties=fallback_ids,
+                )
+            except InvalidAppIdOrSecretException:
+                raise
+            except Exception as exc:
+                _LOGGER.warning(
+                    "device.property.get service fallback failed for %s: %s",
+                    device.device_id,
+                    exc,
+                )
+                complete = False
+                continue
+            for sensor_type, meta in fallback_items:
+                target_id = str(meta[PARAM_V2_FALLBACK_TARGET_ID])
+                if target_id not in fallback_values:
+                    complete = False
+                    continue
+                apply_sensor_state(
+                    device.sensors, sensor_type, fallback_values[target_id]
+                )
         return complete
 
     async def _async_update_v2_bulb_state(self, device: ImouHaDevice) -> bool:
@@ -966,7 +1047,15 @@ class ImouHaDeviceManager:
         entities = self._collect_v2_property_entities(device)
         if not entities:
             return True
-        property_ids = list({str(meta[PARAM_V2_TARGET_ID]) for _, _, meta in entities})
+        property_ids = list(
+            {
+                str(target_id)
+                for _, _, meta in entities
+                for target_id in meta.get(
+                    PARAM_V2_SOURCE_TARGET_IDS, [meta[PARAM_V2_TARGET_ID]]
+                )
+            }
+        )
         try:
             values = await async_property_get(
                 self.delegate.api_client,
@@ -984,9 +1073,10 @@ class ImouHaDeviceManager:
             return False
         complete = True
         for kind, key, meta in entities:
-            target_id = str(meta[PARAM_V2_TARGET_ID])
-            if target_id not in values:
+            found, raw = self._v2_entity_raw_value(key, meta, values)
+            if not found:
                 complete = False
+                target_id = str(meta[PARAM_V2_TARGET_ID])
                 self._debug_missing_property_ref(
                     device,
                     target_id,
@@ -995,10 +1085,6 @@ class ImouHaDeviceManager:
                     key=key,
                 )
                 continue
-            raw = values[target_id]
-            struct_field = meta.get(PARAM_V2_STRUCT_FIELD)
-            if struct_field and isinstance(raw, dict):
-                raw = raw.get(struct_field)
             self._apply_property_value(device, kind, key, meta, raw)
         return complete
 

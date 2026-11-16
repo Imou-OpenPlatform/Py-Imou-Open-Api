@@ -13,9 +13,11 @@ from ..const import (
     PARAM_OPTIONS,
     PARAM_STATE,
     PARAM_SUPPORTED,
+    PARAM_V2_FALLBACK_TARGET_ID,
     PARAM_V2_LIST_SERVICE_ID,
     PARAM_V2_OUTPUT_FIELD,
     PARAM_V2_RAW_BY_OPTION,
+    PARAM_V2_SOURCE_TARGET_IDS,
     PARAM_V2_STRUCT_FIELD,
     PARAM_V2_TARGET_ID,
     PARAM_V2_WRITE_TARGET_ID,
@@ -140,9 +142,21 @@ def _add_property_select(
 
 
 def _add_property_sensor(
-    entities: dict[str, Any], binding: TargetBinding, prop: PropertyCapability
+    entities: dict[str, Any],
+    binding: TargetBinding,
+    capability: CapabilitySet,
 ) -> None:
-    entry: dict[str, Any] = {PARAM_V2_TARGET_ID: binding.target_id}
+    source_ids = [
+        target_id
+        for target_id in (binding.target_id, binding.fallback_target_id)
+        if target_id and target_id in capability.properties
+    ]
+    if not source_ids:
+        return
+    entry: dict[str, Any] = {
+        PARAM_V2_TARGET_ID: source_ids[0],
+        PARAM_V2_SOURCE_TARGET_IDS: source_ids,
+    }
     if binding.output_field:
         entry[PARAM_V2_OUTPUT_FIELD] = binding.output_field
     if binding.struct_field:
@@ -161,11 +175,19 @@ def _add_service_button(
     entities[binding.ha_key] = {PARAM_V2_TARGET_ID: service_id}
 
 
-def _add_service_sensor(entities: dict[str, Any], binding: TargetBinding) -> None:
-    entities[binding.ha_key] = {
+def _add_service_sensor(
+    entities: dict[str, Any], binding: TargetBinding, capability: CapabilitySet
+) -> None:
+    entry = {
         PARAM_V2_TARGET_ID: binding.target_id,
         PARAM_V2_OUTPUT_FIELD: binding.output_field,
     }
+    if (
+        binding.fallback_target_id
+        and binding.fallback_target_id in capability.properties
+    ):
+        entry[PARAM_V2_FALLBACK_TARGET_ID] = binding.fallback_target_id
+    entities[binding.ha_key] = entry
 
 
 def _configure_binding(
@@ -173,11 +195,9 @@ def _configure_binding(
     binding: TargetBinding,
     capability: CapabilitySet,
 ) -> None:
-    prop = (
-        capability.properties.get(binding.target_id or "")
-        if binding.target_id
-        else None
-    )
+    prop = capability.properties.get(
+        binding.target_id or ""
+    ) or capability.properties.get(binding.fallback_target_id or "")
     platform = binding.ha_platform
 
     if binding.kind == "composite" and binding.ha_key == "bulb":
@@ -241,7 +261,7 @@ def _configure_binding(
         elif platform == "select":
             _add_property_select(bucket, binding, prop)
         elif platform == "sensor":
-            _add_property_sensor(bucket, binding, prop)
+            _add_property_sensor(bucket, binding, capability)
         elif platform == "binary_sensor":
             default_on = property_is_on(prop.default_data)
             bucket[binding.ha_key] = {
@@ -254,7 +274,7 @@ def _configure_binding(
         if platform == "button":
             _add_service_button(bucket, binding, capability)
         elif platform == "sensor":
-            _add_service_sensor(bucket, binding)
+            _add_service_sensor(bucket, binding, capability)
 
 
 def configure_imou_ha_device_from_capability(
