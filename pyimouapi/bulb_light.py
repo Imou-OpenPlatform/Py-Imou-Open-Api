@@ -114,7 +114,7 @@ def brightness_to_percent(brightness: int) -> int:
 
 def _as_int(raw: Any) -> int | None:
     if isinstance(raw, bool):
-        return int(raw)
+        return None
     if isinstance(raw, int):
         return raw
     if isinstance(raw, float):

@@ -96,6 +96,72 @@ def test_apply_bulb_properties_ignores_normalized_equivalent_values() -> None:
 
 
 @pytest.mark.parametrize(
+    ("ref", "key"),
+    [
+        (REF_MODE, "mode"),
+        (REF_BRIGHTNESS, "brightness"),
+        (REF_COLOR_TEMP, "color_temp"),
+        (REF_HUE, "hue"),
+        (REF_SATURATION, "saturation"),
+        (REF_VALUE, "value"),
+        (REF_SCENE, "scene"),
+    ],
+)
+@pytest.mark.parametrize("raw", [True, False])
+def test_apply_bulb_properties_rejects_bool_for_numeric_fields(
+    ref: str, key: str, raw: bool
+) -> None:
+    state = empty_bulb_state()
+    state[key] = 37
+    before = dict(state)
+
+    assert apply_bulb_properties(state, {ref: raw}) is False
+    assert state == before
+
+
+def test_apply_bulb_properties_rejects_true_when_numeric_state_is_one() -> None:
+    state = empty_bulb_state()
+    state.update(
+        {
+            "mode": 1,
+            "brightness": 1,
+            "color_temp": 1,
+            "hue": 1,
+            "saturation": 1,
+            "value": 1,
+            "scene": 1,
+        }
+    )
+    before = dict(state)
+
+    assert (
+        apply_bulb_properties(
+            state,
+            {
+                REF_MODE: True,
+                REF_BRIGHTNESS: True,
+                REF_COLOR_TEMP: True,
+                REF_HUE: True,
+                REF_SATURATION: True,
+                REF_VALUE: True,
+                REF_SCENE: True,
+            },
+        )
+        is False
+    )
+    assert state == before
+
+
+@pytest.mark.parametrize("raw", [True, False])
+def test_apply_bulb_properties_accepts_bool_for_switch(raw: bool) -> None:
+    state = empty_bulb_state()
+    state["on"] = not raw
+
+    assert apply_bulb_properties(state, {REF_SWITCH: raw}) is True
+    assert state["on"] is raw
+
+
+@pytest.mark.parametrize(
     "values",
     [
         {REF_SWITCH: {}},
