@@ -59,7 +59,7 @@ async def test_plug_relay_stays_a_switch_without_bulb_mode() -> None:
 def test_apply_bulb_properties_reads_ints_and_bools() -> None:
     """Detail payloads use ints; a bool switch is still on or off."""
     state = empty_bulb_state()
-    apply_bulb_properties(
+    changed = apply_bulb_properties(
         state,
         {
             REF_SWITCH: True,
@@ -70,11 +70,54 @@ def test_apply_bulb_properties_reads_ints_and_bools() -> None:
             REF_SCENE: 2,
         },
     )
+    assert changed is True
     assert state["on"] is True
     assert state["mode"] == MODE_COLOR
     assert state["hue"] == 120
     assert state["scene"] == 2
     assert scene_effect_name(2) == "Movie"
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {REF_SWITCH: {}},
+        {REF_BRIGHTNESS: []},
+        {REF_HUE: object(), REF_SATURATION: None, REF_VALUE: "invalid"},
+        {REF_SWITCH: float("nan"), REF_BRIGHTNESS: float("inf")},
+    ],
+)
+def test_apply_bulb_properties_rejects_malformed_values(
+    values: dict[str, object],
+) -> None:
+    state = empty_bulb_state()
+    before = dict(state)
+
+    assert apply_bulb_properties(state, values) is False
+    assert state == before
+
+
+def test_apply_property_values_reports_actual_legacy_bulb_mutation() -> None:
+    manager = ImouHaDeviceManager(MagicMock())
+    device = _device()
+    device.bulb_light = empty_bulb_state()
+    before = dict(device.bulb_light)
+
+    assert (
+        manager.apply_property_values(
+            device,
+            {
+                REF_SWITCH: {},
+                REF_BRIGHTNESS: [],
+                REF_HUE: "invalid",
+            },
+        )
+        is False
+    )
+    assert device.bulb_light == before
+
+    assert manager.apply_property_values(device, {REF_BRIGHTNESS: 75}) is True
+    assert device.bulb_light["brightness"] == 75
 
 
 def test_turn_on_color_temperature_selects_white_mode() -> None:

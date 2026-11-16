@@ -7,6 +7,7 @@ light itself, not a separate switch.
 from __future__ import annotations
 
 from collections.abc import Set as AbstractSet
+from math import isfinite
 from typing import Any
 
 REF_SWITCH = "11900"
@@ -117,6 +118,8 @@ def _as_int(raw: Any) -> int | None:
     if isinstance(raw, int):
         return raw
     if isinstance(raw, float):
+        if not isfinite(raw):
+            return None
         return int(raw)
     if isinstance(raw, str):
         text = raw.strip()
@@ -134,28 +137,30 @@ def ref_payload_to_v2(payload: dict[str, int]) -> dict[str, Any]:
     }
 
 
-def apply_bulb_v2_properties(state: dict[str, Any], values: dict[str, Any]) -> None:
-    """Apply a v2 propertyId→value map onto bulb state."""
+def apply_bulb_v2_properties(state: dict[str, Any], values: dict[str, Any]) -> bool:
+    """Apply accepted v2 property values and report whether any were assigned."""
     legacy: dict[str, Any] = {}
     ref_by_v2 = {v: k for k, v in BULB_V2_PROPERTY_BY_REF.items()}
     for property_id, raw in values.items():
         ref = ref_by_v2.get(str(property_id))
         if ref is not None:
             legacy[ref] = raw
-    if legacy:
-        apply_bulb_properties(state, legacy)
+    return apply_bulb_properties(state, legacy)
 
 
-def apply_bulb_properties(state: dict[str, Any], values: dict[str, Any]) -> None:
-    """Fold a ref→value map into bulb state. Unknown or empty values are skipped."""
+def apply_bulb_properties(state: dict[str, Any], values: dict[str, Any]) -> bool:
+    """Apply accepted ref values and report whether any were assigned."""
+    changed = False
     if REF_SWITCH in values:
         raw = values[REF_SWITCH]
         if isinstance(raw, bool):
             state["on"] = raw
+            changed = True
         else:
             parsed = _as_int(raw)
             if parsed is not None:
                 state["on"] = parsed == 1
+                changed = True
     for key, ref in (
         ("mode", REF_MODE),
         ("brightness", REF_BRIGHTNESS),
@@ -171,6 +176,8 @@ def apply_bulb_properties(state: dict[str, Any], values: dict[str, Any]) -> None
         if parsed is None:
             continue
         state[key] = _clamp_read(key, parsed)
+        changed = True
+    return changed
 
 
 def properties_for_turn_off() -> dict[str, int]:

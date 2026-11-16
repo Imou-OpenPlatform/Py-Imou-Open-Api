@@ -1,6 +1,6 @@
 """V2 color bulb property batch read/write."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pyimouapi.bulb_light import (
@@ -25,10 +25,44 @@ def test_ref_payload_to_v2_maps_switch() -> None:
 
 def test_apply_bulb_v2_properties_reads_switch() -> None:
     state = empty_bulb_state()
-    apply_bulb_v2_properties(
+    changed = apply_bulb_v2_properties(
         state, {"control.outlet.enabled": 1, "light.white.mode": 0}
     )
+    assert changed is True
     assert state["on"] is True
+
+
+def test_apply_property_values_rejects_malformed_v2_bulb_values() -> None:
+    manager = ImouHaDeviceManager(ImouDeviceManager(MagicMock()))
+    device = ImouHaDevice("B1", "Bulb", "Imou", "L1", "1.0")
+    device.set_capability_set(
+        CapabilitySet(
+            properties=dict.fromkeys(
+                (
+                    "control.outlet.enabled",
+                    "light.white.level",
+                    "light.white.hue",
+                )
+            ),  # type: ignore[arg-type]
+            services=frozenset(),
+            events=frozenset(),
+        )
+    )
+    device.bulb_light = empty_bulb_state()
+    device.set_bulb_v2(True)
+    before = dict(device.bulb_light)
+
+    changed = manager.apply_property_values(
+        device,
+        {
+            "control.outlet.enabled": {},
+            "light.white.level": [],
+            "light.white.hue": "invalid",
+        },
+    )
+
+    assert changed is False
+    assert device.bulb_light == before
 
 
 def test_bulb_property_read_subset_only_contains_supported_properties() -> None:

@@ -812,8 +812,7 @@ class ImouHaDeviceManager:
         present = {ref: values[ref] for ref in BULB_PROPERTY_REFS if ref in values}
         if not present:
             return False
-        apply_bulb_properties(device.bulb_light, present)
-        return True
+        return apply_bulb_properties(device.bulb_light, present)
 
     @staticmethod
     def _v2_entity_raw_value(
@@ -916,8 +915,7 @@ class ImouHaDeviceManager:
                     if prop_id in values
                 }
                 if present:
-                    apply_bulb_v2_properties(device.bulb_light, present)
-                    changed = True
+                    changed |= apply_bulb_v2_properties(device.bulb_light, present)
             return changed
         changed = False
         for kind, key, meta in self._collect_property_entities(device):

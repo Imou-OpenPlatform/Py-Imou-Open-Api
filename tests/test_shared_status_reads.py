@@ -223,7 +223,7 @@ def test_battery_scalar_push_accepts_bounds_and_truncates_fraction(
     device = _battery_device("power.battery.level")
     manager = ImouHaDeviceManager(MagicMock())
 
-    changed = manager.apply_iot_property_values(device, {"power.battery.level": scalar})
+    changed = manager.apply_property_values(device, {"power.battery.level": scalar})
 
     assert changed is True
     assert device.sensors[PARAM_BATTERY][PARAM_STATE] == expected
@@ -263,7 +263,7 @@ def test_battery_scalar_push_falls_back_from_invalid_value(scalar: object) -> No
     device = _battery_device("power.battery.level", "power.battery.info")
     manager = ImouHaDeviceManager(MagicMock())
 
-    changed = manager.apply_iot_property_values(
+    changed = manager.apply_property_values(
         device,
         {
             "power.battery.level": scalar,
@@ -328,7 +328,7 @@ def test_battery_info_push_skips_malformed_candidates() -> None:
     device = _battery_device("power.battery.info")
     manager = ImouHaDeviceManager(MagicMock())
 
-    changed = manager.apply_iot_property_values(
+    changed = manager.apply_property_values(
         device,
         {"power.battery.info": _battery_info_with_malformed_candidates()},
     )
