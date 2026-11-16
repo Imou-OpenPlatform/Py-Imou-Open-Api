@@ -7,8 +7,11 @@ from pyimouapi.capability.catalog import CapabilitySet, PropertyCapability
 from pyimouapi.const import (
     PARAM_CURRENT_OPTION,
     PARAM_STATE,
+    PARAM_STATE_VARIANT,
     PARAM_V2_RAW_BY_OPTION,
+    PARAM_V2_STRUCT_FIELD,
     PARAM_V2_TARGET_ID,
+    STATE_VARIANT_NUMERIC,
 )
 from pyimouapi.device import ImouDeviceManager
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
@@ -77,6 +80,87 @@ def test_apply_property_values_updates_supported_entity_types() -> None:
     assert device.selects["mode"][PARAM_CURRENT_OPTION] == "automatic"
 
 
+def test_apply_property_values_ignores_normalized_equivalent_entity_values() -> None:
+    """Equivalent scalar, bool, enum, struct, and text values are unchanged."""
+    device = _switch_device()
+    device.switches["motion_detect"] = {
+        PARAM_V2_TARGET_ID: "motion.enabled",
+        PARAM_STATE: True,
+    }
+    device.binary_sensors["door"] = {
+        PARAM_V2_TARGET_ID: "door.state",
+        PARAM_V2_STRUCT_FIELD: "active",
+        PARAM_STATE: False,
+    }
+    device.sensors["temperature_current"] = {
+        PARAM_V2_TARGET_ID: "environment.temperature",
+        PARAM_STATE: 23.5,
+        PARAM_STATE_VARIANT: STATE_VARIANT_NUMERIC,
+    }
+    device.selects["mode"] = {
+        PARAM_V2_TARGET_ID: "working.mode",
+        PARAM_CURRENT_OPTION: "automatic",
+        PARAM_V2_RAW_BY_OPTION: {"off": 0, "automatic": 2},
+    }
+    device.texts["count"] = {
+        PARAM_V2_TARGET_ID: "counter.value",
+        PARAM_STATE: "7",
+    }
+    device.set_capability_set(
+        _property_capability_set(
+            "motion.enabled",
+            "door.state",
+            "environment.temperature",
+            "working.mode",
+            "counter.value",
+        )
+    )
+    manager = ImouHaDeviceManager(MagicMock())
+
+    changed = manager.apply_property_values(
+        device,
+        {
+            "motion.enabled": {"enabled": 1},
+            "door.state": {"active": "0"},
+            "environment.temperature": "23.5",
+            "working.mode": "2",
+            "counter.value": 7,
+        },
+    )
+
+    assert changed is False
+
+
+def test_apply_property_values_reports_none_to_value_as_changed() -> None:
+    device = _switch_device()
+    device.sensors["temperature_current"] = {
+        PARAM_V2_TARGET_ID: "environment.temperature",
+        PARAM_STATE: None,
+    }
+    device.set_capability_set(_property_capability_set("environment.temperature"))
+    manager = ImouHaDeviceManager(MagicMock())
+
+    assert (
+        manager.apply_property_values(device, {"environment.temperature": "23.5"})
+        is True
+    )
+    assert device.sensors["temperature_current"][PARAM_STATE] == 23.5
+
+
+def test_apply_property_values_does_not_confuse_bool_with_numeric_enum() -> None:
+    device = _switch_device()
+    device.selects["mode"] = {
+        PARAM_V2_TARGET_ID: "working.mode",
+        PARAM_CURRENT_OPTION: "off",
+        PARAM_V2_RAW_BY_OPTION: {"off": 0, "automatic": 1},
+    }
+    device.set_capability_set(_property_capability_set("working.mode"))
+    manager = ImouHaDeviceManager(MagicMock())
+
+    assert manager.apply_property_values(device, {"working.mode": True}) is False
+    assert device.selects["mode"][PARAM_CURRENT_OPTION] == "off"
+
+
 @pytest.mark.parametrize(
     ("values", "entity"),
     [
@@ -131,6 +215,19 @@ def test_apply_iot_property_values_forwards_to_neutral_method() -> None:
     manager.apply_property_values.assert_called_once_with(
         device, {"detection.motion.enabled": 1}
     )
+
+
+def test_apply_iot_property_values_preserves_unchanged_semantics() -> None:
+    device = _switch_device()
+    manager = ImouHaDeviceManager(MagicMock())
+
+    with pytest.warns(DeprecationWarning):
+        changed = manager.apply_iot_property_values(
+            device, {"detection.motion.enabled": 0}
+        )
+
+    assert changed is False
+    assert device.switches["motion_detect"][PARAM_STATE] is False
 
 
 @pytest.mark.asyncio

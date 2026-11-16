@@ -12,11 +12,13 @@ from pyimouapi.const import (
     PARAM_OUTPUT_DATA,
     PARAM_PROPERTIES,
     PARAM_STATE,
+    PARAM_STATE_VARIANT,
     PARAM_STATUS,
     PARAM_V2_FALLBACK_TARGET_ID,
     PARAM_V2_OUTPUT_FIELD,
     PARAM_V2_SOURCE_TARGET_IDS,
     PARAM_V2_TARGET_ID,
+    STATE_VARIANT_NUMERIC,
 )
 from pyimouapi.exceptions import RequestFailedException
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice, ImouHaDeviceManager
@@ -227,6 +229,18 @@ def test_battery_scalar_push_accepts_bounds_and_truncates_fraction(
 
     assert changed is True
     assert device.sensors[PARAM_BATTERY][PARAM_STATE] == expected
+
+
+def test_battery_push_ignores_normalized_equivalent_value() -> None:
+    device = _battery_device("power.battery.level")
+    device.sensors[PARAM_BATTERY][PARAM_STATE] = 64
+    device.sensors[PARAM_BATTERY][PARAM_STATE_VARIANT] = STATE_VARIANT_NUMERIC
+    manager = ImouHaDeviceManager(MagicMock())
+
+    changed = manager.apply_property_values(device, {"power.battery.level": 64.9})
+
+    assert changed is False
+    assert device.sensors[PARAM_BATTERY][PARAM_STATE] == 64
 
 
 @pytest.mark.asyncio

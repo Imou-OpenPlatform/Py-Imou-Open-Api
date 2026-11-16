@@ -78,6 +78,23 @@ def test_apply_bulb_properties_reads_ints_and_bools() -> None:
     assert scene_effect_name(2) == "Movie"
 
 
+def test_apply_bulb_properties_ignores_normalized_equivalent_values() -> None:
+    state = empty_bulb_state()
+    state["on"] = True
+    state["brightness"] = 100
+
+    assert (
+        apply_bulb_properties(
+            state,
+            {
+                REF_SWITCH: 1,
+                REF_BRIGHTNESS: 150,
+            },
+        )
+        is False
+    )
+
+
 @pytest.mark.parametrize(
     "values",
     [

@@ -149,18 +149,21 @@ def apply_bulb_v2_properties(state: dict[str, Any], values: dict[str, Any]) -> b
 
 
 def apply_bulb_properties(state: dict[str, Any], values: dict[str, Any]) -> bool:
-    """Apply accepted ref values and report whether any were assigned."""
+    """Apply accepted ref values and report whether normalized state changed."""
     changed = False
     if REF_SWITCH in values:
         raw = values[REF_SWITCH]
         if isinstance(raw, bool):
-            state["on"] = raw
-            changed = True
+            if state.get("on") is not raw:
+                state["on"] = raw
+                changed = True
         else:
             parsed = _as_int(raw)
             if parsed is not None:
-                state["on"] = parsed == 1
-                changed = True
+                normalized = parsed == 1
+                if state.get("on") is not normalized:
+                    state["on"] = normalized
+                    changed = True
     for key, ref in (
         ("mode", REF_MODE),
         ("brightness", REF_BRIGHTNESS),
@@ -175,8 +178,10 @@ def apply_bulb_properties(state: dict[str, Any], values: dict[str, Any]) -> bool
         parsed = _as_int(values[ref])
         if parsed is None:
             continue
-        state[key] = _clamp_read(key, parsed)
-        changed = True
+        normalized = _clamp_read(key, parsed)
+        if state.get(key) != normalized:
+            state[key] = normalized
+            changed = True
     return changed
 
 

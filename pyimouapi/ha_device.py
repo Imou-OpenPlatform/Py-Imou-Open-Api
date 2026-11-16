@@ -83,6 +83,7 @@ from .const import (
     PARAM_SIREN_START,
     PARAM_SIREN_STOP,
     PARAM_STATE,
+    PARAM_STATE_VARIANT,
     PARAM_STATUS,
     PARAM_STORAGE_USED,
     PARAM_SUPPORTED,
@@ -118,7 +119,7 @@ from .exceptions import (
 )
 from .property_on import property_is_on
 from .select_option import normalize_options, to_friendly, to_raw
-from .sensor import apply_sensor_state
+from .sensor import apply_sensor_state, normalize_sensor_state
 from .siren import build_siren_start_iot_content
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
@@ -129,6 +130,13 @@ def split_csv(value: Any) -> list[str]:
     if not isinstance(value, str) or not value:
         return []
     return value.split(",")
+
+
+def _state_values_equal(current: Any, new: Any) -> bool:
+    """Compare normalized HA state without treating bool as an integer."""
+    if isinstance(current, bool) or isinstance(new, bool):
+        return isinstance(current, bool) and isinstance(new, bool) and current is new
+    return current == new
 
 
 def _normalized_battery_level(value: Any) -> int | None:
@@ -864,20 +872,31 @@ class ImouHaDeviceManager:
             if parsed is None:
                 return False
             target = device.switches if kind == "switch" else device.binary_sensors
+            if _state_values_equal(target[key].get(PARAM_STATE), parsed):
+                return False
             target[key][PARAM_STATE] = parsed
         elif kind == "select":
             select_state = device.selects[key]
             raw_by_option = select_state.get(PARAM_V2_RAW_BY_OPTION)
             if isinstance(raw_by_option, dict):
                 for friendly, raw in raw_by_option.items():
-                    if raw == raw_value or str(raw) == str(raw_value):
+                    same_type_value = _state_values_equal(raw, raw_value)
+                    same_text_value = not (
+                        isinstance(raw, bool) or isinstance(raw_value, bool)
+                    ) and str(raw) == str(raw_value)
+                    if same_type_value or same_text_value:
+                        if select_state.get(PARAM_CURRENT_OPTION) == friendly:
+                            return False
                         select_state[PARAM_CURRENT_OPTION] = friendly
                         return True
                 return False
             if isinstance(raw_value, dict | list) or raw_value is None:
                 return False
             value = str(raw_value) if isinstance(raw_value, int) else raw_value
-            select_state[PARAM_CURRENT_OPTION] = to_friendly(key, value)
+            normalized = to_friendly(key, value)
+            if select_state.get(PARAM_CURRENT_OPTION) == normalized:
+                return False
+            select_state[PARAM_CURRENT_OPTION] = normalized
         elif kind in ("sensor", "text"):
             if meta.get(PARAM_EXPRESSION) and isinstance(raw_value, dict | list):
                 try:
@@ -889,13 +908,24 @@ class ImouHaDeviceManager:
                     return False
                 state = raw_value
             if kind == "sensor":
+                normalized, variant = normalize_sensor_state(key, state)
+                sensor = device.sensors[key]
+                if (
+                    _state_values_equal(sensor.get(PARAM_STATE), normalized)
+                    and sensor.get(PARAM_STATE_VARIANT) == variant
+                ):
+                    return False
                 apply_sensor_state(device.sensors, key, state)
             else:
-                device.texts[key][PARAM_STATE] = (
-                    str(state) if isinstance(state, int) else state
-                )
+                normalized = str(state) if isinstance(state, int) else state
+                if _state_values_equal(device.texts[key].get(PARAM_STATE), normalized):
+                    return False
+                device.texts[key][PARAM_STATE] = normalized
         elif kind == "alarm_control_panel" and device.alarm_control_panel is not None:
-            device.alarm_control_panel[PARAM_STATE] = alarm_mode_to_friendly(raw_value)
+            normalized = alarm_mode_to_friendly(raw_value)
+            if device.alarm_control_panel.get(PARAM_STATE) == normalized:
+                return False
+            device.alarm_control_panel[PARAM_STATE] = normalized
         else:
             return False
         return True
