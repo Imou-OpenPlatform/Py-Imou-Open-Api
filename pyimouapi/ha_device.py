@@ -512,6 +512,11 @@ class ImouHaDevice:
     def capability_set(self) -> CapabilitySet | None:
         return self._capability_set
 
+    @property
+    def capability_snapshot(self) -> tuple[str | None, CapabilitySet | None]:
+        """Return the product type and V2 capabilities used for entity setup."""
+        return (self._product_device_type, self._capability_set)
+
     def set_bulb_v2(self, enabled: bool = True) -> None:
         self._bulb_v2 = enabled
 
@@ -568,6 +573,9 @@ class ImouHaDevice:
         self._device_ability = other.device_ability
         self._channel_ability = other.channel_ability
         self._is_ipc = other.is_ipc
+        self._product_device_type = other.product_device_type
+        self._capability_set = other.capability_set
+        self._bulb_v2 = other.bulb_v2
         return removed
 
     def __str__(self) -> str:

@@ -3,7 +3,10 @@
 from unittest.mock import AsyncMock
 
 import pytest
-from pyimouapi.const import API_ENDPOINT_LIST_PRODUCT_DETAIL
+from pyimouapi.const import (
+    API_ENDPOINT_LIST_DEVICE_DETAILS,
+    API_ENDPOINT_LIST_PRODUCT_DETAIL,
+)
 from pyimouapi.device import ImouDeviceManager
 from pyimouapi.product_detail import ProductDetail, parse_product_details
 
@@ -120,6 +123,67 @@ async def test_device_discovery_adds_product_type_without_ability_refs() -> None
         API_ENDPOINT_LIST_PRODUCT_DETAIL,
         {"productIds": ["lamp-pid"]},
     )
+
+
+@pytest.mark.asyncio
+async def test_device_discovery_batches_product_details_after_all_pages() -> None:
+    """One discovery fetches every unique product only after pagination."""
+
+    def device(device_id: str, product_id: str) -> dict[str, str]:
+        return {
+            "deviceId": device_id,
+            "deviceName": device_id,
+            "deviceStatus": "1",
+            "brand": "Imou",
+            "deviceModel": "Model",
+            "productId": product_id,
+        }
+
+    page_one = [
+        device("lamp", "zeta"),
+        device("plug", "alpha"),
+        device("duplicate", "zeta"),
+    ]
+    page_two = [device("duplicate", "zeta")]
+    api_client = AsyncMock()
+
+    async def request(endpoint: str, params: dict) -> dict:
+        if endpoint == API_ENDPOINT_LIST_DEVICE_DETAILS:
+            return {
+                "count": 4,
+                "deviceList": page_one if params["page"] == 1 else page_two,
+            }
+        assert endpoint == API_ENDPOINT_LIST_PRODUCT_DETAIL
+        assert api_client.async_request_api.await_count == 3
+        return {
+            "item": [
+                {"productId": "alpha", "deviceType": "Plug"},
+                {"productId": "zeta", "deviceType": "Lamp"},
+            ]
+        }
+
+    api_client.async_request_api.side_effect = request
+    manager = ImouDeviceManager(api_client)
+
+    devices = await manager.async_get_devices(page_size=3, fetch_ability_refs=False)
+
+    assert [item.device_id for item in devices] == [
+        "lamp",
+        "plug",
+        "duplicate",
+        "duplicate",
+    ]
+    assert [item.product_device_type for item in devices] == [
+        "Lamp",
+        "Plug",
+        "Lamp",
+        "Lamp",
+    ]
+    assert api_client.async_request_api.await_args_list[2].args == (
+        API_ENDPOINT_LIST_PRODUCT_DETAIL,
+        {"productIds": ["alpha", "zeta"]},
+    )
+    assert api_client.async_request_api.await_count == 3
 
 
 @pytest.mark.asyncio

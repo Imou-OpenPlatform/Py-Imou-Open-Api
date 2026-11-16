@@ -133,3 +133,25 @@ def test_build_device_copies_product_device_type() -> None:
     source.set_product_device_type("Lamp")
     device = ImouHaDeviceManager.build_device(source)
     assert device.product_device_type == "Lamp"
+
+
+def test_replace_capabilities_syncs_complete_v2_snapshot() -> None:
+    current = ImouHaDevice("B1", "Bulb", "Imou", "L1", "1.0")
+    fresh = ImouHaDevice("B1", "Bulb", "Imou", "L1", "1.0")
+    capability = CapabilitySet(
+        properties=dict.fromkeys(("control.outlet.enabled",)),  # type: ignore[arg-type]
+        services=frozenset(),
+        events=frozenset(),
+    )
+    fresh.set_product_device_type("Lamp")
+    fresh.set_capability_set(capability)
+    fresh.bulb_light = empty_bulb_state()
+    fresh.set_bulb_v2(True)
+
+    assert current.capability_snapshot == (None, None)
+
+    current.replace_capabilities(fresh)
+
+    assert current.capability_snapshot == ("Lamp", capability)
+    assert current.bulb_light == fresh.bulb_light
+    assert current.bulb_v2 is True

@@ -419,12 +419,29 @@ class ImouDeviceManager:
         - ``True``: fetch for every IoT device on the page
         - a set of device ids: fetch only for those ids
         """
-        return await self._async_get_devices(
+        devices = await self._async_get_devices(
             page,
             page_size,
             fetch_ability_refs=fetch_ability_refs,
-            missing_product_details=set(),
         )
+        product_ids = {
+            device.product_id for device in devices if device.product_id is not None
+        }
+        if product_ids:
+            try:
+                details = await self.async_get_product_details(product_ids)
+            except asyncio.CancelledError:
+                raise
+            except Exception as err:
+                _LOGGER.warning("Could not read product details: %s", err)
+            else:
+                for device in devices:
+                    if (
+                        device.product_id is not None
+                        and (detail := details.get(device.product_id)) is not None
+                    ):
+                        device.set_product_device_type(detail.device_type)
+        return devices
 
     async def _async_get_devices(
         self,
@@ -432,7 +449,6 @@ class ImouDeviceManager:
         page_size: int,
         *,
         fetch_ability_refs: bool | set[str],
-        missing_product_details: set[str],
     ) -> list[ImouDevice]:
         params = {
             PARAM_PAGE: page,
@@ -498,28 +514,6 @@ class ImouDeviceManager:
                 imou_device.set_product_id(device[PARAM_PRODUCT_ID])
                 iot_devices.append(imou_device)
             devices.append(imou_device)
-        product_ids = {
-            device.product_id
-            for device in iot_devices
-            if device.product_id and device.product_id not in missing_product_details
-        }
-        if product_ids:
-            try:
-                details = await self.async_get_product_details(product_ids)
-            except asyncio.CancelledError:
-                raise
-            except Exception as err:
-                missing_product_details.update(product_ids)
-                _LOGGER.warning("Could not read product details: %s", err)
-            else:
-                missing_product_details.update(product_ids - details.keys())
-                for iot_device in iot_devices:
-                    product_id = iot_device.product_id
-                    if product_id is None:
-                        continue
-                    detail = details.get(product_id)
-                    if detail is not None:
-                        iot_device.set_product_device_type(detail.device_type)
         # Each iot device costs one getIotDeviceDetailInfo call; issue them together
         # so listing N devices is one round trip instead of N serial ones. Callers
         # that only need the set of device keys (periodic rediscovery) pass
@@ -560,7 +554,6 @@ class ImouDeviceManager:
                     page + 1,
                     page_size,
                     fetch_ability_refs=fetch_ability_refs,
-                    missing_product_details=missing_product_details,
                 )
             )
         return devices
