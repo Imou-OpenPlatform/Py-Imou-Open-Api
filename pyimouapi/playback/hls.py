@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 from urllib.parse import urljoin
 
@@ -14,6 +15,31 @@ from ..openapi import ImouOpenApiClient
 
 RECORD_TYPE_CLOUD = "cloudRecord"
 RECORD_TYPE_LOCAL = "localRecord"
+_RECORD_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+
+def validate_record_playback_window(
+    begin_time: str, end_time: str, record_type: str
+) -> None:
+    """Validate a same-day recording playback window."""
+    if record_type not in (RECORD_TYPE_LOCAL, RECORD_TYPE_CLOUD):
+        raise ValueError("record_type must be localRecord or cloudRecord")
+
+    parsed_times: list[datetime] = []
+    for name, value in (("begin_time", begin_time), ("end_time", end_time)):
+        try:
+            parsed = datetime.strptime(value, _RECORD_TIME_FORMAT)
+        except (TypeError, ValueError) as err:
+            raise ValueError(f"{name} must use the YYYY-MM-DD HH:MM:SS format") from err
+        if parsed.strftime(_RECORD_TIME_FORMAT) != value:
+            raise ValueError(f"{name} must use the YYYY-MM-DD HH:MM:SS format")
+        parsed_times.append(parsed)
+
+    begin, end = parsed_times
+    if begin >= end:
+        raise ValueError("begin_time must be before end_time")
+    if begin.date() != end.date():
+        raise ValueError("begin_time and end_time must be on the same calendar day")
 
 
 def normalize_imou_hls_segment_url(url: str) -> str:
@@ -97,6 +123,7 @@ async def async_create_device_record_hls(
     file_name: str | None = None,
 ) -> str | None:
     """Request an HLS playback URL for a same-day recording window."""
+    validate_record_playback_window(begin_time, end_time, record_type)
     params: dict[str, Any] = {
         PARAM_DEVICE_ID: device_id,
         PARAM_CHANNEL_ID: channel_id,
