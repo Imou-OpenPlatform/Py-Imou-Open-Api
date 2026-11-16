@@ -9,6 +9,7 @@ from pyimouapi.playback.hls import (
     is_hls_playback_url,
     normalize_imou_hls_segment_url,
     parse_hls_media_segment_urls,
+    parse_record_hls_url,
     pick_hls_variant_playlist_url,
     validate_record_playback_window,
 )
@@ -224,6 +225,18 @@ def test_pick_hls_variant_playlist_url() -> None:
 )
 def test_hls_playback_url_rejects_unsafe_syntax(url: str) -> None:
     assert is_hls_playback_url(url) is False
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        " https://media.example/record.m3u8",
+        "https://media.example/record.m3u8 ",
+        "\thttps://media.example/record.m3u8",
+    ],
+)
+def test_record_hls_url_rejects_surrounding_whitespace(url: str) -> None:
+    assert parse_record_hls_url({"url": url}) is None
 
 
 @pytest.mark.parametrize(

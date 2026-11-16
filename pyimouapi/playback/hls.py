@@ -116,7 +116,7 @@ def parse_record_hls_url(data: Any) -> str | None:
     url = data.get("url")
     if not url:
         return None
-    url_str = str(url).strip()
+    url_str = str(url)
     if not url_str or not is_hls_playback_url(url_str):
         return None
     return url_str
