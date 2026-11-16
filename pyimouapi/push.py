@@ -73,7 +73,10 @@ def is_alarm_msg_type(msg_type: str | None) -> bool:
     """Return True if this push should be treated as a security alarm."""
     if msg_type is None:
         return False
-    return msg_type.strip().lower() not in _NON_ALARM_MSG_TYPES_LOWER
+    lower = msg_type.strip().lower()
+    if lower in _NON_ALARM_MSG_TYPES_LOWER:
+        return False
+    return not (lower.startswith("e_") and lower[2:] in _NON_ALARM_MSG_TYPES_LOWER)
 
 
 _IOT_PUSH_ENVELOPES = frozenset({"iotEvent", "iotProperty"})
@@ -150,7 +153,11 @@ def is_unknown_legacy_msg_type(msg_type: str | None) -> bool:
     ):
         return False
     if lower.startswith("e_"):
-        return lower[2:] not in PUSH_DISPATCH_MSG_TYPES_LOWER
+        remainder = lower[2:]
+        return (
+            remainder not in PUSH_DISPATCH_MSG_TYPES_LOWER
+            and remainder not in _NON_ALARM_MSG_TYPES_LOWER
+        )
     return True
 
 
@@ -159,21 +166,21 @@ def push_dispatch_permitted(msg_type: str | None) -> bool:
     if not isinstance(msg_type, str) or not msg_type.strip():
         return False
     stripped = msg_type.strip()
+    lower = stripped.lower()
+    if lower in PUSH_DISPATCH_MSG_TYPES_LOWER:
+        return True
+    if lower.startswith("e_"):
+        remainder = lower[2:]
+        if remainder.startswith("e_") or remainder in _NON_ALARM_MSG_TYPES_LOWER:
+            return False
+        return remainder in PUSH_DISPATCH_MSG_TYPES_LOWER or is_unknown_legacy_msg_type(
+            stripped
+        )
     if is_v2_property_report(stripped) or is_v2_capability_event_id(stripped):
         return True
     if _is_digit_str(stripped):
         return True
-    lower = stripped.lower()
-    if lower in PUSH_DISPATCH_MSG_TYPES_LOWER:
-        return True
-    if is_unknown_legacy_msg_type(stripped):
-        return True
-    if not lower.startswith("e_"):
-        return False
-    remainder = lower[2:]
-    if remainder.startswith("e_"):
-        return False
-    return remainder in PUSH_DISPATCH_MSG_TYPES_LOWER
+    return is_unknown_legacy_msg_type(stripped)
 
 
 def push_subscription_kind(msg_type: str | None) -> PushSubscriptionKind:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from pyimouapi.push import (
+    NON_ALARM_MSG_TYPES,
     V2_PROPERTY_REPORT_MSG_TYPE,
     event_id_from_push,
     event_ref_lookup_key,
@@ -24,6 +25,7 @@ from pyimouapi.push import (
     v2_capability_event_permitted,
     v2_property_report_values,
 )
+from pyimouapi.push_dispatch_allowlist import PUSH_DISPATCH_MSG_TYPES_LOWER
 
 
 @pytest.mark.parametrize(
@@ -321,9 +323,43 @@ def test_push_dispatch_keeps_recognized_non_alarm_operation_policy() -> None:
     assert is_unknown_legacy_msg_type("numberstat") is False
 
 
+@pytest.mark.parametrize(
+    "msg_type",
+    sorted(
+        msg_type for msg_type in NON_ALARM_MSG_TYPES if not msg_type.startswith("e_")
+    ),
+)
+def test_prefixed_known_non_alarm_never_uses_unknown_alarm_fallback(
+    msg_type: str,
+) -> None:
+    prefixed = f"e_{msg_type}"
+
+    assert is_unknown_legacy_msg_type(prefixed) is False
+    assert is_alarm_msg_type(prefixed) is False
+    assert push_dispatch_permitted(prefixed) is (
+        prefixed.lower() in PUSH_DISPATCH_MSG_TYPES_LOWER
+    )
+
+
+@pytest.mark.parametrize("msg_type", ["e_numberstat", " E_NumberStat "])
+def test_prefixed_denied_non_alarm_normalizes_case_and_whitespace(
+    msg_type: str,
+) -> None:
+    assert push_dispatch_permitted(msg_type) is False
+    assert is_unknown_legacy_msg_type(msg_type) is False
+    assert is_alarm_msg_type(msg_type) is False
+
+
 def test_push_dispatch_rejects_double_e_prefix() -> None:
     assert push_dispatch_permitted("e_e_videomotion") is False
+    assert is_unknown_legacy_msg_type("e_e_videomotion") is False
     assert push_dispatch_permitted("e_videoMotion") is True
+
+
+def test_unknown_prefixed_legacy_alarm_keeps_fallback() -> None:
+    assert push_dispatch_permitted("e_newAlarmFromCloud") is True
+    assert is_unknown_legacy_msg_type("e_newAlarmFromCloud") is True
+    assert is_alarm_msg_type("e_newAlarmFromCloud") is True
 
 
 @pytest.mark.parametrize(
