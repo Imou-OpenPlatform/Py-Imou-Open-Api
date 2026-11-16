@@ -911,7 +911,7 @@ class ImouDeviceManager:
         """Create an HLS URL for a same-day recording interval."""
         from .playback.hls import async_create_device_record_hls
 
-        url = await async_create_device_record_hls(
+        return await async_create_device_record_hls(
             self._imou_api_client,
             device_id=device_id,
             channel_id=channel_id,
@@ -921,7 +921,6 @@ class ImouDeviceManager:
             stream_id=stream_id,
             file_name=file_name,
         )
-        return {"url": url} if url else {}
 
     async def async_create_device_record_flv(
         self,
@@ -957,6 +956,7 @@ class ImouDeviceManager:
         year: int,
         month: int,
         record_type: str = "0",
+        product_id: str | None = None,
     ) -> dict[str, Any]:
         """Local recording month bitmap via record.file.bitmap."""
         from .local_record import async_local_record_bitmap
@@ -968,6 +968,7 @@ class ImouDeviceManager:
             year=year,
             month=month,
             record_type=record_type,
+            product_id=product_id,
         )
 
     async def async_local_record_list(

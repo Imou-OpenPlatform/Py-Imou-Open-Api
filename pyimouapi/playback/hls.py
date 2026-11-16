@@ -109,6 +109,9 @@ def is_hls_playback_url(url: str) -> bool:
     )
 
 
+_PLAYBACK_EXPIRY_KEYS = ("expiresAt", "expireAt", "expiry", "expireTime")
+
+
 def parse_record_hls_url(data: Any) -> str | None:
     """Extract HLS url from createDeviceRecordHls data."""
     if not isinstance(data, dict):
@@ -122,6 +125,21 @@ def parse_record_hls_url(data: Any) -> str | None:
     return url_str
 
 
+def parse_record_hls_playback(data: Any) -> dict[str, Any]:
+    """Return the playback URL and the first supplied expiry field."""
+    url = parse_record_hls_url(data)
+    if url is None or not isinstance(data, dict):
+        return {}
+    playback: dict[str, Any] = {"url": url}
+    for key in _PLAYBACK_EXPIRY_KEYS:
+        value = data.get(key)
+        if value is None or value == "":
+            continue
+        playback[key] = value
+        break
+    return playback
+
+
 async def async_create_device_record_hls(
     client: ImouOpenApiClient,
     *,
@@ -132,7 +150,7 @@ async def async_create_device_record_hls(
     record_type: str,
     stream_id: int | None = None,
     file_name: str | None = None,
-) -> str | None:
+) -> dict[str, Any]:
     """Request an HLS playback URL for a same-day recording window."""
     validate_record_playback_window(begin_time, end_time, record_type)
     params: dict[str, Any] = {
@@ -147,4 +165,4 @@ async def async_create_device_record_hls(
     if stream_id is not None:
         params["streamId"] = stream_id
     data = await client.async_request_api(API_ENDPOINT_CREATE_DEVICE_RECORD_HLS, params)
-    return parse_record_hls_url(data)
+    return parse_record_hls_playback(data)

@@ -142,7 +142,7 @@ async def test_valid_hls_request_payload_is_unchanged(
         file_name=file_name,
     )
 
-    assert result == "https://example.test/record.m3u8"
+    assert result == {"url": "https://example.test/record.m3u8"}
     expected = {
         "deviceId": "device",
         "channelId": "0",
@@ -249,3 +249,26 @@ def test_record_hls_url_rejects_surrounding_whitespace(url: str) -> None:
 )
 def test_hls_playback_url_accepts_valid_http_urls(url: str) -> None:
     assert is_hls_playback_url(url) is True
+
+
+async def test_manager_preserves_playback_expiry() -> None:
+    client = AsyncMock()
+    client.async_request_api.return_value = {
+        "url": "https://example.test/record.m3u8",
+        "expireTime": 1_800_000_000,
+        "unused": "ignored",
+    }
+    manager = ImouDeviceManager(client)
+
+    result = await manager.async_create_device_record_hls(
+        "device",
+        "0",
+        begin_time="2026-11-01 00:06:55",
+        end_time="2026-11-01 00:08:10",
+        record_type="cloudRecord",
+    )
+
+    assert result == {
+        "url": "https://example.test/record.m3u8",
+        "expireTime": 1_800_000_000,
+    }

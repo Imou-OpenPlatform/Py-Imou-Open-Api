@@ -162,12 +162,14 @@ async def async_local_record_bitmap(
     year: int,
     month: int,
     record_type: str = LOCAL_RECORD_TYPE_ALL,
+    product_id: str | None = None,
 ) -> dict[str, Any]:
     """Invoke record.file.bitmap."""
     data = await async_service_invoke(
         client,
         device_id=device_id,
         channel_id=channel_id,
+        product_id=product_id,
         service_id=SERVICE_RECORD_FILE_BITMAP,
         input_data={"type": record_type, "year": year, "month": month},
     )

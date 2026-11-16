@@ -300,3 +300,21 @@ async def test_local_record_list_forwards_channel_and_product() -> None:
     assert params["channelId"] == "3"
     assert params["productId"] == "pid"
     assert params["inputData"]["limit"] == 30
+
+
+@pytest.mark.asyncio
+async def test_local_record_bitmap_forwards_product() -> None:
+    client = AsyncMock()
+    client.async_request_api.return_value = {}
+    manager = ImouDeviceManager(client)
+
+    await manager.async_local_record_bitmap(
+        "did", "3", year=2026, month=11, product_id="pid"
+    )
+
+    params = client.async_request_api.await_args.args[1]
+    assert params["deviceId"] == "did"
+    assert params["channelId"] == "3"
+    assert params["productId"] == "pid"
+    assert params["serviceId"] == "record.file.bitmap"
+    assert params["inputData"] == {"type": "0", "year": 2026, "month": 11}
