@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Collection
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime
 from time import monotonic
 from typing import Any
 
@@ -799,8 +800,10 @@ class ImouDeviceManager:
         from .cloud_record import RECORD_QUERY_PAGE_SIZE, parse_cloud_records_data
 
         segments: list = []
+        seen: set[str | tuple[str, str, str]] = set()
         cursor_begin = begin_time
-        while True:
+        max_pages = 1000
+        for _page in range(max_pages):
             data = await self.async_query_cloud_records(
                 device_id,
                 channel_id,
@@ -808,15 +811,74 @@ class ImouDeviceManager:
                 end_time=end_time,
                 count=RECORD_QUERY_PAGE_SIZE,
             )
-            batch = parse_cloud_records_data(data)
-            if not batch:
+            records = data.get("records") if isinstance(data, dict) else None
+            raw_records = records if isinstance(records, list) else []
+            batch: list[tuple[Any, str]] = []
+            for item in raw_records:
+                file_name = ""
+                parsed = parse_cloud_records_data({"records": [item]})
+                if isinstance(item, dict):
+                    file_name = str(item.get("fileName") or "").strip()
+                    if not parsed and not str(item.get("recordId") or "").strip():
+                        item_with_id = dict(item)
+                        item_with_id["recordId"] = "__missing_record_id__"
+                        parsed = [
+                            replace(segment, record_id="")
+                            for segment in parse_cloud_records_data(
+                                {"records": [item_with_id]}
+                            )
+                        ]
+                batch.extend((segment, file_name) for segment in parsed)
+
+            for segment, file_name in batch:
+                identity: str | tuple[str, str, str]
+                if segment.record_id:
+                    identity = segment.record_id
+                else:
+                    identity = (
+                        segment.begin_time,
+                        segment.end_time,
+                        file_name,
+                    )
+                if identity not in seen:
+                    seen.add(identity)
+                    segments.append(segment)
+
+            if len(raw_records) < RECORD_QUERY_PAGE_SIZE:
                 break
-            segments.extend(batch)
-            if len(batch) < RECORD_QUERY_PAGE_SIZE:
+
+            usable_end_times: list[tuple[datetime, str]] = []
+            for segment, _file_name in batch:
+                try:
+                    usable_end_times.append(
+                        (datetime.fromisoformat(segment.end_time), segment.end_time)
+                    )
+                except ValueError:
+                    continue
+            if not usable_end_times:
+                _LOGGER.warning(
+                    "Cloud record page has no usable end time for %s", device_id
+                )
                 break
-            cursor_begin = batch[-1].end_time
-            if cursor_begin >= end_time:
+            next_cursor_time, next_cursor = max(usable_end_times)
+            try:
+                cursor_time = datetime.fromisoformat(cursor_begin)
+                window_end_time = datetime.fromisoformat(end_time)
+            except ValueError:
+                _LOGGER.warning("Cloud record cursor did not advance for %s", device_id)
                 break
+            if next_cursor_time <= cursor_time:
+                _LOGGER.warning("Cloud record cursor did not advance for %s", device_id)
+                break
+            if next_cursor_time >= window_end_time:
+                break
+            cursor_begin = next_cursor
+        else:
+            _LOGGER.warning(
+                "Cloud record pagination reached the %d-page safety limit for %s",
+                max_pages,
+                device_id,
+            )
         return segments
 
     async def async_create_device_record_hls(
