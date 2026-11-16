@@ -882,7 +882,7 @@ class ImouHaDeviceManager:
             product_id=device.product_id,
         )
 
-    async def _async_update_v2_service_entities(self, device: ImouHaDevice) -> None:
+    async def _async_update_v2_service_entities(self, device: ImouHaDevice) -> bool:
         """Poll sensors that read through a v2 service ``outputData``."""
         by_service: dict[str, list[tuple[str, dict[str, Any]]]] = {}
         for sensor_type, meta in device.sensors.items():
@@ -892,7 +892,8 @@ class ImouHaDeviceManager:
                 continue
             by_service.setdefault(str(service_id), []).append((sensor_type, meta))
         if not by_service:
-            return
+            return True
+        complete = True
         for service_id, items in by_service.items():
             try:
                 data = await async_service_invoke(
@@ -912,13 +913,16 @@ class ImouHaDeviceManager:
                     device.device_id,
                     exc,
                 )
+                complete = False
                 continue
             output = data.get(PARAM_OUTPUT_DATA)
             if not isinstance(output, dict):
+                complete = False
                 continue
             for sensor_type, meta in items:
                 field = meta[PARAM_V2_OUTPUT_FIELD]
                 if field not in output:
+                    complete = False
                     continue
                 raw = output[field]
                 if meta.get(PARAM_EXPRESSION) and isinstance(raw, dict | list):
@@ -926,16 +930,17 @@ class ImouHaDeviceManager:
                 else:
                     state = raw
                 apply_sensor_state(device.sensors, sensor_type, state)
+        return complete
 
-    async def _async_update_v2_bulb_state(self, device: ImouHaDevice) -> None:
+    async def _async_update_v2_bulb_state(self, device: ImouHaDevice) -> bool:
         if device.bulb_light is None or not device.bulb_v2:
-            return
+            return True
         capability = device.capability_set
         if capability is None:
-            return
+            return True
         property_ids = list(bulb_v2_property_ids_for_device(set(capability.properties)))
         if not property_ids:
-            return
+            return True
         try:
             values = await async_property_get(
                 self.delegate.api_client,
@@ -952,14 +957,15 @@ class ImouHaDeviceManager:
                 device.device_id,
                 exc,
             )
-            return
+            return False
         apply_bulb_v2_properties(device.bulb_light, values)
+        return all(property_id in values for property_id in property_ids)
 
-    async def _async_update_v2_property_entities(self, device: ImouHaDevice) -> None:
+    async def _async_update_v2_property_entities(self, device: ImouHaDevice) -> bool:
         """Refresh state for entities registered via capability.list."""
         entities = self._collect_v2_property_entities(device)
         if not entities:
-            return
+            return True
         property_ids = list({str(meta[PARAM_V2_TARGET_ID]) for _, _, meta in entities})
         try:
             values = await async_property_get(
@@ -975,10 +981,12 @@ class ImouHaDeviceManager:
             _LOGGER.warning(
                 "device.property.get failed for %s: %s", device.device_id, exc
             )
-            return
+            return False
+        complete = True
         for kind, key, meta in entities:
             target_id = str(meta[PARAM_V2_TARGET_ID])
             if target_id not in values:
+                complete = False
                 self._debug_missing_property_ref(
                     device,
                     target_id,
@@ -992,6 +1000,7 @@ class ImouHaDeviceManager:
             if struct_field and isinstance(raw, dict):
                 raw = raw.get(struct_field)
             self._apply_property_value(device, kind, key, meta, raw)
+        return complete
 
     async def _async_update_properties_from_detail(
         self, device: ImouHaDevice, detail: dict[str, Any]
@@ -1139,14 +1148,21 @@ class ImouHaDeviceManager:
             return set()
 
         fetched: set[str] = set()
+        all_v2_devices = [d for d in devices if d.capability_set is not None]
         v2_devices = [d for d in online_devices if d.capability_set is not None]
+        snapshot_complete = len(v2_devices) == len(all_v2_devices)
         for device in v2_devices:
             physical_id = self._resolve_device_id(device)
             if physical_id in skip_iot_property_ids:
                 continue
-            await self._async_update_v2_property_entities(device)
-            await self._async_update_v2_service_entities(device)
-            await self._async_update_v2_bulb_state(device)
+            snapshot_complete &= await self._async_update_v2_property_entities(device)
+            snapshot_complete &= await self._async_update_v2_service_entities(device)
+            snapshot_complete &= await self._async_update_v2_bulb_state(device)
+        if (
+            v2_devices
+            and snapshot_complete
+            and self._resolve_device_id(v2_devices[0]) not in skip_iot_property_ids
+        ):
             fetched.add(physical_id)
 
         await self._async_gather_reads(

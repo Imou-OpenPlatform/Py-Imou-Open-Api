@@ -13,6 +13,7 @@ from pyimouapi.const import (
     PARAM_REF,
     PARAM_STATE,
     PARAM_STATUS,
+    PARAM_V2_OUTPUT_FIELD,
     PARAM_V2_TARGET_ID,
 )
 from pyimouapi.ha_device import DeviceStatus, ImouHaDevice, ImouHaDeviceManager
@@ -157,6 +158,63 @@ async def test_update_devices_status_returns_fetched_physical_id() -> None:
         fetched = await manager.async_update_devices_status([device])
 
     assert device.device_id in fetched
+    assert device.switches["relay"][PARAM_STATE] is True
+
+
+@pytest.mark.asyncio
+async def test_failed_v2_property_snapshot_is_retried() -> None:
+    """A failed first property read must not suppress the next interval."""
+    device = _v2_relay_device()
+    target = device.switches["relay"][PARAM_V2_TARGET_ID]
+    delegate = MagicMock()
+    delegate.api_client = MagicMock()
+    delegate.async_get_device_online_status = AsyncMock(
+        return_value={PARAM_ONLINE: "1", PARAM_CHANNELS: []}
+    )
+    manager = ImouHaDeviceManager(delegate)
+
+    with patch(
+        "pyimouapi.ha_device.async_property_get",
+        AsyncMock(side_effect=[RuntimeError("property down"), {target: 1}]),
+    ) as property_get:
+        first = await manager.async_update_devices_status([device])
+        second = await manager.async_update_devices_status([device])
+
+    assert first == set()
+    assert second == {device.device_id}
+    assert property_get.await_count == 2
+    assert device.switches["relay"][PARAM_STATE] is True
+
+
+@pytest.mark.asyncio
+async def test_partial_v2_snapshot_is_not_reported_complete() -> None:
+    """A property success cannot hide a failed service-backed state read."""
+    device = _v2_relay_device()
+    target = device.switches["relay"][PARAM_V2_TARGET_ID]
+    device.sensors["power"] = {
+        PARAM_V2_TARGET_ID: "power.outlet.read",
+        PARAM_V2_OUTPUT_FIELD: "power",
+    }
+    delegate = MagicMock()
+    delegate.api_client = MagicMock()
+    delegate.async_get_device_online_status = AsyncMock(
+        return_value={PARAM_ONLINE: "1", PARAM_CHANNELS: []}
+    )
+    manager = ImouHaDeviceManager(delegate)
+
+    with (
+        patch(
+            "pyimouapi.ha_device.async_property_get",
+            AsyncMock(return_value={target: 1}),
+        ),
+        patch(
+            "pyimouapi.ha_device.async_service_invoke",
+            AsyncMock(side_effect=RuntimeError("service down")),
+        ),
+    ):
+        fetched = await manager.async_update_devices_status([device])
+
+    assert fetched == set()
     assert device.switches["relay"][PARAM_STATE] is True
 
 
