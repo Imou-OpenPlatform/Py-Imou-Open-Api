@@ -5,8 +5,12 @@ import logging
 from collections.abc import Collection
 from dataclasses import dataclass, replace
 from datetime import datetime
+from math import ceil
 from time import monotonic
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .local_record import LocalRecordSegment
 
 from .const import (
     API_ENDPOINT_BIND_DEVICE,
@@ -976,6 +980,7 @@ class ImouDeviceManager:
         limit: int = 50,
         record_type: str = "0",
         session_id: str | None = None,
+        product_id: str | None = None,
     ) -> dict[str, Any]:
         """Local recording list for a time window."""
         from .local_record import async_local_record_list
@@ -989,7 +994,98 @@ class ImouDeviceManager:
             limit=limit,
             record_type=record_type,
             session_id=session_id,
+            product_id=product_id,
         )
+
+    async def async_list_local_record_segments(
+        self,
+        device_id: str,
+        channel_id: str,
+        *,
+        begin_time: str,
+        end_time: str,
+        product_id: str | None = None,
+        limit: int = 100,
+    ) -> list[LocalRecordSegment]:
+        """List all local segments in a window, paging record.file.list."""
+        from .local_record import parse_local_record_list
+
+        cursor_time = _parse_record_time(begin_time)
+        window_end_time = _parse_record_time(end_time)
+        if (
+            cursor_time is None
+            or window_end_time is None
+            or cursor_time >= window_end_time
+        ):
+            return []
+
+        bounded_limit = max(30, min(100, int(limit)))
+        window_seconds = min(
+            24 * 60 * 60, int((window_end_time - cursor_time).total_seconds())
+        )
+        max_pages = max(1, ceil(window_seconds / bounded_limit) + 1)
+        segments: list[LocalRecordSegment] = []
+        seen: set[str | tuple[str, str, str]] = set()
+        cursor_begin = begin_time
+        for _page in range(max_pages):
+            data = await self.async_local_record_list(
+                device_id,
+                channel_id,
+                begin_time=cursor_begin,
+                end_time=end_time,
+                limit=bounded_limit,
+                product_id=product_id,
+            )
+            output_data = data.get("outputData") if isinstance(data, dict) else None
+            raw_records = (
+                output_data.get("records") if isinstance(output_data, dict) else None
+            )
+            raw_records = raw_records if isinstance(raw_records, list) else []
+            batch = parse_local_record_list(data)
+
+            for segment in batch:
+                record_id = getattr(segment, "record_id", None)
+                identity: str | tuple[str, str, str]
+                if record_id:
+                    identity = str(record_id)
+                else:
+                    identity = (
+                        segment.begin_time,
+                        segment.end_time,
+                        segment.file_name,
+                    )
+                if identity not in seen:
+                    seen.add(identity)
+                    segments.append(segment)
+
+            if len(raw_records) < bounded_limit:
+                break
+
+            usable_end_times: list[tuple[datetime, str]] = []
+            for segment in batch:
+                parsed_end_time = _parse_record_time(segment.end_time)
+                if parsed_end_time is not None:
+                    usable_end_times.append((parsed_end_time, segment.end_time))
+            if not usable_end_times:
+                _LOGGER.warning(
+                    "Local record page has no usable end time for %s", device_id
+                )
+                break
+            next_cursor_time, next_cursor = max(usable_end_times)
+            if next_cursor_time <= cursor_time:
+                _LOGGER.warning("Local record cursor did not advance for %s", device_id)
+                break
+            if next_cursor_time >= window_end_time:
+                break
+            cursor_begin = next_cursor
+            cursor_time = next_cursor_time
+        else:
+            _LOGGER.warning(
+                "Local record pagination reached the %d-page safety limit for %s",
+                max_pages,
+                device_id,
+            )
+        return segments
 
     async def async_get_device_cloud(
         self, device_id: str, channel_id: str

@@ -184,6 +184,7 @@ async def async_local_record_list(
     limit: int = DEFAULT_LOCAL_LIST_LIMIT,
     record_type: str = LOCAL_RECORD_TYPE_ALL,
     session_id: str | None = None,
+    product_id: str | None = None,
 ) -> dict[str, Any]:
     """Invoke record.file.list."""
     bounded = max(30, min(100, int(limit)))
@@ -199,6 +200,7 @@ async def async_local_record_list(
         client,
         device_id=device_id,
         channel_id=channel_id,
+        product_id=product_id,
         service_id=SERVICE_RECORD_FILE_LIST,
         input_data=input_data,
     )
