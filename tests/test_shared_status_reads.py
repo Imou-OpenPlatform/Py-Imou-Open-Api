@@ -194,6 +194,88 @@ async def test_battery_source_precedence(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("scalar", "expected"),
+    [(0, 0), (100, 100), (64.9, 64)],
+)
+async def test_battery_scalar_poll_accepts_bounds_and_truncates_fraction(
+    scalar: int | float, expected: int
+) -> None:
+    device = _battery_device("power.battery.level")
+    manager = ImouHaDeviceManager(MagicMock())
+
+    with patch(
+        "pyimouapi.ha_device.async_property_get",
+        AsyncMock(return_value={"power.battery.level": scalar}),
+    ):
+        await manager._async_update_v2_property_entities(device)
+
+    assert device.sensors[PARAM_BATTERY][PARAM_STATE] == expected
+
+
+@pytest.mark.parametrize(
+    ("scalar", "expected"),
+    [(0, 0), (100, 100), (64.9, 64)],
+)
+def test_battery_scalar_push_accepts_bounds_and_truncates_fraction(
+    scalar: int | float, expected: int
+) -> None:
+    device = _battery_device("power.battery.level")
+    manager = ImouHaDeviceManager(MagicMock())
+
+    changed = manager.apply_iot_property_values(device, {"power.battery.level": scalar})
+
+    assert changed is True
+    assert device.sensors[PARAM_BATTERY][PARAM_STATE] == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "scalar",
+    [-1, 101, float("nan"), float("inf"), float("-inf"), True],
+    ids=["below", "above", "nan", "positive_inf", "negative_inf", "bool"],
+)
+async def test_battery_scalar_poll_falls_back_from_invalid_value(
+    scalar: object,
+) -> None:
+    device = _battery_device("power.battery.level", "power.battery.info")
+    manager = ImouHaDeviceManager(MagicMock())
+    values = {
+        "power.battery.level": scalar,
+        "power.battery.info": [{"category": 1, "type": 0, "elecPercent": 72}],
+    }
+
+    with patch(
+        "pyimouapi.ha_device.async_property_get",
+        AsyncMock(return_value=values),
+    ):
+        await manager._async_update_v2_property_entities(device)
+
+    assert device.sensors[PARAM_BATTERY][PARAM_STATE] == 72
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    [-1, 101, float("nan"), float("inf"), float("-inf"), True],
+    ids=["below", "above", "nan", "positive_inf", "negative_inf", "bool"],
+)
+def test_battery_scalar_push_falls_back_from_invalid_value(scalar: object) -> None:
+    device = _battery_device("power.battery.level", "power.battery.info")
+    manager = ImouHaDeviceManager(MagicMock())
+
+    changed = manager.apply_iot_property_values(
+        device,
+        {
+            "power.battery.level": scalar,
+            "power.battery.info": [{"category": 1, "type": 0, "elecPercent": 72}],
+        },
+    )
+
+    assert changed is True
+    assert device.sensors[PARAM_BATTERY][PARAM_STATE] == 72
+
+
+@pytest.mark.asyncio
 async def test_battery_info_prefers_type_zero_then_first_active() -> None:
     device = _battery_device("power.battery.info")
     manager = ImouHaDeviceManager(MagicMock())

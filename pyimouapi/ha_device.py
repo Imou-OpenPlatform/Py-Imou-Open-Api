@@ -4,6 +4,7 @@ import asyncio
 import logging
 from collections.abc import Callable, Coroutine, Mapping, Set
 from enum import Enum
+from math import isfinite
 from typing import Any, NamedTuple
 from urllib.parse import urlparse
 
@@ -129,6 +130,18 @@ def split_csv(value: Any) -> list[str]:
     return value.split(",")
 
 
+def _normalized_battery_level(value: Any) -> int | None:
+    """Return one valid integer battery percentage."""
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int | float)
+        or (isinstance(value, float) and not isfinite(value))
+        or not 0 <= value <= 100
+    ):
+        return None
+    return int(value)
+
+
 def _battery_level_from_v2_info(data: Any) -> int | None:
     """Select one active battery percentage from power.battery.info."""
     if not isinstance(data, list):
@@ -139,7 +152,7 @@ def _battery_level_from_v2_info(data: Any) -> int | None:
             continue
         category = item.get("category")
         battery_type = item.get("type")
-        level = item.get("elecPercent")
+        level = _normalized_battery_level(item.get("elecPercent"))
         if (
             isinstance(category, bool)
             or not isinstance(category, int)
@@ -147,16 +160,13 @@ def _battery_level_from_v2_info(data: Any) -> int | None:
             or isinstance(battery_type, bool)
             or not isinstance(battery_type, int)
             or battery_type < 0
-            or isinstance(level, bool)
-            or not isinstance(level, int | float)
-            or not 0 <= level <= 100
+            or level is None
         ):
             continue
-        normalized_level = int(level)
         if battery_type == 0:
-            return normalized_level
+            return level
         if first_active_level is None:
-            first_active_level = normalized_level
+            first_active_level = level
     return first_active_level
 
 
@@ -809,8 +819,8 @@ class ImouHaDeviceManager:
         key: str, meta: dict[str, Any], values: Mapping[str, Any]
     ) -> tuple[bool, Any]:
         if key == PARAM_BATTERY:
-            scalar = values.get("power.battery.level")
-            if not isinstance(scalar, bool) and isinstance(scalar, int | float):
+            scalar = _normalized_battery_level(values.get("power.battery.level"))
+            if scalar is not None:
                 return True, scalar
             if "power.battery.info" in values:
                 level = _battery_level_from_v2_info(values["power.battery.info"])
