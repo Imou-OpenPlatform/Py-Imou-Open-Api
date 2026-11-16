@@ -295,12 +295,32 @@ def test_push_dispatch_rejects_unknown_msg_type() -> None:
     assert push_dispatch_permitted(None) is False
 
 
+def test_push_dispatch_rejects_double_e_prefix() -> None:
+    assert push_dispatch_permitted("e_e_videomotion") is False
+    assert push_dispatch_permitted("e_videoMotion") is True
+
+
 def test_push_subscription_kind_buckets() -> None:
     assert push_subscription_kind("iotProperty") == "iot"
     assert push_subscription_kind("detection.motion.detected") == "capability"
     assert push_subscription_kind("human") == "alarm"
     assert push_subscription_kind("online") == "device_status"
     assert push_subscription_kind("storageEmpty") == "lifecycle"
+
+
+@pytest.mark.parametrize(
+    "msg_type",
+    [
+        "storageempty",
+        "storageEmpty",
+        "  storageEmpty  ",
+        "STORAGEEMPTY",
+    ],
+)
+def test_push_subscription_kind_lifecycle_normalizes_storage_empty(
+    msg_type: str,
+) -> None:
+    assert push_subscription_kind(msg_type) == "lifecycle"
 
 
 def test_legacy_human_not_capability_event() -> None:

@@ -66,10 +66,14 @@ NON_ALARM_MSG_TYPES = frozenset(
     }
 )
 
+_NON_ALARM_MSG_TYPES_LOWER = frozenset(k.lower() for k in NON_ALARM_MSG_TYPES)
+
 
 def is_alarm_msg_type(msg_type: str | None) -> bool:
     """Return True if this push should be treated as a security alarm."""
-    return msg_type is not None and msg_type not in NON_ALARM_MSG_TYPES
+    if msg_type is None:
+        return False
+    return msg_type.strip().lower() not in _NON_ALARM_MSG_TYPES_LOWER
 
 
 _IOT_PUSH_ENVELOPES = frozenset({"iotEvent", "iotProperty"})
@@ -139,21 +143,27 @@ def push_dispatch_permitted(msg_type: str | None) -> bool:
     lower = stripped.lower()
     if lower in PUSH_DISPATCH_MSG_TYPES_LOWER:
         return True
-    return lower.startswith("e_") and lower[2:] in PUSH_DISPATCH_MSG_TYPES_LOWER
+    if not lower.startswith("e_"):
+        return False
+    remainder = lower[2:]
+    if remainder.startswith("e_"):
+        return False
+    return remainder in PUSH_DISPATCH_MSG_TYPES_LOWER
 
 
 def push_subscription_kind(msg_type: str | None) -> PushSubscriptionKind:
     """Map an allowed push msg_type to a Configure event_push_types bucket."""
     if not isinstance(msg_type, str):
         return "lifecycle"
-    if is_v2_property_report(msg_type) or is_v2_capability_event_id(msg_type):
+    stripped = msg_type.strip()
+    if is_v2_property_report(stripped) or is_v2_capability_event_id(stripped):
         return "capability"
-    lower = msg_type.strip().lower()
+    lower = stripped.lower()
     if lower in _IOT_PUSH_ENVELOPES_LOWER:
         return "iot"
     if lower in _DEVICE_STATUS_MSG_TYPES_LOWER:
         return "device_status"
-    if lower in _ARMING_MSG_TYPES_LOWER or is_alarm_msg_type(msg_type):
+    if lower in _ARMING_MSG_TYPES_LOWER or is_alarm_msg_type(stripped):
         return "alarm"
     return "lifecycle"
 
