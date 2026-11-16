@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import warnings
 from collections.abc import Callable, Coroutine, Mapping, Set
 from enum import Enum
 from math import isfinite
@@ -839,20 +840,22 @@ class ImouHaDeviceManager:
         key: str,
         meta: dict[str, Any],
         raw_value: Any,
-    ) -> None:
+    ) -> bool:
         struct_field = meta.get(PARAM_V2_STRUCT_FIELD)
-        if struct_field and isinstance(raw_value, dict):
-            raw_value = raw_value.get(struct_field)
+        if struct_field:
+            if not isinstance(raw_value, dict) or struct_field not in raw_value:
+                return False
+            raw_value = raw_value[struct_field]
         elif (
             isinstance(raw_value, dict)
             and kind in ("switch", "binary_sensor")
             and "enabled" in raw_value
         ):
-            raw_value = raw_value.get("enabled")
+            raw_value = raw_value["enabled"]
         if kind in ("switch", "binary_sensor"):
             parsed = property_is_on(raw_value)
             if parsed is None:
-                return
+                return False
             target = device.switches if kind == "switch" else device.binary_sensors
             target[key][PARAM_STATE] = parsed
         elif kind == "select":
@@ -862,13 +865,21 @@ class ImouHaDeviceManager:
                 for friendly, raw in raw_by_option.items():
                     if raw == raw_value or str(raw) == str(raw_value):
                         select_state[PARAM_CURRENT_OPTION] = friendly
-                        return
+                        return True
+                return False
+            if isinstance(raw_value, dict | list) or raw_value is None:
+                return False
             value = str(raw_value) if isinstance(raw_value, int) else raw_value
             select_state[PARAM_CURRENT_OPTION] = to_friendly(key, value)
         elif kind in ("sensor", "text"):
             if meta.get(PARAM_EXPRESSION) and isinstance(raw_value, dict | list):
-                state = self.get_expression_value(meta[PARAM_EXPRESSION], raw_value)
+                try:
+                    state = self.get_expression_value(meta[PARAM_EXPRESSION], raw_value)
+                except Exception:
+                    return False
             else:
+                if isinstance(raw_value, dict | list) or raw_value is None:
+                    return False
                 state = raw_value
             if kind == "sensor":
                 apply_sensor_state(device.sensors, key, state)
@@ -878,19 +889,26 @@ class ImouHaDeviceManager:
                 )
         elif kind == "alarm_control_panel" and device.alarm_control_panel is not None:
             device.alarm_control_panel[PARAM_STATE] = alarm_mode_to_friendly(raw_value)
+        else:
+            return False
+        return True
 
-    def apply_iot_property_values(
+    def apply_property_values(
         self, device: ImouHaDevice, values: Mapping[str, Any]
     ) -> bool:
-        """Apply property values from an iotProperty push (v2 target ids or legacy refs)."""
+        """Apply accepted property values to matching device entities."""
         if device.capability_set is not None:
+            values = {
+                key: value
+                for key, value in values.items()
+                if device.capability_set.has_property(key)
+            }
             changed = False
             for kind, key, meta in self._collect_v2_property_entities(device):
                 found, raw = self._v2_entity_raw_value(key, meta, values)
                 if not found:
                     continue
-                self._apply_property_value(device, kind, key, meta, raw)
-                changed = True
+                changed |= self._apply_property_value(device, kind, key, meta, raw)
             if device.bulb_v2 and device.bulb_light is not None:
                 present = {
                     prop_id: values[prop_id]
@@ -906,11 +924,21 @@ class ImouHaDeviceManager:
             ref = str(meta[PARAM_REF])
             if ref not in values:
                 continue
-            self._apply_property_value(device, kind, key, meta, values[ref])
-            changed = True
+            changed |= self._apply_property_value(device, kind, key, meta, values[ref])
         if self._apply_bulb_from_values(device, values):
             changed = True
         return changed
+
+    def apply_iot_property_values(
+        self, device: ImouHaDevice, values: Mapping[str, Any]
+    ) -> bool:
+        """Deprecated compatibility alias for :meth:`apply_property_values`."""
+        warnings.warn(
+            "apply_iot_property_values is deprecated; use apply_property_values",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.apply_property_values(device, values)
 
     @staticmethod
     def _require_product_id(device: ImouHaDevice) -> str:

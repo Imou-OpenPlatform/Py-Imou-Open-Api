@@ -270,7 +270,8 @@ def normalize_push_payload(payload: dict[str, Any]) -> dict[str, Any]:
         payload.get("did") or payload.get("deviceId") or payload.get("msgDeviceId")
     )
     channel_id = _channel_id_from_payload(payload)
-    msg_type = payload.get("msgType")
+    raw_msg_type = payload.get("msgType")
+    msg_type = raw_msg_type.strip() if isinstance(raw_msg_type, str) else raw_msg_type
     content = payload.get("content")
     output_data = None
     if isinstance(content, dict):

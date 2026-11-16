@@ -98,6 +98,17 @@ def test_normalize_iot_event_keeps_top_level_msg_type() -> None:
     assert "is_alarm" not in event
 
 
+def test_normalize_strips_msg_type() -> None:
+    """Normalized msg_type fields use the canonical stripped value."""
+    event = normalize_push_payload(
+        {"msgType": "  device.property.report  ", "deviceId": "IPC1"}
+    )
+
+    assert event["msg_type"] == V2_PROPERTY_REPORT_MSG_TYPE
+    assert event["msg_type_name"] == V2_PROPERTY_REPORT_MSG_TYPE
+    assert event["raw"]["msgType"] == "  device.property.report  "
+
+
 def test_normalize_does_not_use_dname_as_device_id() -> None:
     """Display name alone must not become device_id."""
     event = normalize_push_payload({"msgType": "human", "dname": "Gate"})
