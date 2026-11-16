@@ -88,6 +88,17 @@ from .openapi import ImouOpenApiClient
 from .product_detail import ProductDetail, parse_product_details
 
 _LOGGER = logging.getLogger(__name__)
+_RECORD_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+
+def _parse_record_time(value: str) -> datetime | None:
+    """Parse the device-local time format used by cloud-record APIs."""
+    try:
+        parsed = datetime.strptime(value, _RECORD_TIME_FORMAT)
+    except ValueError:
+        return None
+    return parsed if parsed.strftime(_RECORD_TIME_FORMAT) == value else None
+
 
 # A failed product-model fetch is retried after this, instead of on every push.
 _EVENT_MAP_RETRY_SECONDS = 60
@@ -799,6 +810,15 @@ class ImouDeviceManager:
         """List all cloud segments in a window, paging queryCloudRecords."""
         from .cloud_record import RECORD_QUERY_PAGE_SIZE, parse_cloud_records_data
 
+        cursor_time = _parse_record_time(begin_time)
+        window_end_time = _parse_record_time(end_time)
+        if (
+            cursor_time is None
+            or window_end_time is None
+            or cursor_time >= window_end_time
+        ):
+            return []
+
         segments: list = []
         seen: set[str | tuple[str, str, str]] = set()
         cursor_begin = begin_time
@@ -849,30 +869,22 @@ class ImouDeviceManager:
 
             usable_end_times: list[tuple[datetime, str]] = []
             for segment, _file_name in batch:
-                try:
-                    usable_end_times.append(
-                        (datetime.fromisoformat(segment.end_time), segment.end_time)
-                    )
-                except ValueError:
-                    continue
+                parsed_end_time = _parse_record_time(segment.end_time)
+                if parsed_end_time is not None:
+                    usable_end_times.append((parsed_end_time, segment.end_time))
             if not usable_end_times:
                 _LOGGER.warning(
                     "Cloud record page has no usable end time for %s", device_id
                 )
                 break
             next_cursor_time, next_cursor = max(usable_end_times)
-            try:
-                cursor_time = datetime.fromisoformat(cursor_begin)
-                window_end_time = datetime.fromisoformat(end_time)
-            except ValueError:
-                _LOGGER.warning("Cloud record cursor did not advance for %s", device_id)
-                break
             if next_cursor_time <= cursor_time:
                 _LOGGER.warning("Cloud record cursor did not advance for %s", device_id)
                 break
             if next_cursor_time >= window_end_time:
                 break
             cursor_begin = next_cursor
+            cursor_time = next_cursor_time
         else:
             _LOGGER.warning(
                 "Cloud record pagination reached the %d-page safety limit for %s",

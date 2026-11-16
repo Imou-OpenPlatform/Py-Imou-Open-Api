@@ -149,6 +149,63 @@ async def test_list_cloud_record_segments_stops_on_malformed_page_times(
 
 
 @pytest.mark.asyncio
+async def test_list_cloud_record_segments_stops_on_offset_only_page_times(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    manager = ImouDeviceManager(AsyncMock())
+    page = [
+        _record(
+            str(index),
+            "2026-01-01T09:59:00+08:00",
+            "2026-01-01T10:00:00+08:00",
+        )
+        for index in range(RECORD_QUERY_PAGE_SIZE)
+    ]
+    manager.async_query_cloud_records = AsyncMock(return_value={"records": page})
+
+    with caplog.at_level(logging.WARNING, logger="pyimouapi.device"):
+        segments = await manager.async_list_cloud_record_segments(
+            "did",
+            "0",
+            begin_time="2026-01-01 10:00:00",
+            end_time="2026-01-01 11:00:00",
+        )
+
+    assert len(segments) == RECORD_QUERY_PAGE_SIZE
+    assert manager.async_query_cloud_records.await_count == 1
+    assert "no usable end time" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_list_cloud_record_segments_ignores_offset_times_for_mixed_cursor() -> (
+    None
+):
+    manager = ImouDeviceManager(AsyncMock())
+    page = _full_page()
+    page[-1] = _record(
+        "offset",
+        "2026-01-01T11:59:59+08:00",
+        "2026-01-01T12:00:00+08:00",
+    )
+    manager.async_query_cloud_records = AsyncMock(
+        side_effect=[{"records": page}, {"records": []}]
+    )
+
+    await manager.async_list_cloud_record_segments(
+        "did",
+        "0",
+        begin_time="2026-01-01 10:00:00",
+        end_time="2026-01-01 11:00:00",
+    )
+
+    assert manager.async_query_cloud_records.await_count == 2
+    assert (
+        manager.async_query_cloud_records.await_args_list[1].kwargs["begin_time"]
+        == "2026-01-01 10:01:39"
+    )
+
+
+@pytest.mark.asyncio
 async def test_list_cloud_record_segments_deduplicates_records_without_ids() -> None:
     manager = ImouDeviceManager(AsyncMock())
     first_page = _full_page()
@@ -264,3 +321,30 @@ async def test_list_cloud_record_segments_propagates_api_errors() -> None:
             begin_time="2026-01-01 10:00:00",
             end_time="2026-01-01 11:00:00",
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("begin_time", "end_time"),
+    [
+        ("2026-01-01 10:00:00", "2026-01-01 10:00:00"),
+        ("2026-01-01 10:00:01", "2026-01-01 10:00:00"),
+        ("2026-01-01T10:00:00+08:00", "2026-01-01 11:00:00"),
+        ("2026-01-01 10:00:00", "2026-01-01T11:00:00+08:00"),
+    ],
+)
+async def test_list_cloud_record_segments_skips_invalid_window(
+    begin_time: str, end_time: str
+) -> None:
+    manager = ImouDeviceManager(AsyncMock())
+    manager.async_query_cloud_records = AsyncMock()
+
+    segments = await manager.async_list_cloud_record_segments(
+        "did",
+        "0",
+        begin_time=begin_time,
+        end_time=end_time,
+    )
+
+    assert segments == []
+    manager.async_query_cloud_records.assert_not_awaited()
