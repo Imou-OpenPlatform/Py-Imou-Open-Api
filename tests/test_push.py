@@ -11,6 +11,7 @@ from pyimouapi.push import (
     is_alarm_msg_type,
     is_capability_event_payload,
     is_iot_non_event,
+    is_unknown_legacy_msg_type,
     is_v2_capability_event_id,
     is_v2_property_report,
     legacy_msg_type_from_v2_event,
@@ -298,12 +299,26 @@ def test_capability_event_v2_normalize() -> None:
     assert event_id_from_push(payload) == "detection.motion.detected"
 
 
-def test_push_dispatch_rejects_unknown_msg_type() -> None:
+def test_push_dispatch_accepts_unknown_legacy_alarm_type() -> None:
     assert push_dispatch_permitted("human") is True
     assert push_dispatch_permitted("detection.person.detected") is True
     assert push_dispatch_permitted("iotProperty") is True
-    assert push_dispatch_permitted("totallyUnknownType") is False
+    assert push_dispatch_permitted("newAlarmFromCloud") is True
+    assert is_unknown_legacy_msg_type("newAlarmFromCloud") is True
     assert push_dispatch_permitted(None) is False
+
+
+@pytest.mark.parametrize("msg_type", [None, "", " ", "\t"])
+def test_push_dispatch_rejects_empty_msg_type(msg_type: str | None) -> None:
+    assert push_dispatch_permitted(msg_type) is False
+    assert is_unknown_legacy_msg_type(msg_type) is False
+
+
+def test_push_dispatch_keeps_recognized_non_alarm_operation_policy() -> None:
+    assert push_dispatch_permitted("electricity") is True
+    assert is_unknown_legacy_msg_type("electricity") is False
+    assert push_dispatch_permitted("numberstat") is False
+    assert is_unknown_legacy_msg_type("numberstat") is False
 
 
 def test_push_dispatch_rejects_double_e_prefix() -> None:
@@ -311,12 +326,19 @@ def test_push_dispatch_rejects_double_e_prefix() -> None:
     assert push_dispatch_permitted("e_videoMotion") is True
 
 
-def test_push_subscription_kind_buckets() -> None:
-    assert push_subscription_kind("iotProperty") == "iot"
-    assert push_subscription_kind("detection.motion.detected") == "capability"
-    assert push_subscription_kind("human") == "alarm"
-    assert push_subscription_kind("online") == "device_status"
-    assert push_subscription_kind("storageEmpty") == "lifecycle"
+@pytest.mark.parametrize(
+    ("msg_type", "expected"),
+    [
+        ("iotProperty", "iot"),
+        ("device.property.report", "capability"),
+        ("detection.motion.detected", "capability"),
+        ("alarmLocal", "alarm"),
+        ("online", "device_status"),
+        ("storageEmpty", "lifecycle"),
+    ],
+)
+def test_push_subscription_kind_buckets(msg_type: str, expected: str) -> None:
+    assert push_subscription_kind(msg_type) == expected
 
 
 @pytest.mark.parametrize(

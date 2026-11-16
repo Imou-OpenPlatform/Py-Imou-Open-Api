@@ -131,8 +131,31 @@ def v2_capability_event_permitted(
     return event_id in events
 
 
+def is_unknown_legacy_msg_type(msg_type: str | None) -> bool:
+    """Return whether a non-empty Legacy msg_type is absent from known catalogs."""
+    if not isinstance(msg_type, str) or not msg_type.strip():
+        return False
+    stripped = msg_type.strip()
+    if (
+        is_v2_property_report(stripped)
+        or is_v2_capability_event_id(stripped)
+        or _is_digit_str(stripped)
+    ):
+        return False
+    lower = stripped.lower()
+    if (
+        lower in PUSH_DISPATCH_MSG_TYPES_LOWER
+        or lower in _NON_ALARM_MSG_TYPES_LOWER
+        or lower.startswith("e_e_")
+    ):
+        return False
+    if lower.startswith("e_"):
+        return lower[2:] not in PUSH_DISPATCH_MSG_TYPES_LOWER
+    return True
+
+
 def push_dispatch_permitted(msg_type: str | None) -> bool:
-    """Return True only for msg_type values the integration knows how to handle."""
+    """Allow known pushes and unknown Legacy alarms; reject malformed/denied ops."""
     if not isinstance(msg_type, str) or not msg_type.strip():
         return False
     stripped = msg_type.strip()
@@ -142,6 +165,8 @@ def push_dispatch_permitted(msg_type: str | None) -> bool:
         return True
     lower = stripped.lower()
     if lower in PUSH_DISPATCH_MSG_TYPES_LOWER:
+        return True
+    if is_unknown_legacy_msg_type(stripped):
         return True
     if not lower.startswith("e_"):
         return False
