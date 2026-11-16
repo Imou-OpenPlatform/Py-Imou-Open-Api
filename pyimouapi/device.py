@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Collection
 from dataclasses import dataclass
 from time import monotonic
 from typing import Any
@@ -28,6 +29,7 @@ from .const import (
     API_ENDPOINT_GET_STREAM_URL,
     API_ENDPOINT_IOT_DEVICE_CONTROL,
     API_ENDPOINT_LIST_DEVICE_DETAILS,
+    API_ENDPOINT_LIST_PRODUCT_DETAIL,
     API_ENDPOINT_MODIFY_DEVICE_ALARM_STATUS,
     API_ENDPOINT_QUERY_CLOUD_RECORD_BITMAP,
     API_ENDPOINT_QUERY_CLOUD_RECORDS,
@@ -75,12 +77,14 @@ from .const import (
     PARAM_PARENT_DEVICE_ID,
     PARAM_PARENT_PRODUCT_ID,
     PARAM_PRODUCT_ID,
+    PARAM_PRODUCT_IDS,
     PARAM_PROPERTIES,
     PARAM_REF,
     PARAM_STREAM_ID,
     PARAM_URL,
 )
 from .openapi import ImouOpenApiClient
+from .product_detail import ProductDetail, parse_product_details
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -196,6 +200,7 @@ class ImouDevice:
         self._channel_number = 0
         self._channels: list[ImouChannel] = []
         self._product_id: str | None = None
+        self._product_device_type: str | None = None
         self._parent_product_id: str | None = None
         self._parent_device_id: str | None = None
         self._is_multi = False
@@ -239,6 +244,10 @@ class ImouDevice:
         return self._product_id
 
     @property
+    def product_device_type(self) -> str | None:
+        return self._product_device_type
+
+    @property
     def parent_product_id(self) -> str | None:
         return self._parent_product_id
 
@@ -266,6 +275,9 @@ class ImouDevice:
 
     def set_product_id(self, product_id: str) -> None:
         self._product_id = product_id
+
+    def set_product_device_type(self, product_device_type: str | None) -> None:
+        self._product_device_type = product_device_type
 
     def set_channels(self, channels: list[ImouChannel]) -> None:
         self._channels = channels
@@ -302,6 +314,7 @@ class ImouDeviceManager:
         self._event_map_failed_at: dict[str, float] = {}
         self._event_map_locks: dict[str, asyncio.Lock] = {}
         self._event_map_locks_guard = asyncio.Lock()
+        self._product_details: dict[str, ProductDetail] = {}
 
     @property
     def api_client(self) -> ImouOpenApiClient:
@@ -370,6 +383,24 @@ class ImouDeviceManager:
             return None
         return mapping.get(str(ref))
 
+    async def async_get_product_details(
+        self, product_ids: Collection[str]
+    ) -> dict[str, ProductDetail]:
+        """Return cached product details, fetching uncached ids in one request."""
+        requested_ids = {product_id for product_id in product_ids if product_id}
+        missing_ids = sorted(requested_ids - self._product_details.keys())
+        if missing_ids:
+            data = await self._imou_api_client.async_request_api(
+                API_ENDPOINT_LIST_PRODUCT_DETAIL,
+                {PARAM_PRODUCT_IDS: missing_ids},
+            )
+            self._product_details.update(parse_product_details(data))
+        return {
+            product_id: self._product_details[product_id]
+            for product_id in requested_ids
+            if product_id in self._product_details
+        }
+
     async def async_get_devices(
         self,
         page: int = 1,
@@ -388,6 +419,21 @@ class ImouDeviceManager:
         - ``False``: skip every detail call (list-only discovery)
         - a set of device ids: fetch only for those ids
         """
+        return await self._async_get_devices(
+            page,
+            page_size,
+            fetch_ability_refs=fetch_ability_refs,
+            missing_product_details=set(),
+        )
+
+    async def _async_get_devices(
+        self,
+        page: int,
+        page_size: int,
+        *,
+        fetch_ability_refs: bool | set[str],
+        missing_product_details: set[str],
+    ) -> list[ImouDevice]:
         params = {
             PARAM_PAGE: page,
             PARAM_PAGE_SIZE: page_size,
@@ -452,6 +498,28 @@ class ImouDeviceManager:
                 imou_device.set_product_id(device[PARAM_PRODUCT_ID])
                 iot_devices.append(imou_device)
             devices.append(imou_device)
+        product_ids = {
+            device.product_id
+            for device in iot_devices
+            if device.product_id and device.product_id not in missing_product_details
+        }
+        if product_ids:
+            try:
+                details = await self.async_get_product_details(product_ids)
+            except asyncio.CancelledError:
+                raise
+            except Exception as err:
+                missing_product_details.update(product_ids)
+                _LOGGER.warning("Could not read product details: %s", err)
+            else:
+                missing_product_details.update(product_ids - details.keys())
+                for iot_device in iot_devices:
+                    product_id = iot_device.product_id
+                    if product_id is None:
+                        continue
+                    detail = details.get(product_id)
+                    if detail is not None:
+                        iot_device.set_product_device_type(detail.device_type)
         # Each iot device costs one getIotDeviceDetailInfo call; issue them together
         # so listing N devices is one round trip instead of N serial ones. Callers
         # that only need the set of device keys (periodic rediscovery) pass
@@ -488,10 +556,11 @@ class ImouDeviceManager:
         # holding an exact multiple of page_size would page on forever.
         if len(device_list) >= page_size:
             devices.extend(
-                await self.async_get_devices(
+                await self._async_get_devices(
                     page + 1,
                     page_size,
                     fetch_ability_refs=fetch_ability_refs,
+                    missing_product_details=missing_product_details,
                 )
             )
         return devices

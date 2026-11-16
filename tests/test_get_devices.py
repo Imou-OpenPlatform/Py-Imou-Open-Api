@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from pyimouapi.const import (
     API_ENDPOINT_LIST_DEVICE_DETAILS,
+    API_ENDPOINT_LIST_PRODUCT_DETAIL,
     PARAM_ABILITY_REFS,
     PARAM_BRAND,
     PARAM_CHANNEL_ID,
@@ -20,6 +21,7 @@ from pyimouapi.const import (
     PARAM_DEVICE_STATUS,
     PARAM_PAGE,
     PARAM_PRODUCT_ID,
+    PARAM_PRODUCT_IDS,
 )
 from pyimouapi.device import ImouDeviceManager
 
@@ -61,6 +63,13 @@ def make_manager(pages: dict[int, dict]) -> tuple[ImouDeviceManager, DetailTrack
     """Build a manager whose device list returns the given pages."""
 
     async def request(endpoint: str, params: dict) -> dict:
+        if endpoint == API_ENDPOINT_LIST_PRODUCT_DETAIL:
+            return {
+                "item": [
+                    {"productId": product_id, "deviceType": "IPC"}
+                    for product_id in params[PARAM_PRODUCT_IDS]
+                ]
+            }
         assert endpoint == API_ENDPOINT_LIST_DEVICE_DETAILS
         return pages[params[PARAM_PAGE]]
 
