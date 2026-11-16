@@ -129,21 +129,35 @@ def split_csv(value: Any) -> list[str]:
     return value.split(",")
 
 
-def _battery_level_from_v2_info(data: Any) -> int | float | None:
+def _battery_level_from_v2_info(data: Any) -> int | None:
     """Select one active battery percentage from power.battery.info."""
     if not isinstance(data, list):
         return None
-    active = [
-        item for item in data if isinstance(item, dict) and item.get("category") == 1
-    ]
-    preferred = next((item for item in active if item.get("type") == 0), None)
-    selected = preferred or (active[0] if active else None)
-    if selected is None:
-        return None
-    level = selected.get("elecPercent")
-    if isinstance(level, bool) or not isinstance(level, int | float):
-        return None
-    return level
+    first_active_level: int | None = None
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        category = item.get("category")
+        battery_type = item.get("type")
+        level = item.get("elecPercent")
+        if (
+            isinstance(category, bool)
+            or not isinstance(category, int)
+            or category != 1
+            or isinstance(battery_type, bool)
+            or not isinstance(battery_type, int)
+            or battery_type < 0
+            or isinstance(level, bool)
+            or not isinstance(level, int | float)
+            or not 0 <= level <= 100
+        ):
+            continue
+        normalized_level = int(level)
+        if battery_type == 0:
+            return normalized_level
+        if first_active_level is None:
+            first_active_level = normalized_level
+    return first_active_level
 
 
 def _battery_level_from_106200_list(data) -> int:

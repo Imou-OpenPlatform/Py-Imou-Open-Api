@@ -214,6 +214,47 @@ async def test_battery_info_prefers_type_zero_then_first_active() -> None:
     assert device.sensors[PARAM_BATTERY][PARAM_STATE] == 74
 
 
+def _battery_info_with_malformed_candidates() -> list[object]:
+    return [
+        {"category": True, "type": 0, "elecPercent": 91},
+        {"category": 1, "type": False, "elecPercent": 92},
+        {"category": 1, "type": 0, "elecPercent": True},
+        {"category": 1, "type": 0, "elecPercent": "bad"},
+        {"category": 1, "type": 2, "elecPercent": 64.9},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_battery_info_poll_skips_malformed_candidates() -> None:
+    device = _battery_device("power.battery.info")
+    manager = ImouHaDeviceManager(MagicMock())
+
+    with patch(
+        "pyimouapi.ha_device.async_property_get",
+        AsyncMock(
+            return_value={
+                "power.battery.info": _battery_info_with_malformed_candidates()
+            }
+        ),
+    ):
+        await manager._async_update_v2_property_entities(device)
+
+    assert device.sensors[PARAM_BATTERY][PARAM_STATE] == 64
+
+
+def test_battery_info_push_skips_malformed_candidates() -> None:
+    device = _battery_device("power.battery.info")
+    manager = ImouHaDeviceManager(MagicMock())
+
+    changed = manager.apply_iot_property_values(
+        device,
+        {"power.battery.info": _battery_info_with_malformed_candidates()},
+    )
+
+    assert changed is True
+    assert device.sensors[PARAM_BATTERY][PARAM_STATE] == 64
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "malformed",
