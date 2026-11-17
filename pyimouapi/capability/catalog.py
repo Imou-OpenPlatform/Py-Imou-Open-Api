@@ -43,6 +43,7 @@ class CapabilitySet:
     properties: dict[str, PropertyCapability]
     services: frozenset[str]
     events: frozenset[str]
+    service_scopes: dict[str, str] = field(default_factory=dict)
     device_id: str | None = None
     product_id: str | None = None
     channel_id: str | None = None
@@ -107,6 +108,7 @@ def capability_set_from_list_response(data: dict[str, Any]) -> CapabilitySet:
     """Build a :class:`CapabilitySet` from ``result.data`` of capability.list."""
     properties: dict[str, PropertyCapability] = {}
     services: set[str] = set()
+    service_scopes: dict[str, str] = {}
     events: set[str] = set()
     capabilities = data.get("capabilities")
     if isinstance(capabilities, list):
@@ -124,7 +126,9 @@ def capability_set_from_list_response(data: dict[str, Any]) -> CapabilitySet:
                         properties[parsed.property_id] = parsed
             for raw_svc in block.get("services") or []:
                 if isinstance(raw_svc, dict) and raw_svc.get("serviceId"):
-                    services.add(str(raw_svc["serviceId"]))
+                    service_id = str(raw_svc["serviceId"])
+                    services.add(service_id)
+                    service_scopes[service_id] = scope
             for raw_evt in block.get("events") or []:
                 if isinstance(raw_evt, dict) and raw_evt.get("eventId"):
                     events.add(str(raw_evt["eventId"]))
@@ -132,6 +136,7 @@ def capability_set_from_list_response(data: dict[str, Any]) -> CapabilitySet:
         properties=properties,
         services=frozenset(services),
         events=frozenset(events),
+        service_scopes=service_scopes,
         device_id=_optional_str(data.get("deviceId")),
         product_id=_optional_str(data.get("productId")),
         channel_id=_optional_str(data.get("channelId")),

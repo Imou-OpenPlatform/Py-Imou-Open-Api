@@ -334,6 +334,44 @@ async def test_property_get_splits_device_and_channel_scope(
 
 
 @pytest.mark.asyncio
+async def test_switch_set_omits_channel_for_device_scope(
+    ha_manager: ImouHaDeviceManager,
+) -> None:
+    """A device-scope switch is written without a channel id."""
+    device = _switch_device()
+    device.switches["prompt"] = {
+        PARAM_V2_TARGET_ID: "audio.prompt.enabled",
+        PARAM_STATE: False,
+    }
+    device.set_capability_set(
+        CapabilitySet(
+            properties={
+                "audio.prompt.enabled": PropertyCapability(
+                    "audio.prompt.enabled", "rw", "int", scope="device"
+                )
+            },
+            services=frozenset(),
+            events=frozenset(),
+        )
+    )
+    with patch(
+        "pyimouapi.ha_device.async_property_set", new_callable=AsyncMock
+    ) as mock_set:
+        await ha_manager.async_switch_operation(device, "prompt", True)
+    assert mock_set.await_args.kwargs["channel_id"] is None
+    assert mock_set.await_args.kwargs["properties"] == {"audio.prompt.enabled": 1}
+
+
+def test_apply_identity_copies_play_token() -> None:
+    current = ImouHaDevice("IPC1", "Old", "Imou", "IPC", "1.0")
+    fresh = ImouHaDevice("IPC1", "New", "Imou", "IPC", "2.0")
+    fresh.set_play_token_v2("token-v2")
+    current.apply_identity(fresh)
+    assert current.play_token_v2 == "token-v2"
+    assert current.device_name == "New"
+
+
+@pytest.mark.asyncio
 async def test_update_paas_v2_property_entities_omits_product_id(
     ha_manager: ImouHaDeviceManager,
 ) -> None:

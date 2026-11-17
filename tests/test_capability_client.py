@@ -84,6 +84,22 @@ def client() -> ImouOpenApiClient:
     return ImouOpenApiClient("app_id", "app_secret", "api.example.com")
 
 
+def test_service_scope_follows_the_capability_block() -> None:
+    cap = capability_set_from_list_response(
+        {
+            "capabilities": [
+                {
+                    "scope": "device",
+                    "properties": [],
+                    "services": [{"serviceId": "power.outlet.read"}],
+                    "events": [],
+                }
+            ]
+        }
+    )
+    assert cap.service_scopes["power.outlet.read"] == "device"
+
+
 def test_capability_set_from_list_response() -> None:
     cap = capability_set_from_list_response(LIST_FIXTURE)
     assert cap.device_id == "TESTIPC000012345"
@@ -97,6 +113,7 @@ def test_capability_set_from_list_response() -> None:
     assert motion.data_type == "int"
     assert motion.range_min == 0 and motion.range_max == 1
     assert motion.scope == "channel"
+    assert cap.service_scopes["ptz.aim.step"] == "channel"
     wdr = cap.properties["image.wdr.mode"]
     assert wdr.data_type == "enum"
     assert len(wdr.enum_options) == 3

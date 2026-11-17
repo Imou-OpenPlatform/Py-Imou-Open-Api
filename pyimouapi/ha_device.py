@@ -586,6 +586,9 @@ class ImouHaDevice:
             self._channel_name = other.channel_name
         self._cs_status = other.cs_status
         self._ai_insight_status = other.ai_insight_status
+        token = other.play_token_v2
+        if isinstance(token, str) and token:
+            self.set_play_token_v2(token)
 
     def replace_capabilities(self, other: ImouHaDevice) -> list[str]:
         """Take another's entities, keeping state for keys that still exist.
@@ -715,12 +718,8 @@ class ImouHaDeviceManager:
                 return
 
             async def _write_v2() -> None:
-                await async_property_set(
-                    self.delegate.api_client,
-                    device_id=device.device_id,
-                    channel_id=device.channel_id,
-                    product_id=product_id,
-                    properties=v2_payload,
+                await self._async_set_scoped_properties(
+                    device, v2_payload, product_id=product_id
                 )
 
             await self._async_dormant_write_retry(device, _write_v2)
@@ -1057,11 +1056,7 @@ class ImouHaDeviceManager:
             )
             return
         input_data = v2_service_input_data(service_id, button_type, duration)
-        channel_id = device.channel_id
-        if service_id.startswith("device.") and channel_id is None:
-            pass
-        elif channel_id is None and device.is_ipc:
-            channel_id = "0"
+        channel_id = self._channel_id_for_service(device, service_id, ipc_default=True)
         await async_service_invoke(
             self.delegate.api_client,
             device_id=device.device_id,
@@ -1090,7 +1085,7 @@ class ImouHaDeviceManager:
                     device_id=device.device_id,
                     service_id=service_id,
                     input_data={},
-                    channel_id=device.channel_id,
+                    channel_id=self._channel_id_for_service(device, service_id),
                     product_id=device.product_id,
                 )
             except InvalidAppIdOrSecretException:
@@ -1129,12 +1124,8 @@ class ImouHaDeviceManager:
                 str(meta[PARAM_V2_FALLBACK_TARGET_ID]) for _, meta in fallback_items
             ]
             try:
-                fallback_values = await async_property_get(
-                    self.delegate.api_client,
-                    device_id=device.device_id,
-                    channel_id=device.channel_id,
-                    product_id=device.product_id,
-                    properties=fallback_ids,
+                fallback_values = await self._async_read_scoped_properties(
+                    device, fallback_ids
                 )
             except InvalidAppIdOrSecretException:
                 raise
@@ -1166,13 +1157,7 @@ class ImouHaDeviceManager:
         if not property_ids:
             return True
         try:
-            values = await async_property_get(
-                self.delegate.api_client,
-                device_id=device.device_id,
-                channel_id=device.channel_id,
-                product_id=device.product_id,
-                properties=property_ids,
-            )
+            values = await self._async_read_scoped_properties(device, property_ids)
         except InvalidAppIdOrSecretException:
             raise
         except Exception as exc:
@@ -1184,6 +1169,57 @@ class ImouHaDeviceManager:
             return False
         apply_bulb_v2_properties(device.bulb_light, values)
         return all(property_id in values for property_id in property_ids)
+
+    def _channel_id_for_property(
+        self, device: ImouHaDevice, property_id: str
+    ) -> str | None:
+        """Channel id for one property. Device scope omits it."""
+        capability = device.capability_set
+        if capability is not None:
+            prop = capability.properties.get(property_id)
+            if prop is not None and prop.scope == "device":
+                return None
+        return device.channel_id
+
+    def _channel_id_for_service(
+        self,
+        device: ImouHaDevice,
+        service_id: str,
+        *,
+        ipc_default: bool = False,
+    ) -> str | None:
+        """Channel id for one service. Device scope omits it."""
+        capability = device.capability_set
+        if (
+            capability is not None
+            and capability.service_scopes.get(service_id) == "device"
+        ):
+            return None
+        if ipc_default and device.channel_id is None and device.is_ipc:
+            return "0"
+        return device.channel_id
+
+    async def _async_set_scoped_properties(
+        self,
+        device: ImouHaDevice,
+        properties: dict[str, Any],
+        *,
+        product_id: str | None = None,
+    ) -> None:
+        """Write properties without mixing device scope and channel scope."""
+        groups: dict[str | None, dict[str, Any]] = {}
+        for property_id, value in properties.items():
+            channel_id = self._channel_id_for_property(device, property_id)
+            groups.setdefault(channel_id, {})[property_id] = value
+        resolved_product = device.product_id if product_id is None else product_id
+        for channel_id, payload in groups.items():
+            await async_property_set(
+                self.delegate.api_client,
+                device_id=device.device_id,
+                channel_id=channel_id,
+                product_id=resolved_product,
+                properties=payload,
+            )
 
     async def _async_read_scoped_properties(
         self, device: ImouHaDevice, property_ids: list[str]
@@ -1608,7 +1644,7 @@ class ImouHaDeviceManager:
                     device_id=device.device_id,
                     service_id=str(list_service),
                     input_data={},
-                    channel_id=device.channel_id,
+                    channel_id=self._channel_id_for_service(device, str(list_service)),
                     product_id=device.product_id,
                 )
                 output = data.get(PARAM_OUTPUT_DATA)
@@ -1674,7 +1710,7 @@ class ImouHaDeviceManager:
                 device_id=device.device_id,
                 service_id=str(goto_service),
                 input_data={"name": option},
-                channel_id=device.channel_id,
+                channel_id=self._channel_id_for_service(device, str(goto_service)),
                 product_id=device.product_id,
             )
             select_state[PARAM_CURRENT_OPTION] = PARAM_COLLECTION_POINT_PROMPT
@@ -2632,13 +2668,7 @@ class ImouHaDeviceManager:
         payload = {target_id: 1 if enable else 0}
 
         async def _write() -> None:
-            await async_property_set(
-                self.delegate.api_client,
-                device_id=device.device_id,
-                channel_id=device.channel_id,
-                product_id=device.product_id,
-                properties=payload,
-            )
+            await self._async_set_scoped_properties(device, payload)
 
         await self._async_dormant_write_retry(device, _write)
         device.switches[switch_type][PARAM_STATE] = enable
@@ -2667,13 +2697,7 @@ class ImouHaDeviceManager:
         payload = {target_id: value}
 
         async def _write() -> None:
-            await async_property_set(
-                self.delegate.api_client,
-                device_id=device.device_id,
-                channel_id=device.channel_id,
-                product_id=device.product_id,
-                properties=payload,
-            )
+            await self._async_set_scoped_properties(device, payload)
 
         await self._async_dormant_write_retry(device, _write)
 
@@ -2843,7 +2867,7 @@ class ImouHaDeviceManager:
                 device_id=device.device_id,
                 service_id=str(read_id),
                 input_data={},
-                channel_id=device.channel_id,
+                channel_id=self._channel_id_for_service(device, str(read_id)),
                 product_id=self._require_product_id(device),
             )
         except InvalidAppIdOrSecretException:
@@ -2875,12 +2899,8 @@ class ImouHaDeviceManager:
             is_on = await self._async_refresh_bulb_on(device, device_id)
         elif switch := device.switches.get("switch"):
             if switch.get(PARAM_V2_TARGET_ID):
-                props = await async_property_get(
-                    self.delegate.api_client,
-                    device_id=device.device_id,
-                    channel_id=device.channel_id,
-                    product_id=self._require_product_id(device),
-                    properties=[str(switch[PARAM_V2_TARGET_ID])],
+                props = await self._async_read_scoped_properties(
+                    device, [str(switch[PARAM_V2_TARGET_ID])]
                 )
                 is_on = property_is_on(props.get(str(switch[PARAM_V2_TARGET_ID])))
                 is_on = bool(is_on)
@@ -2908,7 +2928,7 @@ class ImouHaDeviceManager:
                 device_id=device.device_id,
                 service_id=str(write_id),
                 input_data=input_data,
-                channel_id=device.channel_id,
+                channel_id=self._channel_id_for_service(device, str(write_id)),
                 product_id=self._require_product_id(device),
             )
 
@@ -2960,12 +2980,8 @@ class ImouHaDeviceManager:
                 outlet_id = BULB_V2_PROPERTY_BY_REF[REF_SWITCH]
                 if capability is None or outlet_id not in capability.properties:
                     return bool(state["on"])
-                properties = await async_property_get(
-                    self.delegate.api_client,
-                    device_id=device.device_id,
-                    channel_id=device.channel_id,
-                    product_id=self._require_product_id(device),
-                    properties=[outlet_id],
+                properties = await self._async_read_scoped_properties(
+                    device, [outlet_id]
                 )
                 if properties:
                     apply_bulb_v2_properties(state, properties)
