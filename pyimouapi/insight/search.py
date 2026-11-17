@@ -16,6 +16,16 @@ class InsightAlarmHit:
     security_risk_level: int | None
     ai_tags: tuple[str, ...]
     thumb_url: str | None
+    alarm_type: str | None = None
+    picture_urls: tuple[str, ...] = ()
+
+
+def _url_list(value: Any) -> list[str]:
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    if not isinstance(value, list):
+        return []
+    return [item.strip() for item in value if isinstance(item, str) and item.strip()]
 
 
 def parse_search_ai_alarms(data: Any) -> tuple[str | None, list[InsightAlarmHit]]:
@@ -50,6 +60,13 @@ def parse_search_ai_alarms(data: Any) -> tuple[str | None, list[InsightAlarmHit]
             tags = [str(item).strip() for item in tags_raw if str(item).strip()]
         thumb = row.get("thumbUrl")
         thumb_url = str(thumb).strip() if thumb else None
+        alarm_type_raw = row.get("alarmType")
+        alarm_type = (
+            str(alarm_type_raw).strip() if alarm_type_raw not in (None, "") else None
+        )
+        picture_urls: list[str] = []
+        for key in ("picurlArray", "picUrlArray", "picUrlArr"):
+            picture_urls.extend(_url_list(row.get(key)))
         hits.append(
             InsightAlarmHit(
                 alarm_id=aid,
@@ -58,6 +75,8 @@ def parse_search_ai_alarms(data: Any) -> tuple[str | None, list[InsightAlarmHit]
                 security_risk_level=risk,
                 ai_tags=tuple(tags),
                 thumb_url=thumb_url,
+                alarm_type=alarm_type,
+                picture_urls=tuple(picture_urls),
             )
         )
     return next_id, hits

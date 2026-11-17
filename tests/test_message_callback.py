@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 from pyimouapi.const import (
     API_ENDPOINT_GET_MESSAGE_CALLBACK,
+    API_ENDPOINT_GET_PLAY_TOKEN_KEY,
     API_ENDPOINT_SET_MESSAGE_CALLBACK,
 )
 from pyimouapi.openapi import ImouOpenApiClient
@@ -62,6 +63,24 @@ async def test_get_message_callback(client: ImouOpenApiClient) -> None:
         API_ENDPOINT_GET_MESSAGE_CALLBACK,
         {},
     )
+
+
+@pytest.mark.asyncio
+async def test_get_play_token_key(client: ImouOpenApiClient) -> None:
+    client.async_request_api = AsyncMock(
+        return_value={"playTokenKey": "ab" * 16, "playTokenKeyV2": "cd" * 32}
+    )
+    assert await client.async_get_play_token_key("SN1") == "cd" * 32
+    client.async_request_api.assert_awaited_once_with(
+        API_ENDPOINT_GET_PLAY_TOKEN_KEY,
+        {"deviceId": "SN1"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_play_token_key_missing(client: ImouOpenApiClient) -> None:
+    client.async_request_api = AsyncMock(return_value={})
+    assert await client.async_get_play_token_key("SN1") is None
 
 
 @pytest.mark.asyncio

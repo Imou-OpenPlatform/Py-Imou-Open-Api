@@ -8,11 +8,15 @@ from typing import TYPE_CHECKING, Any
 from ..alarm_mode import ALARM_MODES
 from ..bulb_light import empty_bulb_state
 from ..const import (
+    PARAM_BATTERY,
     PARAM_COLLECTION_POINT_PROMPT,
     PARAM_CURRENT_OPTION,
+    PARAM_HUMIDITY_CURRENT,
     PARAM_OPTIONS,
     PARAM_STATE,
+    PARAM_STORAGE_USED,
     PARAM_SUPPORTED,
+    PARAM_TEMPERATURE_CURRENT,
     PARAM_V2_FALLBACK_TARGET_ID,
     PARAM_V2_LIST_SERVICE_ID,
     PARAM_V2_OUTPUT_FIELD,
@@ -38,6 +42,13 @@ from .binding import (
     cached_v2_target_map,
 )
 from .catalog import CapabilitySet, PropertyCapability
+
+NUMBER_TYPE = {
+    PARAM_STORAGE_USED,
+    PARAM_TEMPERATURE_CURRENT,
+    PARAM_HUMIDITY_CURRENT,
+    PARAM_BATTERY,
+}
 
 if TYPE_CHECKING:
     from ..ha_device import ImouHaDevice
@@ -94,7 +105,7 @@ def _add_property_switch(
     default_on = property_is_on(prop.default_data)
     entities[binding.ha_key] = {
         PARAM_STATE: default_on if default_on is not None else False,
-        PARAM_V2_TARGET_ID: binding.target_id,
+        PARAM_V2_TARGET_ID: prop.property_id,
     }
 
 
@@ -156,6 +167,7 @@ def _add_property_sensor(
     entry: dict[str, Any] = {
         PARAM_V2_TARGET_ID: source_ids[0],
         PARAM_V2_SOURCE_TARGET_IDS: source_ids,
+        PARAM_STATE: "unknown" if binding.ha_key not in NUMBER_TYPE else "0",
     }
     if binding.output_field:
         entry[PARAM_V2_OUTPUT_FIELD] = binding.output_field
@@ -181,6 +193,7 @@ def _add_service_sensor(
     entry = {
         PARAM_V2_TARGET_ID: binding.target_id,
         PARAM_V2_OUTPUT_FIELD: binding.output_field,
+        PARAM_STATE: "unknown" if binding.ha_key not in NUMBER_TYPE else "0",
     }
     if (
         binding.fallback_target_id

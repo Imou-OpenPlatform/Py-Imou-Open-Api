@@ -25,7 +25,6 @@ from .const import (
     API_ENDPOINT_GET_DEVICE_CLOUD,
     API_ENDPOINT_GET_DEVICE_LIVE_INFO,
     API_ENDPOINT_GET_DEVICE_NIGHT_VISION_MODE,
-    API_ENDPOINT_GET_DEVICE_ONLINE,
     API_ENDPOINT_GET_DEVICE_POWER_INFO,
     API_ENDPOINT_GET_DEVICE_STATUS,
     API_ENDPOINT_GET_IOT_DEVICE_DETAIL_INFO,
@@ -38,7 +37,6 @@ from .const import (
     API_ENDPOINT_MODIFY_DEVICE_ALARM_STATUS,
     API_ENDPOINT_QUERY_CLOUD_RECORD_BITMAP,
     API_ENDPOINT_QUERY_CLOUD_RECORDS,
-    API_ENDPOINT_RESTART_DEVICE,
     API_ENDPOINT_SEARCH_AI_ALARM_MESSAGE,
     API_ENDPOINT_SET_DEVICE_NIGHT_VISION_MODE,
     API_ENDPOINT_SET_DEVICE_SNAP,
@@ -48,9 +46,12 @@ from .const import (
     API_ENDPOINT_SIREN_STOP,
     API_ENDPOINT_TURN_COLLECTION,
     API_ENDPOINT_WAKE_UP_DEVICE,
+    API_V2_DEVICE_REBOOT_EXECUTE,
+    API_V2_DEVICE_STATUS_GET,
     NIGHT_VISION_MODE_MAP,
     PARAM_ABILITY_REFS,
     PARAM_ACCESS_TYPE,
+    PARAM_AI_INSIGHT_STATUS,
     PARAM_BRAND,
     PARAM_CHANNEL_ABILITY,
     PARAM_CHANNEL_ID,
@@ -62,6 +63,7 @@ from .const import (
     PARAM_CODE,
     PARAM_COLLECTION_NAME,
     PARAM_CONTENT,
+    PARAM_CS_STATUS,
     PARAM_DEVICE_ABILITY,
     PARAM_DEVICE_ID,
     PARAM_DEVICE_LIST,
@@ -106,6 +108,26 @@ def _parse_record_time(value: str) -> datetime | None:
 
 # A failed product-model fetch is retried after this, instead of on every push.
 _EVENT_MAP_RETRY_SECONDS = 60
+
+
+def _named_field(payload: dict[str, Any], name: str) -> str | None:
+    """Read a status field, ignoring key case and blank values."""
+    if not isinstance(payload, dict):
+        return None
+    wanted = name.lower()
+    raw = None
+    for key, value in payload.items():
+        if str(key).lower() == wanted:
+            raw = value
+            break
+    if isinstance(raw, dict):
+        raw = raw.get("status", raw.get("value"))
+    if isinstance(raw, list) and len(raw) == 1:
+        raw = raw[0]
+    if raw in (None, ""):
+        return None
+    text = str(raw).strip()
+    return text or None
 
 
 def _text_or_default(value: Any, default: str = "unknown") -> str:
@@ -171,6 +193,8 @@ class ImouChannel:
         self._channel_status = channel_status
         self._channel_ability = channel_ability
         self._channel_ability_refs = "unknown"
+        self._cs_status: str | None = None
+        self._ai_insight_status: str | None = None
 
     @property
     def channel_id(self) -> str:
@@ -194,6 +218,22 @@ class ImouChannel:
 
     def set_channel_ability_refs(self, channel_ability_refs: str):
         self._channel_ability_refs = channel_ability_refs
+
+    @property
+    def cs_status(self) -> str | None:
+        """Cloud storage status from the device list, such as ``using``."""
+        return self._cs_status
+
+    def set_cs_status(self, cs_status: str | None) -> None:
+        self._cs_status = cs_status
+
+    @property
+    def ai_insight_status(self) -> str | None:
+        """AI Insight status from the device list, such as ``on``."""
+        return self._ai_insight_status
+
+    def set_ai_insight_status(self, ai_insight_status: str | None) -> None:
+        self._ai_insight_status = ai_insight_status
 
 
 class ImouDevice:
@@ -222,6 +262,7 @@ class ImouDevice:
         self._is_multi = False
         self._is_ipc = False
         self._access_type = "PaaS"
+        self._play_token_v2: str | None = None
 
     @property
     def device_id(self) -> str:
@@ -304,6 +345,14 @@ class ImouDevice:
     def set_device_ability(self, device_ability: str):
         self._device_ability = device_ability
 
+    @property
+    def play_token_v2(self) -> str | None:
+        """Encrypted play credential from the device list, if the cloud sent one."""
+        return self._play_token_v2
+
+    def set_play_token_v2(self, play_token_v2: str | None) -> None:
+        self._play_token_v2 = play_token_v2 or None
+
     def set_device_version(self, device_version: str):
         self._device_version = device_version
 
@@ -321,6 +370,12 @@ class ImouDevice:
 
     def set_access_type(self, access_type: str):
         self._access_type = access_type
+
+
+def _search_channel_param(channel_id: str) -> dict[str, Any]:
+    """searchAiAlarmMessageByPage takes channelIds on both gateways."""
+    channel = int(channel_id) if str(channel_id).isdigit() else str(channel_id)
+    return {"channelIds": [channel]}
 
 
 class ImouDeviceManager:
@@ -503,6 +558,9 @@ class ImouDeviceManager:
                 imou_device.set_is_multi(device[PARAM_MULTI_FLAG])
             if PARAM_ACCESS_TYPE in device:
                 imou_device.set_access_type(device[PARAM_ACCESS_TYPE])
+            play_token = device.get("playTokenV2")
+            if isinstance(play_token, str) and play_token:
+                imou_device.set_play_token_v2(play_token)
             if PARAM_CHANNEL_LIST in device:
                 channel_list = device[PARAM_CHANNEL_LIST] or []
                 if not isinstance(channel_list, list):
@@ -519,10 +577,27 @@ class ImouDeviceManager:
                     channel_ability = _text_or_default(
                         channel.get(PARAM_CHANNEL_ABILITY)
                     )
-                    channel = ImouChannel(
+                    parsed = ImouChannel(
                         channel_id, channel_name, channel_status, channel_ability
                     )
-                    channels.append(channel)
+                    raw_cs = _named_field(channel, PARAM_CS_STATUS)
+                    if raw_cs is None:
+                        raw_cs = _named_field(device, PARAM_CS_STATUS)
+                    if raw_cs is not None:
+                        parsed.set_cs_status(raw_cs)
+                    raw_insight = _named_field(channel, PARAM_AI_INSIGHT_STATUS)
+                    if raw_insight is None:
+                        raw_insight = _named_field(device, PARAM_AI_INSIGHT_STATUS)
+                    if raw_insight is not None:
+                        parsed.set_ai_insight_status(raw_insight)
+                    _LOGGER.debug(
+                        "device %s ch%s csStatus=%s aiInsightStatus=%s",
+                        device_id,
+                        channel_id,
+                        parsed.cs_status,
+                        parsed.ai_insight_status,
+                    )
+                    channels.append(parsed)
                 imou_device.set_channels(channels)
             # If it is an iot device, update the abilityRefs field to determine the entity
             # that needs to be registered based on this field
@@ -648,13 +723,17 @@ class ImouDeviceManager:
             API_ENDPOINT_GET_DEVICE_STATUS, params
         )
 
-    async def async_get_device_online_status(self, device_id: str) -> dict[str, Any]:
-        """GET DEVICE ONLINE STATUS"""
-        params = {
+    async def async_get_device_online_status(
+        self, device_id: str, product_id: str | None = None
+    ) -> dict[str, Any]:
+        """GET DEVICE ONLINE STATUS via device.status.get."""
+        params: dict[str, Any] = {
             PARAM_DEVICE_ID: device_id,
         }
+        if product_id:
+            params[PARAM_PRODUCT_ID] = product_id
         return await self._imou_api_client.async_request_api(
-            API_ENDPOINT_GET_DEVICE_ONLINE, params
+            API_V2_DEVICE_STATUS_GET, params
         )
 
     async def async_set_device_status(
@@ -704,11 +783,15 @@ class ImouDeviceManager:
             API_ENDPOINT_DEVICE_STORAGE, params
         )
 
-    async def async_restart_device(self, device_id: str) -> None:
-        """reboot device"""
-        params = {PARAM_DEVICE_ID: device_id}
+    async def async_restart_device(
+        self, device_id: str, product_id: str | None = None
+    ) -> None:
+        """reboot device via device.reboot.execute"""
+        params: dict[str, Any] = {PARAM_DEVICE_ID: device_id}
+        if product_id:
+            params[PARAM_PRODUCT_ID] = product_id
         await self._imou_api_client.async_request_api(
-            API_ENDPOINT_RESTART_DEVICE, params
+            API_V2_DEVICE_REBOOT_EXECUTE, params
         )
 
     async def async_bind_device(self, device_id: str, code: str) -> None:
@@ -1113,11 +1196,11 @@ class ImouDeviceManager:
         """Keyword search over AI alarm messages."""
         params: dict[str, Any] = {
             PARAM_DEVICE_ID: device_id,
-            PARAM_CHANNEL_ID: channel_id,
             "searchContent": search_content[:50],
             "pageSize": str(max(1, min(32, page_size))),
             "sortType": sort_type,
         }
+        params.update(_search_channel_param(channel_id))
         if product_id:
             params[PARAM_PRODUCT_ID] = product_id
         if next_index_id:

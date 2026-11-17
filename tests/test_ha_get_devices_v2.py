@@ -199,3 +199,93 @@ async def test_paas_skips_ability_fallback_when_capability_list_missing() -> Non
     ability_configure.assert_not_called()
     assert devices[0].capability_set is None
     assert devices[0].switches == {}
+
+
+@pytest.mark.asyncio
+async def test_capability_list_is_not_repeated_for_a_known_channel() -> None:
+    """Discovery after the first list reuses the stored capability set."""
+    from pyimouapi.capability.catalog import PropertyCapability
+
+    cap = CapabilitySet(
+        properties={
+            "detection.motion.enabled": PropertyCapability(
+                property_id="detection.motion.enabled",
+                access_mode="rw",
+                data_type="int",
+                default_data=0,
+            ),
+        },
+        services=frozenset(),
+        events=frozenset(),
+    )
+    device = ImouDevice("CAM1", "Cam", "1", "Imou", "IPC")
+    device.set_channels([ImouChannel("0", "Main", "1", "MotionDetect")])
+    device.channels[0].set_ai_insight_status("using")
+    delegate = MagicMock()
+    delegate.async_get_devices = AsyncMock(return_value=[device])
+    manager = ImouHaDeviceManager(delegate)
+    listed = AsyncMock(return_value=cap)
+    with patch("pyimouapi.ha_device.async_capability_list", listed):
+        first = await manager.async_get_devices()
+        second = await manager.async_get_devices()
+    listed.assert_awaited_once()
+    assert first[0].ai_insight_label == "active"
+    assert second[0].ai_insight_label == "active"
+    assert second[0].capability_set is cap
+
+
+@pytest.mark.asyncio
+async def test_empty_capability_list_is_cached_and_registers_nothing() -> None:
+    empty = CapabilitySet(properties={}, services=frozenset(), events=frozenset())
+    device = ImouDevice("CAM1", "Cam", "1", "Imou", "IPC")
+    device.set_product_id("PID")
+    device.set_channels([ImouChannel("0", "Main", "1", "")])
+    delegate = MagicMock()
+    delegate.async_get_devices = AsyncMock(return_value=[device])
+    manager = ImouHaDeviceManager(delegate)
+    listed = AsyncMock(return_value=empty)
+    with patch("pyimouapi.ha_device.async_capability_list", listed):
+        first = await manager.async_get_devices()
+        second = await manager.async_get_devices()
+    listed.assert_awaited_once()
+    assert first[0].capability_set is None
+    assert second[0].switches == {}
+
+
+@pytest.mark.asyncio
+async def test_failed_capability_list_is_retried() -> None:
+    from pyimouapi.exceptions import RequestFailedException
+
+    device = ImouDevice("CAM1", "Cam", "1", "Imou", "IPC")
+    device.set_channels([ImouChannel("0", "Main", "1", "")])
+    delegate = MagicMock()
+    delegate.async_get_devices = AsyncMock(return_value=[device])
+    manager = ImouHaDeviceManager(delegate)
+    listed = AsyncMock(side_effect=RequestFailedException("temporary"))
+    with patch("pyimouapi.ha_device.async_capability_list", listed):
+        await manager.async_get_devices()
+        await manager.async_get_devices()
+    assert listed.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_unselected_device_does_not_request_capability_list() -> None:
+    selected = ImouDevice("KEEP", "Keep", "1", "Imou", "IPC")
+    selected.set_channels([ImouChannel("0", "Main", "1", "")])
+    other = ImouDevice("SKIP", "Skip", "1", "Imou", "IPC")
+    other.set_channels([ImouChannel("0", "Main", "1", "")])
+    delegate = MagicMock()
+    delegate.async_get_devices = AsyncMock(return_value=[selected, other])
+    manager = ImouHaDeviceManager(delegate)
+    listed = AsyncMock(
+        return_value=CapabilitySet(
+            properties={},
+            services=frozenset(),
+            events=frozenset(),
+        )
+    )
+    with patch("pyimouapi.ha_device.async_capability_list", listed):
+        devices = await manager.async_get_devices(configure_device_ids={"KEEP"})
+    assert {item.device_id for item in devices} == {"KEEP", "SKIP"}
+    assert listed.await_count == 1
+    assert listed.await_args.kwargs["device_id"] == "KEEP"

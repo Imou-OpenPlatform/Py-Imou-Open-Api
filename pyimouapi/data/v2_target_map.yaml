@@ -13,6 +13,7 @@ bindings:
 
   - ha_key: motion_detect
     target_id: detection.motion.enabled
+    fallback_target_id: detection.intrusion.enabled
     kind: property
     ha_platform: switch
     scope: channel
@@ -31,12 +32,14 @@ bindings:
 
   - ha_key: header_detect
     target_id: detection.person.enabled
+    fallback_target_id: detection.intrusion.personFilter
     kind: property
     ha_platform: switch
     scope: channel
 
   - ha_key: pet_detect
     target_id: detection.pet.enabled
+    fallback_target_id: detection.intrusion.petFilter
     kind: property
     ha_platform: switch
     scope: channel

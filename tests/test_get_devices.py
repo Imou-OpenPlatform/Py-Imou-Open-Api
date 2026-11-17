@@ -9,11 +9,13 @@ from pyimouapi.const import (
     API_ENDPOINT_LIST_DEVICE_DETAILS,
     API_ENDPOINT_LIST_PRODUCT_DETAIL,
     PARAM_ABILITY_REFS,
+    PARAM_AI_INSIGHT_STATUS,
     PARAM_BRAND,
     PARAM_CHANNEL_ID,
     PARAM_CHANNEL_LIST,
     PARAM_CHANNEL_NUM,
     PARAM_COUNT,
+    PARAM_CS_STATUS,
     PARAM_DEVICE_ID,
     PARAM_DEVICE_LIST,
     PARAM_DEVICE_MODEL,
@@ -215,7 +217,7 @@ async def test_channel_list_tolerates_missing_name_and_status() -> None:
     """Some device details omit channelName / channelStatus on a channel."""
     entry = make_device("cam1")
     entry[PARAM_CHANNEL_NUM] = 1
-    entry[PARAM_CHANNEL_LIST] = [{PARAM_CHANNEL_ID: 0}]
+    entry[PARAM_CHANNEL_LIST] = [{PARAM_CHANNEL_ID: 0, "csstatus": "using"}]
     manager, _ = make_manager({1: {PARAM_COUNT: 1, PARAM_DEVICE_LIST: [entry]}})
 
     result = await manager.async_get_devices(fetch_ability_refs=False)
@@ -226,3 +228,36 @@ async def test_channel_list_tolerates_missing_name_and_status() -> None:
     assert channel.channel_id == "0"
     assert channel.channel_name == ""
     assert channel.channel_status == ""
+    assert channel.cs_status == "using"
+
+
+@pytest.mark.asyncio
+async def test_channel_cs_status_uses_documented_field() -> None:
+    """device.detail.page reports cloud storage as channelList[].csStatus."""
+    entry = make_device("cam1")
+    entry[PARAM_CHANNEL_LIST] = [
+        {
+            PARAM_CHANNEL_ID: "0",
+            PARAM_CS_STATUS: "expired",
+            PARAM_AI_INSIGHT_STATUS: "on",
+        }
+    ]
+    manager, _ = make_manager({1: {PARAM_COUNT: 1, PARAM_DEVICE_LIST: [entry]}})
+
+    result = await manager.async_get_devices(fetch_ability_refs=False)
+
+    assert result[0].channels[0].cs_status == "expired"
+    assert result[0].channels[0].ai_insight_status == "on"
+
+
+@pytest.mark.asyncio
+async def test_channel_inherits_device_ai_insight_status() -> None:
+    """A device-level aiInsightStatus applies when the channel omits it."""
+    entry = make_device("8K11FAAPAZ9DAA1")
+    entry["aiInsightStatus"] = "using"
+    entry[PARAM_CHANNEL_LIST] = [{PARAM_CHANNEL_ID: "0"}]
+    manager, _ = make_manager({1: {PARAM_COUNT: 1, PARAM_DEVICE_LIST: [entry]}})
+
+    result = await manager.async_get_devices(fetch_ability_refs=False)
+
+    assert result[0].channels[0].ai_insight_status == "using"

@@ -1,6 +1,10 @@
 """Insight cloud parsing tests."""
 
-from pyimouapi.insight.cloud import parse_device_cloud_data
+from pyimouapi.insight.cloud import (
+    ai_insight_label_from_status,
+    cloud_storage_label_from_cs_status,
+    parse_device_cloud_data,
+)
 
 
 def test_ai_insight_active_when_strategy_type_six() -> None:
@@ -13,10 +17,38 @@ def test_ai_insight_active_when_strategy_type_six() -> None:
         }
     )
     assert snap.ai_insight_active
-    assert snap.cloud_storage_label == "insight"
+    assert snap.cloud_storage_label == "active"
 
 
 def test_no_plan() -> None:
     snap = parse_device_cloud_data({"hasDefault": False})
-    assert snap.cloud_storage_label == "none"
+    assert snap.cloud_storage_label == "not_opened"
     assert not snap.ai_insight_active
+
+
+def test_expired_plan() -> None:
+    snap = parse_device_cloud_data(
+        {"hasDefault": True, "strategyStatus": 2, "strategyType": "6"}
+    )
+    assert snap.cloud_storage_label == "expired"
+    assert not snap.ai_insight_active
+
+
+def test_cs_status_maps_onto_cloud_storage_states() -> None:
+    """Device-list csStatus is the cloud storage sensor."""
+    assert cloud_storage_label_from_cs_status("notExist") == "not_opened"
+    assert cloud_storage_label_from_cs_status("off") == "not_opened"
+    assert cloud_storage_label_from_cs_status("using") == "active"
+    assert cloud_storage_label_from_cs_status("on") == "active"
+    assert cloud_storage_label_from_cs_status("expired") == "expired"
+    assert cloud_storage_label_from_cs_status(None) == "unknown"
+    assert cloud_storage_label_from_cs_status("mystery") == "unknown"
+
+
+def test_ai_insight_status_maps_onto_sensor_states() -> None:
+    """Device-list aiInsightStatus is the AI Insight sensor."""
+    assert ai_insight_label_from_status("on") == "active"
+    assert ai_insight_label_from_status("using") == "active"
+    assert ai_insight_label_from_status("off") == "inactive"
+    assert ai_insight_label_from_status("notExist") == "inactive"
+    assert ai_insight_label_from_status(None) == "unavailable"

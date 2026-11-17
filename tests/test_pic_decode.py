@@ -174,19 +174,19 @@ def test_decrypt_bytes_empty_data_raises() -> None:
         raise AssertionError("expected PicDecodeError")
 
 
-def test_decrypt_bytes_non_tcm_retries_with_password_key() -> None:
-    """A serial-keyed picture that rejects the AES key is retried as a password."""
+def test_decrypt_bytes_password_falls_back_to_serial() -> None:
+    """A rejected device password is retried with the serial-derived key."""
     jpeg = b"\xff\xd8retry"
     decoder, calls = _decoder_with_stub_decrypt(jpeg, codes=[2, 0])
 
     result = decoder.decrypt_bytes(
-        b"DHAV", device_id="SN1", encrypt_key="pw", use_tcm=False
+        b"DHAV", device_id="SN1", encrypt_key="pw", use_tcm=True
     )
 
     assert result == jpeg
     assert [c[2:] for c in calls] == [
-        (serial_aes_key("SN1").encode(), b"", b""),
         (b"", b"SN1", b"pw"),
+        (serial_aes_key("SN1").encode(), b"", b""),
     ]
 
 

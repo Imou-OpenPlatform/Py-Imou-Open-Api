@@ -35,6 +35,8 @@ def test_parse_statistics_and_markdown() -> None:
     )
     assert len(briefing.daily) == 1
     assert briefing.daily[0].pet == 10
+    assert briefing.daily[0].total == 20
+    assert briefing.daily[0].package == 0
     text = format_briefing_markdown(briefing)
     assert "20260327" in text
     assert "A person near the door" in text

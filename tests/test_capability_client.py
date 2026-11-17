@@ -96,6 +96,7 @@ def test_capability_set_from_list_response() -> None:
     assert motion.writable
     assert motion.data_type == "int"
     assert motion.range_min == 0 and motion.range_max == 1
+    assert motion.scope == "channel"
     wdr = cap.properties["image.wdr.mode"]
     assert wdr.data_type == "enum"
     assert len(wdr.enum_options) == 3
@@ -142,6 +143,25 @@ async def test_async_property_get(client: ImouOpenApiClient) -> None:
             "properties": ["detection.motion.enabled", "image.night.mode"],
         },
     )
+
+
+@pytest.mark.asyncio
+async def test_async_property_get_splits_after_eight(
+    client: ImouOpenApiClient,
+) -> None:
+    """The gateway rejects a property read with more than eight ids."""
+    names = [f"prop.{index}" for index in range(9)]
+
+    async def _respond(_path: str, params: dict) -> dict:
+        return {"properties": dict.fromkeys(params["properties"], 1)}
+
+    client.async_request_api = AsyncMock(side_effect=_respond)
+    values = await async_property_get(client, device_id="SN1", properties=names)
+    assert values == dict.fromkeys(names, 1)
+    sent = [
+        call.args[1]["properties"] for call in client.async_request_api.await_args_list
+    ]
+    assert sent == [names[:8], names[8:]]
 
 
 @pytest.mark.asyncio

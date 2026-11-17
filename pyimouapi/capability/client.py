@@ -13,6 +13,9 @@ from ..const import (
 from ..openapi import ImouOpenApiClient
 from .catalog import CapabilitySet, capability_set_from_list_response
 
+# device.property.get / set reject a request with more than eight properties.
+_PROPERTY_BATCH_SIZE = 8
+
 
 def _require_device_or_product(device_id: str | None, product_id: str | None) -> None:
     if not device_id and not product_id:
@@ -57,19 +60,24 @@ async def async_property_get(
     """Read values for one or more property ids (same device/channel level)."""
     if not properties:
         return {}
-    params: dict[str, Any] = {
-        "deviceId": device_id,
-        "properties": list(properties),
-    }
-    if product_id:
-        params["productId"] = product_id
-    if channel_id is not None and channel_id != "":
-        params["channelId"] = str(channel_id)
-    data = await client.async_request_api(API_V2_DEVICE_PROPERTY_GET, params)
-    if not isinstance(data, dict):
-        return {}
-    raw = data.get("properties")
-    return dict(raw) if isinstance(raw, dict) else {}
+    merged: dict[str, Any] = {}
+    for start in range(0, len(properties), _PROPERTY_BATCH_SIZE):
+        batch = list(properties[start : start + _PROPERTY_BATCH_SIZE])
+        params: dict[str, Any] = {
+            "deviceId": device_id,
+            "properties": batch,
+        }
+        if product_id:
+            params["productId"] = product_id
+        if channel_id is not None and channel_id != "":
+            params["channelId"] = str(channel_id)
+        data = await client.async_request_api(API_V2_DEVICE_PROPERTY_GET, params)
+        if not isinstance(data, dict):
+            continue
+        raw = data.get("properties")
+        if isinstance(raw, dict):
+            merged.update(raw)
+    return merged
 
 
 async def async_property_set(
@@ -80,19 +88,25 @@ async def async_property_set(
     channel_id: str | None = None,
     product_id: str | None = None,
 ) -> dict[str, Any]:
-    """Write property values (batch)."""
+    """Write property values, at most eight per request."""
     if not properties:
         return {}
-    params: dict[str, Any] = {
-        "deviceId": device_id,
-        "properties": properties,
-    }
-    if product_id:
-        params["productId"] = product_id
-    if channel_id is not None and channel_id != "":
-        params["channelId"] = str(channel_id)
-    data = await client.async_request_api(API_V2_DEVICE_PROPERTY_SET, params)
-    return data if isinstance(data, dict) else {}
+    items = list(properties.items())
+    last: dict[str, Any] = {}
+    for start in range(0, len(items), _PROPERTY_BATCH_SIZE):
+        batch = dict(items[start : start + _PROPERTY_BATCH_SIZE])
+        params: dict[str, Any] = {
+            "deviceId": device_id,
+            "properties": batch,
+        }
+        if product_id:
+            params["productId"] = product_id
+        if channel_id is not None and channel_id != "":
+            params["channelId"] = str(channel_id)
+        data = await client.async_request_api(API_V2_DEVICE_PROPERTY_SET, params)
+        if isinstance(data, dict):
+            last = data
+    return last
 
 
 async def async_service_invoke(

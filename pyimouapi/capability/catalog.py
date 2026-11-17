@@ -25,6 +25,7 @@ class PropertyCapability:
     range_min: Any | None = None
     range_max: Any | None = None
     default_data: Any = None
+    scope: str = "channel"
 
     @property
     def readable(self) -> bool:
@@ -70,7 +71,7 @@ def _parse_enum_options(specs: dict[str, Any]) -> tuple[EnumOption, ...]:
     return tuple(options)
 
 
-def _parse_property(raw: dict[str, Any]) -> PropertyCapability | None:
+def _parse_property(raw: dict[str, Any], scope: str) -> PropertyCapability | None:
     property_id = raw.get("propertyId")
     if not property_id:
         return None
@@ -98,6 +99,7 @@ def _parse_property(raw: dict[str, Any]) -> PropertyCapability | None:
         range_min=range_min,
         range_max=range_max,
         default_data=raw.get("defaultData"),
+        scope=scope or "channel",
     )
 
 
@@ -112,11 +114,12 @@ def capability_set_from_list_response(data: dict[str, Any]) -> CapabilitySet:
             if not isinstance(block, dict):
                 continue
             props = block.get("properties")
+            scope = str(block.get("scope") or "channel")
             if isinstance(props, list):
                 for raw_prop in props:
                     if not isinstance(raw_prop, dict):
                         continue
-                    parsed = _parse_property(raw_prop)
+                    parsed = _parse_property(raw_prop, scope)
                     if parsed is not None:
                         properties[parsed.property_id] = parsed
             for raw_svc in block.get("services") or []:

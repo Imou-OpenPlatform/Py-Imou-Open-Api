@@ -44,7 +44,6 @@ from .const import (
     BINARY_SENSOR_TYPE_ABILITY,
     BINARY_SENSOR_TYPE_REF,
     BUTTON_TYPE_ABILITY,
-    BUTTON_TYPE_PARAM_VALUE,
     BUTTON_TYPE_REF,
     ERROR_CODE_NO_PERMISSION,
     ERROR_CODE_NO_STORAGE_MEDIUM,
@@ -79,7 +78,6 @@ from .const import (
     PARAM_PTZ,
     PARAM_REF,
     PARAM_REF_TYPE,
-    PARAM_RESTART_DEVICE,
     PARAM_SERVICES,
     PARAM_SIREN_START,
     PARAM_SIREN_STOP,
@@ -117,6 +115,10 @@ from .exceptions import (
     ImouException,
     InvalidAppIdOrSecretException,
     RequestFailedException,
+)
+from .insight.cloud import (
+    ai_insight_label_from_status,
+    cloud_storage_label_from_cs_status,
 )
 from .property_on import property_is_on
 from .select_option import normalize_options, to_friendly, to_raw
@@ -398,6 +400,9 @@ class ImouHaDevice:
         self._channel_ability = "unknown"
         self._capability_set: CapabilitySet | None = None
         self._bulb_v2: bool = False
+        self._cs_status: str | None = None
+        self._ai_insight_status: str | None = None
+        self._play_token_v2: str | None = None
 
     @property
     def device_id(self) -> str:
@@ -511,8 +516,47 @@ class ImouHaDevice:
     def set_device_ability(self, device_ability: str) -> None:
         self._device_ability = device_ability
 
+    @property
+    def play_token_v2(self) -> str | None:
+        """Encrypted play credential copied from the device list."""
+        return self._play_token_v2
+
+    def set_play_token_v2(self, play_token_v2: str | None) -> None:
+        self._play_token_v2 = play_token_v2 or None
+
     def set_channel_ability(self, channel_ability: str) -> None:
         self._channel_ability = channel_ability
+
+    @property
+    def cs_status(self) -> str | None:
+        """Raw cloud-storage status from the device list."""
+        return self._cs_status
+
+    def set_cs_status(self, cs_status: str | None) -> None:
+        self._cs_status = cs_status
+
+    @property
+    def cloud_storage_label(self) -> str:
+        """Cloud storage sensor state derived from ``csStatus``."""
+        return cloud_storage_label_from_cs_status(self._cs_status)
+
+    @property
+    def ai_insight_status(self) -> str | None:
+        """Raw AI Insight status from the device list."""
+        return self._ai_insight_status
+
+    def set_ai_insight_status(self, ai_insight_status: str | None) -> None:
+        self._ai_insight_status = ai_insight_status
+
+    @property
+    def ai_insight_label(self) -> str:
+        """AI Insight sensor state derived from ``aiInsightStatus``."""
+        return ai_insight_label_from_status(self._ai_insight_status)
+
+    @property
+    def ai_insight_active(self) -> bool:
+        """True when the device list says this channel has AI Insight."""
+        return self.ai_insight_label == "active"
 
     def set_capability_set(self, capability_set: CapabilitySet) -> None:
         self._capability_set = capability_set
@@ -540,6 +584,8 @@ class ImouHaDevice:
         self._swversion = other.swversion
         if other.channel_name is not None:
             self._channel_name = other.channel_name
+        self._cs_status = other.cs_status
+        self._ai_insight_status = other.ai_insight_status
 
     def replace_capabilities(self, other: ImouHaDevice) -> list[str]:
         """Take another's entities, keeping state for keys that still exist.
@@ -621,6 +667,9 @@ class ImouHaDeviceManager:
     ):
         self._delegate = device_manager
         self._dormant_write_retry_wait_seconds = dormant_write_retry_wait_seconds
+        self._capability_by_channel: dict[
+            tuple[str, str | None, str | None], CapabilitySet
+        ] = {}
 
     @property
     def delegate(self) -> ImouDeviceManager:
@@ -1002,6 +1051,11 @@ class ImouHaDeviceManager:
         service_id: str,
         duration: int,
     ) -> None:
+        if service_id == "device.reboot.execute":
+            await self.delegate.async_restart_device(
+                device.device_id, device.product_id
+            )
+            return
         input_data = v2_service_input_data(service_id, button_type, duration)
         channel_id = device.channel_id
         if service_id.startswith("device.") and channel_id is None:
@@ -1131,28 +1185,57 @@ class ImouHaDeviceManager:
         apply_bulb_v2_properties(device.bulb_light, values)
         return all(property_id in values for property_id in property_ids)
 
+    async def _async_read_scoped_properties(
+        self, device: ImouHaDevice, property_ids: list[str]
+    ) -> dict[str, Any]:
+        """Read properties in scope groups. Device and channel ids cannot share a call."""
+        groups: dict[str, list[str]] = {}
+        capability = device.capability_set
+        for property_id in property_ids:
+            scope = "channel"
+            if capability is not None:
+                prop = capability.properties.get(property_id)
+                if prop is not None and prop.scope:
+                    scope = prop.scope
+            groups.setdefault(scope, []).append(property_id)
+        merged: dict[str, Any] = {}
+        for scope, ids in groups.items():
+            channel_id = None if scope == "device" else device.channel_id
+            merged.update(
+                await async_property_get(
+                    self.delegate.api_client,
+                    device_id=device.device_id,
+                    channel_id=channel_id,
+                    product_id=device.product_id,
+                    properties=ids,
+                )
+            )
+        return merged
+
     async def _async_update_v2_property_entities(self, device: ImouHaDevice) -> bool:
         """Refresh state for entities registered via capability.list."""
         entities = self._collect_v2_property_entities(device)
         if not entities:
             return True
-        property_ids = list(
-            {
-                str(target_id)
-                for _, _, meta in entities
-                for target_id in meta.get(
-                    PARAM_V2_SOURCE_TARGET_IDS, [meta[PARAM_V2_TARGET_ID]]
-                )
-            }
-        )
+        property_ids: list[str] = []
+        seen: set[str] = set()
+        capability = device.capability_set
+        for _, _, meta in entities:
+            raw_ids = meta.get(PARAM_V2_SOURCE_TARGET_IDS, [meta[PARAM_V2_TARGET_ID]])
+            for raw_id in raw_ids:
+                target_id = str(raw_id)
+                if target_id in seen:
+                    continue
+                if capability is not None:
+                    prop = capability.properties.get(target_id)
+                    if prop is None or not prop.readable:
+                        continue
+                seen.add(target_id)
+                property_ids.append(target_id)
+        if not property_ids:
+            return True
         try:
-            values = await async_property_get(
-                self.delegate.api_client,
-                device_id=device.device_id,
-                channel_id=device.channel_id,
-                product_id=device.product_id,
-                properties=property_ids,
-            )
+            values = await self._async_read_scoped_properties(device, property_ids)
         except InvalidAppIdOrSecretException:
             raise
         except Exception as exc:
@@ -1359,11 +1442,14 @@ class ImouHaDeviceManager:
         return fetched
 
     async def _async_update_status_shared(self, devices: list[ImouHaDevice]) -> None:
-        """Apply one deviceOnline response to every channel that shares it."""
+        """Apply one device.status.get response to every channel that shares it."""
         # A failure here is the caller's to report: one physical device going
         # unreadable is skipped, a whole account doing so is an outage.
-        device_id = self._resolve_device_id(devices[0])
-        data = await self.delegate.async_get_device_online_status(device_id)
+        primary = devices[0]
+        device_id = self._resolve_device_id(primary)
+        data = await self.delegate.async_get_device_online_status(
+            device_id, primary.product_id
+        )
         for device in devices:
             try:
                 self._apply_online_status(device, data)
@@ -1375,9 +1461,11 @@ class ImouHaDeviceManager:
                 )
 
     def _apply_online_status(self, device: ImouHaDevice, data: dict[str, Any]) -> None:
-        """Write the online sensor from a deviceOnline payload."""
+        """Write the online sensor from a device.status.get payload."""
+        online_key = "online"
+        raw_dev_online = data.get(online_key, data.get(PARAM_ONLINE))
         if device.channel_id is None and device.product_id is not None:
-            self._apply_online_value(device, data.get(PARAM_ONLINE))
+            self._apply_online_value(device, raw_dev_online)
             return
         channels = data.get(PARAM_CHANNELS)
         device_channel_id = (
@@ -1388,16 +1476,18 @@ class ImouHaDeviceManager:
                 if not isinstance(channel, dict):
                     continue
                 if str(channel.get(PARAM_CHANNEL_ID)) == device_channel_id:
-                    self._apply_online_value(device, channel.get(PARAM_ONLINE))
+                    self._apply_online_value(
+                        device, channel.get(online_key, channel.get(PARAM_ONLINE))
+                    )
                     return
-        elif data.get(PARAM_ONLINE) is not None:
-            # No channel list: a device-level onLine is the only status we have.
-            self._apply_online_value(device, data.get(PARAM_ONLINE))
+        elif raw_dev_online is not None:
+            # No channel list: a device-level online is the only status we have.
+            self._apply_online_value(device, raw_dev_online)
             return
         # Channel missing, or the payload has no usable status: treat as offline
         # so we do not keep refreshing against a stale "online" cache.
         _LOGGER.debug(
-            "deviceOnline has no channel %s for %s; marking offline",
+            "device.status.get has no channel %s for %s; marking offline",
             device_channel_id,
             device.device_id,
         )
@@ -1491,6 +1581,7 @@ class ImouHaDeviceManager:
                 device.capability_set is not None
                 or PARAM_REF in value
                 or PARAM_V2_TARGET_ID in value
+                or select_type == PARAM_NIGHT_VISION_MODE
             ):
                 continue
             else:
@@ -1609,15 +1700,7 @@ class ImouHaDeviceManager:
 
     async def _async_update_device_sensor_status(self, device: ImouHaDevice):
         """UPDATE SENSOR STATUS"""
-        coroutines: list[Coroutine[Any, Any, Any]] = []
-        for sensor_type, value in device.sensors.items():
-            if PARAM_REF in value:
-                continue
-            elif sensor_type == PARAM_STORAGE_USED:
-                coroutines.append(self._async_update_device_storage(device))
-            elif sensor_type == PARAM_BATTERY:
-                coroutines.append(self._async_update_device_battery(device))
-        await self._async_gather_reads(coroutines, device, "sensors")
+        return
 
     async def _async_update_device_storage(self, device: ImouHaDevice):
         try:
@@ -1684,10 +1767,15 @@ class ImouHaDeviceManager:
         self,
         *,
         fetch_ability_refs: bool | set[str] = False,
+        configure_device_ids: set[str] | None = None,
+        skip_device_ids: set[str] | None = None,
     ) -> list[ImouHaDevice]:
         """Return Imou HA devices registered from ``device.capability.list`` only."""
         devices = []
         for device in await self.delegate.async_get_devices(fetch_ability_refs=False):
+            should_configure = (
+                configure_device_ids is None or device.device_id in configure_device_ids
+            ) and not (bool(skip_device_ids) and device.device_id in skip_device_ids)
             # Prioritize whether it's a video device.
             if device.channels:
                 for channel in device.channels:
@@ -1695,8 +1783,13 @@ class ImouHaDeviceManager:
                     imou_ha_device.set_channel_id(channel.channel_id)
                     imou_ha_device.set_channel_name(channel.channel_name)
                     imou_ha_device.set_channel_ability(channel.channel_ability)
-                    if not await self._async_try_configure_by_capability(
-                        device, channel, imou_ha_device
+                    imou_ha_device.set_cs_status(channel.cs_status)
+                    imou_ha_device.set_ai_insight_status(channel.ai_insight_status)
+                    if (
+                        should_configure
+                        and not await self._async_try_configure_by_capability(
+                            device, channel, imou_ha_device
+                        )
                     ):
                         _LOGGER.warning(
                             "device.capability.list missing for %s ch%s; "
@@ -1712,8 +1805,11 @@ class ImouHaDeviceManager:
                     device.product_id,
                 )
                 imou_ha_device = self.build_device(device)
-                if not await self._async_try_configure_by_capability(
-                    device, None, imou_ha_device
+                if (
+                    should_configure
+                    and not await self._async_try_configure_by_capability(
+                        device, None, imou_ha_device
+                    )
                 ):
                     _LOGGER.warning(
                         "device.capability.list missing for %s; no entities registered",
@@ -1753,6 +1849,9 @@ class ImouHaDeviceManager:
             imou_ha_device.set_parent_device_id(device.parent_device_id)
         imou_ha_device.set_is_ipc(device.is_ipc)
         imou_ha_device.set_device_ability(device.device_ability)
+        token = getattr(device, "play_token_v2", None)
+        if isinstance(token, str) and token:
+            imou_ha_device.set_play_token_v2(token)
         return imou_ha_device
 
     async def async_press_button(
@@ -1764,23 +1863,16 @@ class ImouHaDeviceManager:
                 device, button_type, str(service_id), duration
             )
             return
-        if device.capability_set is not None:
+        if PARAM_PTZ in button_type:
+            raise RequestFailedException("该设备没有云台能力")
+        if button_type in (PARAM_SIREN_START, PARAM_SIREN_STOP):
+            await self._async_press_siren_button(device, button_type)
+        elif ref_id := button_state.get(PARAM_REF):
+            await self._async_press_button_by_ref(device, ref_id)
+        else:
             raise RequestFailedException(
                 f"{button_type} is not exposed on this device capability set"
             )
-        if button_type == PARAM_RESTART_DEVICE:
-            await self.delegate.async_restart_device(device.device_id)
-        elif PARAM_PTZ in button_type:
-            await self.delegate.async_control_device_ptz(
-                device.device_id,
-                device.channel_id,
-                BUTTON_TYPE_PARAM_VALUE[button_type],
-                duration,
-            )
-        elif button_type in (PARAM_SIREN_START, PARAM_SIREN_STOP):
-            await self._async_press_siren_button(device, button_type)
-        elif ref_id := device.buttons[button_type].get(PARAM_REF):
-            await self._async_press_button_by_ref(device, ref_id)
 
     async def _async_press_siren_button(
         self, device: ImouHaDevice, button_type: str
@@ -1933,16 +2025,9 @@ class ImouHaDeviceManager:
                 device, write_option, ref_id, value_type
             )
             device.selects[select_type][PARAM_CURRENT_OPTION] = option
-        elif select_type == PARAM_NIGHT_VISION_MODE:
-
-            async def _set_night_vision() -> None:
-                await self.delegate.async_set_device_night_vision_mode(
-                    device.device_id, device.channel_id, option
-                )
-
-            await self._async_dormant_write_retry(device, _set_night_vision)
-            device.selects[PARAM_NIGHT_VISION_MODE][PARAM_CURRENT_OPTION] = to_friendly(
-                PARAM_NIGHT_VISION_MODE, option
+        else:
+            raise RequestFailedException(
+                f"{select_type} is not exposed on this device capability set"
             )
 
     async def _async_get_device_switch_status_by_ability(
@@ -2028,8 +2113,9 @@ class ImouHaDeviceManager:
         )
 
     @staticmethod
-    def get_device_status(origin_value: str) -> str:
-        match origin_value:
+    def get_device_status(origin_value: object) -> str:
+        text = str(origin_value).strip() if origin_value is not None else ""
+        match text:
             case "1":
                 return DeviceStatus.ONLINE.value
             case "0":
@@ -2145,31 +2231,39 @@ class ImouHaDeviceManager:
         channel: Any,
         imou_ha_device: ImouHaDevice,
     ) -> bool:
-        """Return True when v2 list + map registration succeeded."""
+        """Return True when v2 list + map registration succeeded.
+
+        A successful list is kept for this process. Later discovery reuses it
+        instead of calling ``device.capability.list`` on every poll.
+        """
         channel_id = channel.channel_id if channel is not None else None
-        try:
-            capability = await async_capability_list(
-                self.delegate.api_client,
-                device_id=device.device_id,
-                product_id=device.product_id,
-                channel_id=channel_id,
-            )
-        except InvalidAppIdOrSecretException:
-            raise
-        except ImouException as exc:
-            _LOGGER.debug(
-                "device.capability.list failed for %s: %s",
-                device.device_id,
-                exc,
-            )
-            return False
-        except (TypeError, ValueError, AttributeError) as exc:
-            _LOGGER.debug(
-                "device.capability.list unavailable for %s: %s",
-                device.device_id,
-                exc,
-            )
-            return False
+        cache_key = (device.device_id, channel_id, device.product_id)
+        capability = self._capability_by_channel.get(cache_key)
+        if capability is None:
+            try:
+                capability = await async_capability_list(
+                    self.delegate.api_client,
+                    device_id=device.device_id,
+                    product_id=device.product_id,
+                    channel_id=channel_id,
+                )
+            except InvalidAppIdOrSecretException:
+                raise
+            except ImouException as exc:
+                _LOGGER.debug(
+                    "device.capability.list failed for %s: %s",
+                    device.device_id,
+                    exc,
+                )
+                return False
+            except (TypeError, ValueError, AttributeError) as exc:
+                _LOGGER.debug(
+                    "device.capability.list unavailable for %s: %s",
+                    device.device_id,
+                    exc,
+                )
+                return False
+            self._capability_by_channel[cache_key] = capability
         if not (capability.properties or capability.services or capability.events):
             _LOGGER.debug(
                 "device.capability.list empty for %s ch%s",
@@ -2180,12 +2274,15 @@ class ImouHaDeviceManager:
         imou_ha_device.set_capability_set(capability)
         configure_imou_ha_device_from_capability(imou_ha_device, capability)
         _LOGGER.debug(
-            "device.capability.list ok for %s ch%s (%s properties, %s services, %s events)",
+            "device.capability.list %s ch%s properties=%s services=%s events=%s "
+            "switches=%s buttons=%s",
             device.device_id,
             channel_id,
-            len(capability.properties),
-            len(capability.services),
-            len(capability.events),
+            sorted(capability.properties),
+            sorted(capability.services),
+            sorted(capability.events),
+            sorted(imou_ha_device.switches),
+            sorted(imou_ha_device.buttons),
         )
         return True
 

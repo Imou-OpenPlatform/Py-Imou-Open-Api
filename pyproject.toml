@@ -12,6 +12,7 @@ license = { text = "MIT" }
 authors = [{ name = "Imou-OpenPlatform", email = "cloud_openteam_service@imou.com" }]
 dependencies = [
   "aiohttp>=3.11.9,<4.0",
+  "cryptography>=42.0",
   "pyyaml>=6.0",
   "simpleeval>=1.0.3",
 ]

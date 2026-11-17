@@ -24,7 +24,7 @@ class DailyAlarmRollup:
     human: int
     vehicle: int
     pet: int
-    motion: int
+    package: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,14 +35,15 @@ class InsightBriefing:
     risk_notes: tuple[str, ...]
 
 
-def _int_field(row: dict[str, Any], key: str) -> int:
-    raw = row.get(key)
-    if raw is None:
-        return 0
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return 0
+def _int_field(row: dict[str, Any], *keys: str) -> int:
+    for key in keys:
+        if key not in row or row[key] is None:
+            continue
+        try:
+            return int(row[key])
+        except (TypeError, ValueError):
+            return 0
+    return 0
 
 
 def parse_alarm_message_statistics(data: Any) -> InsightBriefing:
@@ -63,11 +64,11 @@ def parse_alarm_message_statistics(data: Any) -> InsightBriefing:
             daily_rows.append(
                 DailyAlarmRollup(
                     date=date,
-                    total=_int_field(row, "totalcount"),
+                    total=_int_field(row, "totalCount", "totalcount"),
                     human=_int_field(row, "humanAlarm"),
                     vehicle=_int_field(row, "carAlarm"),
                     pet=_int_field(row, "petAlarm"),
-                    motion=_int_field(row, "motionAlarm"),
+                    package=_int_field(row, "packageAlarm"),
                 )
             )
 
@@ -113,7 +114,7 @@ def format_briefing_markdown(briefing: InsightBriefing) -> str:
                 f"person {row.human}",
                 f"vehicle {row.vehicle}",
                 f"pet {row.pet}",
-                f"motion {row.motion}",
+                f"package {row.package}",
             ]
             lines.append("- " + ", ".join(parts))
     else:

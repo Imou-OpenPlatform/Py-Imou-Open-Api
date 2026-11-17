@@ -42,6 +42,72 @@ def _motion_cap() -> CapabilitySet:
     )
 
 
+def test_v2_gate_registers_intrusion_switches() -> None:
+    device = ImouHaDevice("IPC1", "Cam", "Imou", "IPC", "1.0")
+    device.set_channel_id("0")
+    device.set_is_ipc(True)
+    properties = {
+        property_id: PropertyCapability(
+            property_id=property_id,
+            access_mode="rw",
+            data_type="int",
+            range_min=0,
+            range_max=1,
+            default_data=0,
+        )
+        for property_id in (
+            "detection.intrusion.enabled",
+            "detection.intrusion.personFilter",
+            "detection.intrusion.petFilter",
+        )
+    }
+    configure_imou_ha_device_from_capability(
+        device,
+        CapabilitySet(properties=properties, services=frozenset(), events=frozenset()),
+    )
+    assert set(device.switches) == {
+        "motion_detect",
+        "header_detect",
+        "pet_detect",
+    }
+    assert device.switches["motion_detect"][PARAM_V2_TARGET_ID] == (
+        "detection.intrusion.enabled"
+    )
+    assert device.switches["header_detect"][PARAM_V2_TARGET_ID] == (
+        "detection.intrusion.personFilter"
+    )
+    assert device.switches["pet_detect"][PARAM_V2_TARGET_ID] == (
+        "detection.intrusion.petFilter"
+    )
+
+
+def test_dedicated_detection_property_wins_over_intrusion() -> None:
+    device = ImouHaDevice("IPC1", "Cam", "Imou", "IPC", "1.0")
+    device.set_channel_id("0")
+    device.set_is_ipc(True)
+    properties = {
+        property_id: PropertyCapability(
+            property_id=property_id,
+            access_mode="rw",
+            data_type="int",
+            range_min=0,
+            range_max=1,
+            default_data=0,
+        )
+        for property_id in (
+            "detection.motion.enabled",
+            "detection.intrusion.enabled",
+        )
+    }
+    configure_imou_ha_device_from_capability(
+        device,
+        CapabilitySet(properties=properties, services=frozenset(), events=frozenset()),
+    )
+    assert device.switches["motion_detect"][PARAM_V2_TARGET_ID] == (
+        "detection.motion.enabled"
+    )
+
+
 def test_v2_gate_registers_motion_switch() -> None:
     device = ImouHaDevice("IPC1", "Cam", "Imou", "IPC", "1.0")
     device.set_product_id("pid")

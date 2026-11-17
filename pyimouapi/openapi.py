@@ -16,6 +16,7 @@ import aiohttp
 from .const import (
     API_ENDPOINT_ACCESS_TOKEN,
     API_ENDPOINT_GET_MESSAGE_CALLBACK,
+    API_ENDPOINT_GET_PLAY_TOKEN_KEY,
     API_ENDPOINT_SET_MESSAGE_CALLBACK,
     ERROR_CODE_INVALID_APP,
     ERROR_CODE_INVALID_SIGN,
@@ -26,6 +27,7 @@ from .const import (
     PARAM_CODE,
     PARAM_CURRENT_DOMAIN,
     PARAM_DATA,
+    PARAM_DEVICE_ID,
     PARAM_ID,
     PARAM_MSG,
     PARAM_NONCE,
@@ -50,6 +52,15 @@ CONNECTION_LIMIT = 10
 DOWNLOAD_MAX_BYTES = 8 * 1024 * 1024
 
 REDACTED = "***"
+_SECRET_RESPONSE_FIELDS = frozenset(
+    {
+        PARAM_ACCESS_TOKEN,
+        "playToken",
+        "playTokenV2",
+        "playTokenKey",
+        "playTokenKeyV2",
+    }
+)
 
 
 def _redacted_request(body: dict[str, Any]) -> dict[str, Any]:
@@ -70,18 +81,23 @@ def _redacted_request(body: dict[str, Any]) -> dict[str, Any]:
     return {**body, PARAM_SYSTEM: system, PARAM_PARAMS: params}
 
 
+def _redacted_value(value: Any) -> Any:
+    """Mask play tokens, play-token keys, and access tokens in a logged value."""
+    if isinstance(value, dict):
+        return {
+            key: REDACTED
+            if key in _SECRET_RESPONSE_FIELDS and isinstance(item, str) and item
+            else _redacted_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redacted_value(item) for item in value]
+    return value
+
+
 def _redacted_response(body: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy of a response body with any access token masked."""
-    result = body.get(PARAM_RESULT)
-    if not isinstance(result, dict):
-        return body
-    data = result.get(PARAM_DATA)
-    if not isinstance(data, dict) or PARAM_ACCESS_TOKEN not in data:
-        return body
-    return {
-        **body,
-        PARAM_RESULT: {**result, PARAM_DATA: {**data, PARAM_ACCESS_TOKEN: REDACTED}},
-    }
+    """Return a copy of a response body with secrets masked."""
+    return _redacted_value(body)
 
 
 class ImouOpenApiClient:
@@ -168,6 +184,11 @@ class ImouOpenApiClient:
             self._session = None
             if session is not None and not session.closed:
                 await session.close()
+
+    @property
+    def app_id(self) -> str:
+        """Open Platform application id used to sign requests."""
+        return self._app_id
 
     async def async_get_token(self) -> None:
         """Fetch and store accessToken."""
@@ -337,6 +358,22 @@ class ImouOpenApiClient:
         """Return the developer account message callback settings."""
         data = await self.async_request_api(API_ENDPOINT_GET_MESSAGE_CALLBACK, {})
         return data if isinstance(data, dict) else {}
+
+    async def async_get_play_token_key(self, device_id: str) -> str | None:
+        """Return the play-token key for one device, or None when the cloud omits it."""
+        data = await self.async_request_api(
+            API_ENDPOINT_GET_PLAY_TOKEN_KEY,
+            {PARAM_DEVICE_ID: device_id},
+        )
+        if not isinstance(data, dict):
+            return None
+        # playTokenV2 opens with the 32-byte playTokenKeyV2. playTokenKey is
+        # a shorter key and does not decrypt that token.
+        for field in ("playTokenKeyV2", "playTokenKey"):
+            raw = data.get(field)
+            if isinstance(raw, str) and raw.strip():
+                return raw.strip()
+        return None
 
     @property
     def access_token(self) -> str | None:
