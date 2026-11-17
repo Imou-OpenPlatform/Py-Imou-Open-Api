@@ -179,6 +179,8 @@ async def test_async_property_get_splits_after_eight(
         call.args[1]["properties"] for call in client.async_request_api.await_args_list
     ]
     assert sent == [names[:8], names[8:]]
+    for call in client.async_request_api.await_args_list:
+        assert "channelId" not in call.args[1]
 
 
 @pytest.mark.asyncio

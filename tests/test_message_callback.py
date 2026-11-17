@@ -8,7 +8,7 @@ from pyimouapi.const import (
     API_ENDPOINT_GET_PLAY_TOKEN_KEY,
     API_ENDPOINT_SET_MESSAGE_CALLBACK,
 )
-from pyimouapi.openapi import ImouOpenApiClient
+from pyimouapi.openapi import REDACTED, ImouOpenApiClient, _redacted_response
 
 
 @pytest.fixture
@@ -75,6 +75,26 @@ async def test_get_play_token_key(client: ImouOpenApiClient) -> None:
         API_ENDPOINT_GET_PLAY_TOKEN_KEY,
         {"deviceId": "SN1"},
     )
+
+
+def test_logged_response_masks_play_tokens_and_keeps_the_serial() -> None:
+    """Debug logs must not keep a play token or its key."""
+    body = {
+        "result": {
+            "data": {
+                "deviceList": [{"deviceId": "SN1", "playTokenV2": "secret-token"}],
+                "playTokenKey": "ab" * 16,
+                "playTokenKeyV2": "cd" * 32,
+            }
+        }
+    }
+    masked = _redacted_response(body)
+    device = masked["result"]["data"]["deviceList"][0]
+    assert device["deviceId"] == "SN1"
+    assert device["playTokenV2"] == REDACTED
+    assert masked["result"]["data"]["playTokenKey"] == REDACTED
+    assert masked["result"]["data"]["playTokenKeyV2"] == REDACTED
+    assert body["result"]["data"]["deviceList"][0]["playTokenV2"] == "secret-token"
 
 
 @pytest.mark.asyncio

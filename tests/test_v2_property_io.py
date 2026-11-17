@@ -8,6 +8,7 @@ from pyimouapi.const import (
     PARAM_CURRENT_OPTION,
     PARAM_STATE,
     PARAM_STATE_VARIANT,
+    PARAM_V2_OUTPUT_FIELD,
     PARAM_V2_RAW_BY_OPTION,
     PARAM_V2_STRUCT_FIELD,
     PARAM_V2_TARGET_ID,
@@ -360,6 +361,106 @@ async def test_switch_set_omits_channel_for_device_scope(
         await ha_manager.async_switch_operation(device, "prompt", True)
     assert mock_set.await_args.kwargs["channel_id"] is None
     assert mock_set.await_args.kwargs["properties"] == {"audio.prompt.enabled": 1}
+
+
+@pytest.mark.asyncio
+async def test_property_get_skips_write_only(
+    ha_manager: ImouHaDeviceManager,
+) -> None:
+    """A command that cannot be read must not go out in property.get."""
+    device = _switch_device()
+    device.switches["siren"] = {
+        PARAM_V2_TARGET_ID: "detection.siren.start",
+        PARAM_STATE: False,
+    }
+    device.set_capability_set(
+        CapabilitySet(
+            properties={
+                "detection.motion.enabled": PropertyCapability(
+                    "detection.motion.enabled", "rw", "int"
+                ),
+                "detection.siren.start": PropertyCapability(
+                    "detection.siren.start", "w", "int"
+                ),
+            },
+            services=frozenset(),
+            events=frozenset(),
+        )
+    )
+    with patch(
+        "pyimouapi.ha_device.async_property_get", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"detection.motion.enabled": 1}
+        await ha_manager._async_update_v2_property_entities(device)
+    assert mock_get.await_args.kwargs["properties"] == ["detection.motion.enabled"]
+
+
+@pytest.mark.asyncio
+async def test_property_set_splits_device_and_channel_scope(
+    ha_manager: ImouHaDeviceManager,
+) -> None:
+    """One write must not send a device property and a channel property together."""
+    device = _switch_device()
+    device.set_capability_set(
+        CapabilitySet(
+            properties={
+                "detection.motion.enabled": PropertyCapability(
+                    "detection.motion.enabled", "rw", "int", scope="channel"
+                ),
+                "audio.prompt.enabled": PropertyCapability(
+                    "audio.prompt.enabled", "rw", "int", scope="device"
+                ),
+            },
+            services=frozenset(),
+            events=frozenset(),
+        )
+    )
+    with patch(
+        "pyimouapi.ha_device.async_property_set", new_callable=AsyncMock
+    ) as mock_set:
+        await ha_manager._async_set_scoped_properties(
+            device,
+            {"detection.motion.enabled": 1, "audio.prompt.enabled": 0},
+        )
+    calls = {
+        (
+            call.kwargs["channel_id"],
+            tuple(call.kwargs["properties"].items()),
+        )
+        for call in mock_set.await_args_list
+    }
+    assert calls == {
+        ("0", (("detection.motion.enabled", 1),)),
+        (None, (("audio.prompt.enabled", 0),)),
+    }
+
+
+@pytest.mark.asyncio
+async def test_service_read_omits_channel_for_device_scope(
+    ha_manager: ImouHaDeviceManager,
+) -> None:
+    """A device-scope service is invoked without a channel id."""
+    device = _switch_device()
+    device.sensors["power"] = {
+        PARAM_V2_TARGET_ID: "power.outlet.read",
+        PARAM_V2_OUTPUT_FIELD: "power",
+        PARAM_STATE: "unknown",
+    }
+    device.set_capability_set(
+        CapabilitySet(
+            properties={},
+            services=frozenset({"power.outlet.read"}),
+            events=frozenset(),
+            service_scopes={"power.outlet.read": "device"},
+        )
+    )
+    with patch(
+        "pyimouapi.ha_device.async_service_invoke", new_callable=AsyncMock
+    ) as mock_invoke:
+        mock_invoke.return_value = {"outputData": {"power": 12}}
+        await ha_manager._async_update_v2_service_entities(device)
+    assert mock_invoke.await_args.kwargs["channel_id"] is None
+    assert mock_invoke.await_args.kwargs["service_id"] == "power.outlet.read"
 
 
 def test_apply_identity_copies_play_token() -> None:
