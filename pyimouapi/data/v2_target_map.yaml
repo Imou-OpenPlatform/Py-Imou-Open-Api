@@ -221,6 +221,18 @@ bindings:
     ha_platform: button
     scope: channel
 
+  - ha_key: white_light_start
+    target_id: light.white.start
+    kind: service
+    ha_platform: button
+    scope: channel
+
+  - ha_key: white_light_stop
+    target_id: light.white.stop
+    kind: service
+    ha_platform: button
+    scope: channel
+
   - ha_key: mute
     target_id: detection.siren.stop
     kind: service

@@ -47,6 +47,35 @@ def _property_capability_set(*target_ids: str) -> CapabilitySet:
     )
 
 
+def test_storage_capacity_list_becomes_a_used_percentage() -> None:
+    """storage.local.capacity is a list of byte counts, not a percentage."""
+    device = _switch_device()
+    device.sensors["storage_used"] = {
+        PARAM_V2_TARGET_ID: "storage.local.capacity",
+        PARAM_STATE: "0",
+    }
+    device.set_capability_set(_property_capability_set("storage.local.capacity"))
+    manager = ImouHaDeviceManager(MagicMock())
+
+    changed = manager.apply_property_values(
+        device,
+        {
+            "storage.local.capacity": [
+                {
+                    "totalBytes": 31256674304,
+                    "usedBytes": 14181138432,
+                    "storageState": "1",
+                    "index": 0,
+                }
+            ]
+        },
+    )
+
+    assert changed is True
+    assert device.sensors["storage_used"][PARAM_STATE] == 45
+    assert device.sensors["storage_used"][PARAM_STATE_VARIANT] == STATE_VARIANT_NUMERIC
+
+
 def test_apply_property_values_updates_supported_entity_types() -> None:
     device = _switch_device()
     device.switches["motion_detect"][PARAM_V2_TARGET_ID] = "motion.enabled"

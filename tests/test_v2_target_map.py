@@ -10,7 +10,7 @@ from pyimouapi.capability.binding import (
 )
 
 # imou_life P0 bindings (Canvas has ~71 rows; yaml is the integration subset).
-EXPECTED_P0_HA_KEY_COUNT = 41
+EXPECTED_P0_HA_KEY_COUNT = 43
 
 
 def test_load_packaged_map() -> None:

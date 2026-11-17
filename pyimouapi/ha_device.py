@@ -182,6 +182,48 @@ def _battery_level_from_v2_info(data: Any) -> int | None:
     return first_active_level
 
 
+def _byte_count(value: Any) -> int | None:
+    """Return a non-negative byte count, or None when the value is not one."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value >= 0 else None
+    if isinstance(value, float):
+        if not isfinite(value) or value < 0:
+            return None
+        return int(value)
+    if isinstance(value, str):
+        try:
+            number = float(value)
+        except ValueError:
+            return None
+        if not isfinite(number) or number < 0:
+            return None
+        return int(number)
+    return None
+
+
+def _storage_percent_from_capacity(raw: Any) -> int | None:
+    """Turn a storage.local.capacity list into a used percentage."""
+    rows = raw if isinstance(raw, list) else [raw] if isinstance(raw, dict) else None
+    if not rows:
+        return None
+    total = 0
+    used = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        total_bytes = _byte_count(row.get(PARAM_TOTAL_BYTES))
+        used_bytes = _byte_count(row.get(PARAM_USED_BYTES))
+        if total_bytes is None or used_bytes is None or total_bytes == 0:
+            continue
+        total += total_bytes
+        used += used_bytes
+    if total <= 0:
+        return None
+    return int(used * 100 / total)
+
+
 def _battery_level_from_106200_list(data) -> int:
     """解析 ref 106200 电量属性: [{"106202": 电池类型, "106203": 电量}, ...]。
     多条时取 106202==0 的 106203；仅一条时取该条的 106203。
@@ -883,6 +925,15 @@ class ImouHaDeviceManager:
     def _v2_entity_raw_value(
         key: str, meta: dict[str, Any], values: Mapping[str, Any]
     ) -> tuple[bool, Any]:
+        if key == PARAM_STORAGE_USED:
+            target_id = str(meta[PARAM_V2_TARGET_ID])
+            if target_id not in values:
+                return False, None
+            raw = values[target_id]
+            percent = _storage_percent_from_capacity(raw)
+            if percent is not None:
+                return True, percent
+            return True, raw
         if key == PARAM_BATTERY:
             scalar = _normalized_battery_level(values.get("power.battery.level"))
             if scalar is not None:

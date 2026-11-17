@@ -15,6 +15,12 @@ def test_v2_ptz_step_operator_mapping() -> None:
     assert data == {"operator": "3", "zoom": "1"}
 
 
+def test_white_light_start_sends_client_local_time() -> None:
+    data = v2_service_input_data("light.white.start", "white_light_start", 0)
+    assert set(data) == {"clientLocalTime"}
+    assert len(data["clientLocalTime"]) == 15
+
+
 @pytest.fixture
 def ha_manager() -> ImouHaDeviceManager:
     client = ImouOpenApiClient("app", "secret", "api.example.com")

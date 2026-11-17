@@ -31,51 +31,40 @@ class DeviceCloudService:
 
     @property
     def cloud_storage_label(self) -> str:
-        """Subscription state: not opened, active, or expired.
+        """Same active / inactive states as the AI Insight sensor.
 
-        Imou ``strategyStatus`` 1 is in use and 2 is expired. A plan that is
-        present without a status still counts as opened.
+        Imou ``strategyStatus`` 1 is in use. An expired plan and a missing
+        plan are both inactive.
         """
         if self.strategy_status == 2:
-            return "expired"
+            return "inactive"
         if self.strategy_status == 1 or self.has_default:
             return "active"
-        return "not_opened"
+        return "inactive"
 
 
-_CS_NOT_OPENED = frozenset({"notexist", "not_exist", "off", "none"})
-_CS_ACTIVE = frozenset({"using", "on", "active"})
-_CS_EXPIRED = frozenset({"expired"})
+_SUBSCRIPTION_ACTIVE = frozenset({"using", "on", "active"})
+_SUBSCRIPTION_INACTIVE = frozenset({"notexist", "not_exist", "off", "none", "expired"})
+
+
+def subscription_status_label(value: str | None) -> str:
+    """Map a device-list status onto active, inactive, or unavailable."""
+    raw = (value or "").strip().lower()
+    if raw in _SUBSCRIPTION_ACTIVE:
+        return "active"
+    if raw in _SUBSCRIPTION_INACTIVE:
+        return "inactive"
+    return "unavailable"
 
 
 def cloud_storage_label_from_cs_status(value: str | None) -> str:
-    """Map a device-list ``csStatus`` onto the cloud-storage sensor states.
-
-    ``notExist`` is not opened, ``using`` is active, and ``expired`` is expired.
-    The page sample also uses ``off`` / ``on``.
-    """
-    raw = (value or "").strip().lower()
-    if raw in _CS_NOT_OPENED:
-        return "not_opened"
-    if raw in _CS_ACTIVE:
-        return "active"
-    if raw in _CS_EXPIRED:
-        return "expired"
-    return "unknown"
-
-
-_INSIGHT_ACTIVE = frozenset({"using", "on", "active"})
-_INSIGHT_INACTIVE = frozenset({"notexist", "not_exist", "off", "none", "expired"})
+    """Map a device-list ``csStatus`` onto the AI Insight status set."""
+    return subscription_status_label(value)
 
 
 def ai_insight_label_from_status(value: str | None) -> str:
-    """Map a device-list ``aiInsightStatus`` onto the AI Insight sensor states."""
-    raw = (value or "").strip().lower()
-    if raw in _INSIGHT_ACTIVE:
-        return "active"
-    if raw in _INSIGHT_INACTIVE:
-        return "inactive"
-    return "unavailable"
+    """Map a device-list ``aiInsightStatus`` onto active, inactive, or unavailable."""
+    return subscription_status_label(value)
 
 
 def parse_device_cloud_data(data: Any) -> DeviceCloudService:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..const import BUTTON_TYPE_PARAM_VALUE, V2_PTZ_STEP_OPERATOR
+from ..siren import client_local_time_iso
 
 
 def v2_service_input_data(
@@ -37,4 +38,6 @@ def v2_service_input_data(
             "zoom": "0",
             "duration": duration,
         }
+    if service_id == "light.white.start":
+        return {"clientLocalTime": client_local_time_iso()}
     return {}
