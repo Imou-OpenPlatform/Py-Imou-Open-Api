@@ -247,6 +247,34 @@ def _channel_id_from_payload(payload: dict[str, Any]) -> Any:
     return channels
 
 
+def _field_ci(source: dict[str, Any], name: str) -> Any:
+    """Return the value whose key matches ``name``, ignoring case."""
+    for key, value in source.items():
+        if str(key).lower() == name:
+            return value
+    return None
+
+
+def _push_field(payload: dict[str, Any], content: Any, name: str) -> Any:
+    """Read a push field from the envelope, then from content."""
+    value = _field_ci(payload, name)
+    if value not in (None, "", []):
+        return value
+    if isinstance(content, dict):
+        return _field_ci(content, name)
+    return None
+
+
+def _ai_tags(value: Any) -> list[str]:
+    """Return detected-category tags from a list or a comma-separated string."""
+    if isinstance(value, str):
+        parts = value.replace("\uff0c", ",").split(",")
+        return [part.strip() for part in parts if part.strip()]
+    if not isinstance(value, list):
+        return []
+    return [str(tag).strip() for tag in value if str(tag).strip()]
+
+
 def normalize_push_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Normalize PaaS / IoT push formats into common fields.
 
@@ -269,16 +297,11 @@ def normalize_push_payload(payload: dict[str, Any]) -> dict[str, Any]:
         if isinstance(monitor, dict) and "channel" in monitor:
             channel_id = monitor.get("channel")
 
-    ai_copy = payload.get("aiCopyWriting")
-    if not ai_copy and isinstance(content, dict):
-        ai_copy = content.get("aiCopyWriting")
-    ai_copywriting = str(ai_copy).strip() if ai_copy else None
-    ai_tags_raw = payload.get("aiTag")
-    if ai_tags_raw is None and isinstance(content, dict):
-        ai_tags_raw = content.get("aiTag")
-    ai_tags: list[str] = []
-    if isinstance(ai_tags_raw, list):
-        ai_tags = [str(tag).strip() for tag in ai_tags_raw if str(tag).strip()]
+    ai_copy = _push_field(payload, content, "aicopywriting")
+    ai_copywriting = (
+        ai_copy.strip() if isinstance(ai_copy, str) and ai_copy.strip() else None
+    )
+    ai_tags = _ai_tags(_push_field(payload, content, "aitag"))
 
     return {
         "msg_type": msg_type,

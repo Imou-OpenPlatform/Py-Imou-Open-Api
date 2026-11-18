@@ -167,6 +167,17 @@ def test_normalize_includes_ai_copywriting() -> None:
     event = normalize_push_payload(payload)
     assert event["ai_copywriting"] == "Man in dark jacket"
     assert event["ai_tags"] == ["human", "vehicle"]
+    folded = normalize_push_payload(
+        {
+            "msgType": "human",
+            "content": {
+                "aicopywriting": "A box by the door",
+                "aitag": "pet\uff0cpackage",
+            },
+        }
+    )
+    assert folded["ai_copywriting"] == "A box by the door"
+    assert folded["ai_tags"] == ["pet", "package"]
 
 
 def test_normalize_prefers_cid_over_channel_id() -> None:

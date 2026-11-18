@@ -222,10 +222,10 @@ NUMBER_TYPE = [
 ]
 
 
-def device_access_is_iot(device: ImouHaDevice) -> bool:
-    """IoT devices report entity values on capability pushes."""
-    access_type = device.access_type
-    return isinstance(access_type, str) and access_type.strip().lower() == "iot"
+def device_is_iot(device: ImouHaDevice) -> bool:
+    """A device list row that includes productId is an IoT device."""
+    product_id = device.product_id
+    return isinstance(product_id, str) and bool(product_id.strip())
 
 
 class ImouHaDevice:
@@ -1147,7 +1147,7 @@ class ImouHaDeviceManager:
         snapshot_complete = len(v2_devices) == len(all_v2_devices)
         for device in v2_devices:
             physical_id = self._resolve_device_id(device)
-            if physical_id in skip_iot_property_ids and device_access_is_iot(device):
+            if physical_id in skip_iot_property_ids and device_is_iot(device):
                 continue
             snapshot_complete &= await self._async_update_v2_property_entities(device)
             snapshot_complete &= await self._async_update_v2_service_entities(device)
@@ -1157,7 +1157,7 @@ class ImouHaDeviceManager:
             and snapshot_complete
             and not (
                 self._resolve_device_id(v2_devices[0]) in skip_iot_property_ids
-                and device_access_is_iot(v2_devices[0])
+                and device_is_iot(v2_devices[0])
             )
         ):
             fetched.add(physical_id)

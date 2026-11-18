@@ -70,7 +70,6 @@ async def test_update_device_status_calls_detail_info_once():
 async def test_update_devices_status_skips_detail_for_listed_ids() -> None:
     """skip_iot_property_ids suppresses v2 property reads for that device."""
     device = _v2_relay_device()
-    device.set_access_type("IoT")
 
     delegate = MagicMock()
     delegate.api_client = MagicMock()
@@ -89,6 +88,29 @@ async def test_update_devices_status_skips_detail_for_listed_ids() -> None:
 
     assert fetched == set()
     prop_get.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_listed_skip_still_reads_a_device_without_product_id() -> None:
+    """A device list row without productId keeps its entity poll."""
+    device = _v2_relay_device()
+    device._product_id = None
+
+    delegate = MagicMock()
+    delegate.api_client = MagicMock()
+    delegate.async_list_device_details = AsyncMock(
+        return_value=[{"deviceId": "dev1", "deviceStatus": "online", "channelList": []}]
+    )
+    manager = ImouHaDeviceManager(delegate)
+    with patch(
+        "pyimouapi.ha_device.async_property_get",
+        AsyncMock(return_value={"control.outlet.enabled": 0}),
+    ) as prop_get:
+        await manager.async_update_devices_status(
+            [device], skip_iot_property_ids={device.device_id}
+        )
+
+    prop_get.assert_awaited()
 
 
 @pytest.mark.asyncio
