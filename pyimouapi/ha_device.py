@@ -935,16 +935,14 @@ class ImouHaDeviceManager:
         apply_bulb_v2_properties(device.bulb_light, values)
         return all(property_id in values for property_id in property_ids)
 
-    def _channel_id_for_property(
-        self, device: ImouHaDevice, property_id: str
-    ) -> str | None:
-        """Channel id for one property. Device scope omits it."""
+    def _property_scope(self, device: ImouHaDevice, property_id: str) -> str:
+        """Scope from capability.list. Unknown properties stay channel-scoped."""
         capability = device.capability_set
         if capability is not None:
             prop = capability.properties.get(property_id)
-            if prop is not None and prop.scope == "device":
-                return None
-        return device.channel_id
+            if prop is not None and prop.scope:
+                return prop.scope
+        return "channel"
 
     def _channel_id_for_service(
         self,
@@ -971,17 +969,21 @@ class ImouHaDeviceManager:
         *,
         product_id: str | None = None,
     ) -> None:
-        """Write properties without mixing device scope and channel scope."""
-        groups: dict[str | None, dict[str, Any]] = {}
+        """Write properties without mixing device scope and channel scope.
+
+        Group by scope, not by the channel id that would be sent. A lamp has
+        no channel, so both requests omit it; they are still separate calls.
+        """
+        groups: dict[str, dict[str, Any]] = {}
         for property_id, value in properties.items():
-            channel_id = self._channel_id_for_property(device, property_id)
-            groups.setdefault(channel_id, {})[property_id] = value
+            scope = self._property_scope(device, property_id)
+            groups.setdefault(scope, {})[property_id] = value
         resolved_product = device.product_id if product_id is None else product_id
-        for channel_id, payload in groups.items():
+        for scope, payload in groups.items():
             await async_property_set(
                 self.delegate.api_client,
                 device_id=device.device_id,
-                channel_id=channel_id,
+                channel_id=None if scope == "device" else device.channel_id,
                 product_id=resolved_product,
                 properties=payload,
             )
@@ -991,13 +993,8 @@ class ImouHaDeviceManager:
     ) -> dict[str, Any]:
         """Read properties in scope groups. Device and channel ids cannot share a call."""
         groups: dict[str, list[str]] = {}
-        capability = device.capability_set
         for property_id in property_ids:
-            scope = "channel"
-            if capability is not None:
-                prop = capability.properties.get(property_id)
-                if prop is not None and prop.scope:
-                    scope = prop.scope
+            scope = self._property_scope(device, property_id)
             groups.setdefault(scope, []).append(property_id)
         merged: dict[str, Any] = {}
         for scope, ids in groups.items():

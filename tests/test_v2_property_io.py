@@ -493,6 +493,55 @@ async def test_property_set_splits_device_and_channel_scope(
 
 
 @pytest.mark.asyncio
+async def test_property_set_splits_scopes_when_device_has_no_channel(
+    ha_manager: ImouHaDeviceManager,
+) -> None:
+    """A lamp has no channel. Mixed scopes still leave in two requests."""
+    device = ImouHaDevice("LAMP1", "Bulb", "Imou", "Lamp", "1.0")
+    device.set_product_id("pid")
+    device.set_capability_set(
+        CapabilitySet(
+            properties={
+                "control.outlet.enabled": PropertyCapability(
+                    "control.outlet.enabled", "rw", "int", scope="device"
+                ),
+                "light.white.mode": PropertyCapability(
+                    "light.white.mode", "rw", "int", scope="channel"
+                ),
+                "light.white.hue": PropertyCapability(
+                    "light.white.hue", "rw", "int", scope="channel"
+                ),
+            },
+            services=frozenset(),
+            events=frozenset(),
+        )
+    )
+    with patch(
+        "pyimouapi.ha_device.async_property_set", new_callable=AsyncMock
+    ) as mock_set:
+        await ha_manager._async_set_scoped_properties(
+            device,
+            {
+                "control.outlet.enabled": 1,
+                "light.white.mode": 1,
+                "light.white.hue": 53,
+            },
+        )
+    calls = {
+        (
+            call.kwargs["channel_id"],
+            tuple(sorted(call.kwargs["properties"].items())),
+        )
+        for call in mock_set.await_args_list
+    }
+    assert device.channel_id is None
+    assert calls == {
+        (None, (("control.outlet.enabled", 1),)),
+        (None, (("light.white.hue", 53), ("light.white.mode", 1))),
+    }
+
+
+@pytest.mark.asyncio
 async def test_service_read_omits_channel_for_device_scope(
     ha_manager: ImouHaDeviceManager,
 ) -> None:
