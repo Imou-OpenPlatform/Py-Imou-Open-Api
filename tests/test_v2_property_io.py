@@ -596,3 +596,85 @@ async def test_update_paas_v2_property_entities_omits_product_id(
         product_id=None,
         properties=["detection.motion.enabled"],
     )
+
+
+@pytest.mark.asyncio
+async def test_unknown_scopes_are_read_one_property_at_a_time(
+    ha_manager: ImouHaDeviceManager,
+) -> None:
+    device = ImouHaDevice("LAMP1", "Bulb", "Imou", "CL2B", "1")
+    device.set_product_id("PID")
+    device.switches["switch"] = {
+        PARAM_V2_TARGET_ID: "control.outlet.enabled",
+        PARAM_STATE: False,
+    }
+    device.switches["brightness"] = {
+        PARAM_V2_TARGET_ID: "light.white.level",
+        PARAM_STATE: False,
+    }
+    with patch(
+        "pyimouapi.ha_device.async_property_get", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {}
+        await ha_manager._async_update_v2_property_entities(device)
+    assert [call.kwargs["channel_id"] for call in mock_get.await_args_list] == [
+        None,
+        None,
+    ]
+    assert [call.kwargs["properties"] for call in mock_get.await_args_list] == [
+        ["control.outlet.enabled"],
+        ["light.white.level"],
+    ]
+
+
+@pytest.mark.asyncio
+async def test_unknown_scopes_are_written_one_property_at_a_time(
+    ha_manager: ImouHaDeviceManager,
+) -> None:
+    device = ImouHaDevice("LAMP1", "Bulb", "Imou", "CL2B", "1")
+    device.set_product_id("PID")
+    with patch(
+        "pyimouapi.ha_device.async_property_set", new_callable=AsyncMock
+    ) as mock_set:
+        await ha_manager._async_set_scoped_properties(
+            device,
+            {"control.outlet.enabled": 1, "light.white.level": 40},
+        )
+    assert [call.kwargs["channel_id"] for call in mock_set.await_args_list] == [
+        None,
+        None,
+    ]
+    assert [call.kwargs["properties"] for call in mock_set.await_args_list] == [
+        {"control.outlet.enabled": 1},
+        {"light.white.level": 40},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_write_only_property_is_skipped_and_missing_detail_is_read(
+    ha_manager: ImouHaDeviceManager,
+) -> None:
+    device = _switch_device()
+    device.switches["prompt"] = {
+        PARAM_V2_TARGET_ID: "audio.prompt.enabled",
+        PARAM_STATE: False,
+    }
+    device.set_capability_set(
+        CapabilitySet(
+            properties={
+                "detection.motion.enabled": PropertyCapability(
+                    "detection.motion.enabled", "w", "int", scope="channel"
+                ),
+            },
+            services=frozenset(),
+            events=frozenset(),
+        )
+    )
+    with patch(
+        "pyimouapi.ha_device.async_property_get", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"audio.prompt.enabled": 1}
+        await ha_manager._async_update_v2_property_entities(device)
+    mock_get.assert_awaited_once()
+    assert mock_get.await_args.kwargs["properties"] == ["audio.prompt.enabled"]
+    assert mock_get.await_args.kwargs["channel_id"] == "0"

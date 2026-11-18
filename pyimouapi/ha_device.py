@@ -950,13 +950,13 @@ class ImouHaDeviceManager:
         return all(property_id in values for property_id in property_ids)
 
     def _property_scope(self, device: ImouHaDevice, property_id: str) -> str:
-        """Scope from capability.list. Unknown properties stay channel-scoped."""
+        """Scope from capability.list. Unknown properties are not grouped together."""
         capability = device.capability_set
         if capability is not None:
             prop = capability.properties.get(property_id)
             if prop is not None and prop.scope:
                 return prop.scope
-        return "channel"
+        return f"unknown:{property_id}"
 
     def _channel_id_for_service(
         self,
@@ -1040,7 +1040,9 @@ class ImouHaDeviceManager:
                     continue
                 if capability is not None:
                     prop = capability.properties.get(target_id)
-                    if prop is None or not prop.readable:
+                    if prop is not None and not prop.readable:
+                        continue
+                    if prop is None and target_id in capability.services:
                         continue
                 seen.add(target_id)
                 property_ids.append(target_id)
