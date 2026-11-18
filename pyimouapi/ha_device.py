@@ -254,6 +254,7 @@ class ImouHaDevice:
         self._channel_id: str | None = None
         self._channel_name: str | None = None
         self._is_ipc = False
+        self._view_count = 1
         self._product_id: str | None = None
         self._product_device_type: str | None = None
         self._parent_product_id: str | None = None
@@ -282,6 +283,11 @@ class ImouHaDevice:
     @property
     def is_ipc(self) -> bool:
         return self._is_ipc
+
+    @property
+    def view_count(self) -> int:
+        """Lens count from the device list. Recorders stay at one."""
+        return self._view_count
 
     @property
     def manufacturer(self) -> str:
@@ -460,6 +466,7 @@ class ImouHaDevice:
         if isinstance(token, str) and token:
             self.set_play_token_v2(token)
         self._access_type = other.access_type
+        self._view_count = other.view_count
 
     def replace_capabilities(self, other: ImouHaDevice) -> list[str]:
         """Take another's entities, keeping state for keys that still exist.
@@ -522,6 +529,9 @@ class ImouHaDevice:
 
     def set_is_ipc(self, is_ipc: bool) -> None:
         self._is_ipc = is_ipc
+
+    def set_view_count(self, view_count: int) -> None:
+        self._view_count = view_count if view_count > 0 else 1
 
 
 class ImouHaDeviceManager:
@@ -1493,6 +1503,7 @@ class ImouHaDeviceManager:
         if device.parent_device_id is not None:
             imou_ha_device.set_parent_device_id(device.parent_device_id)
         imou_ha_device.set_is_ipc(device.is_ipc)
+        imou_ha_device.set_view_count(device.multi_view)
         imou_ha_device.set_device_ability(device.device_ability)
         token = getattr(device, "play_token_v2", None)
         if isinstance(token, str) and token:

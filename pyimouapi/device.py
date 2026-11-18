@@ -55,6 +55,30 @@ from .openapi import ImouOpenApiClient
 from .product_detail import ProductDetail, parse_product_details
 
 _LOGGER = logging.getLogger(__name__)
+
+_MSG_ANALYSIS_LABELS = ("humanAlarm", "carAlarm", "petAlarm", "packageAlarm")
+_MSG_ANALYSIS = {
+    "analysisHourInterval": 2,
+    "labelTime": [
+        {"labelType": label, "count": 10, "sortType": "desc"}
+        for label in _MSG_ANALYSIS_LABELS
+    ],
+}
+_RISK_WINDOWS = [
+    {"startHour": f"{hour:02d}", "endHour": f"{hour + 2:02d}"}
+    for hour in range(0, 24, 2)
+]
+
+
+def _multi_view_param(multi_view: int) -> str:
+    """multiView is a string lens count. Missing or invalid stays at one."""
+    try:
+        count = int(multi_view)
+    except (TypeError, ValueError):
+        return "1"
+    return str(count if count > 0 else 1)
+
+
 _RECORD_TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
@@ -250,6 +274,18 @@ class ImouDevice:
         return (
             self._channel_number is not None and self._channel_number == 1
         ) or self._is_multi
+
+    @property
+    def multi_view(self) -> int:
+        """Lens count for a camera. Recorders stay at one view."""
+        if not self.is_ipc:
+            return 1
+        raw = len(self._channels) or self._channel_number or 1
+        try:
+            count = int(raw)
+        except (TypeError, ValueError):
+            return 1
+        return count if count > 0 else 1
 
     @property
     def access_type(self) -> str:
@@ -933,6 +969,7 @@ class ImouDeviceManager:
         end_day: str,
         product_id: str | None = None,
         ai_statistics_analysis_enable: bool = True,
+        multi_view: int = 1,
     ) -> dict[str, Any]:
         """Daily AI alarm statistics for a channel."""
         params: dict[str, Any] = {
@@ -941,6 +978,9 @@ class ImouDeviceManager:
             "startDay": start_day,
             "endDay": end_day,
             "aiStatisticsAnalysisEnable": ai_statistics_analysis_enable,
+            "multiView": _multi_view_param(multi_view),
+            "msgAnalysis": _MSG_ANALYSIS,
+            "riskStatement": _RISK_WINDOWS,
         }
         if product_id:
             params[PARAM_PRODUCT_ID] = product_id
