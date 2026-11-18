@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -121,6 +122,22 @@ def bulb_gate_satisfied(
 def binding_by_ha_key(bindings: list[TargetBinding]) -> dict[str, TargetBinding]:
     """Index bindings by ha_key (last wins if duplicates)."""
     return {row.ha_key: row for row in bindings}
+
+
+def applicable_capability_ids(
+    device_ids: Iterable[str],
+    channel_ids: Iterable[str],
+    *,
+    is_ipc: bool,
+    channel_id: str | None,
+) -> frozenset[str]:
+    """Ids that may create entities on this device or channel row."""
+    if channel_id is None:
+        return frozenset(device_ids)
+    ids = set(channel_ids)
+    if is_ipc and channel_id == "0":
+        ids.update(device_ids)
+    return frozenset(ids)
 
 
 def binding_applies_to_device(

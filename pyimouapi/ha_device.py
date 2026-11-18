@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable, Coroutine, Mapping, Set
+from collections.abc import Callable, Coroutine, Mapping
+from collections.abc import Set as AbstractSet
 from enum import Enum
 from math import isfinite
 from typing import Any
@@ -263,6 +264,7 @@ class ImouHaDevice:
         self._device_ability = "unknown"
         self._channel_ability = "unknown"
         self._capability_set: CapabilitySet | None = None
+        self._capability_ids: frozenset[str] | None = None
         self._bulb_v2: bool = False
         self._cs_status: str | None = None
         self._ai_insight_status: str | None = None
@@ -442,6 +444,16 @@ class ImouHaDevice:
         return self._capability_set
 
     @property
+    def capability_ids(self) -> frozenset[str] | None:
+        return self._capability_ids
+
+    def set_capability_ids(self, capability_ids: AbstractSet[str] | None) -> None:
+        if capability_ids is None:
+            self._capability_ids = None
+            return
+        self._capability_ids = frozenset(capability_ids)
+
+    @property
     def capability_snapshot(self) -> tuple[str | None, CapabilitySet | None]:
         """Return the product type and V2 capabilities used for entity setup."""
         return (self._product_device_type, self._capability_set)
@@ -511,6 +523,7 @@ class ImouHaDevice:
         self._is_ipc = other.is_ipc
         self._product_device_type = other.product_device_type
         self._capability_set = other.capability_set
+        self._capability_ids = other.capability_ids
         self._bulb_v2 = other.bulb_v2
         return removed
 
@@ -1062,7 +1075,7 @@ class ImouHaDeviceManager:
         self,
         devices: list[ImouHaDevice],
         *,
-        skip_iot_property_ids: Set[str] | None = None,
+        skip_iot_property_ids: AbstractSet[str] | None = None,
     ) -> set[str]:
         """Update many devices, sharing online/detail reads per physical device.
 
@@ -1129,7 +1142,7 @@ class ImouHaDeviceManager:
         self,
         devices: list[ImouHaDevice],
         *,
-        skip_iot_property_ids: Set[str] = frozenset(),
+        skip_iot_property_ids: AbstractSet[str] = frozenset(),
     ) -> set[str]:
         """Refresh one physical device and every HA channel that shares it."""
         if not devices:
