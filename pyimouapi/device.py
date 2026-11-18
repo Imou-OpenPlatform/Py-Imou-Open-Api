@@ -27,6 +27,7 @@ from .const import (
     PARAM_ACCESS_TYPE,
     PARAM_AI_INSIGHT_STATUS,
     PARAM_BRAND,
+    PARAM_CAPABILITY_IDS,
     PARAM_CHANNEL_ABILITY,
     PARAM_CHANNEL_ID,
     PARAM_CHANNEL_LIST,
@@ -142,6 +143,13 @@ class ImouDeviceSummary:
     status: str  # "0" offline, "1" online
 
 
+def capability_ids_from_raw(raw: object) -> tuple[str, ...]:
+    """Keep non-blank string ids. Anything else is an empty tuple."""
+    if not isinstance(raw, list):
+        return ()
+    return tuple(item.strip() for item in raw if isinstance(item, str) and item.strip())
+
+
 class ImouChannel:
     def __init__(
         self,
@@ -154,6 +162,7 @@ class ImouChannel:
         self._channel_name = channel_name
         self._channel_status = channel_status
         self._channel_ability = channel_ability
+        self._capability_ids: tuple[str, ...] = ()
         self._cs_status: str | None = None
         self._ai_insight_status: str | None = None
 
@@ -172,6 +181,13 @@ class ImouChannel:
     @property
     def channel_ability(self) -> str:
         return self._channel_ability
+
+    @property
+    def capability_ids(self) -> tuple[str, ...]:
+        return self._capability_ids
+
+    def set_capability_ids(self, capability_ids: tuple[str, ...]) -> None:
+        self._capability_ids = capability_ids
 
     @property
     def cs_status(self) -> str | None:
@@ -216,6 +232,7 @@ class ImouDevice:
         self._is_ipc = False
         self._access_type = "PaaS"
         self._play_token_v2: str | None = None
+        self._capability_ids: tuple[str, ...] = ()
 
     @property
     def device_id(self) -> str:
@@ -236,6 +253,13 @@ class ImouDevice:
     @property
     def device_ability(self) -> str:
         return self._device_ability
+
+    @property
+    def capability_ids(self) -> tuple[str, ...]:
+        return self._capability_ids
+
+    def set_capability_ids(self, capability_ids: tuple[str, ...]) -> None:
+        self._capability_ids = capability_ids
 
     @property
     def brand(self) -> str:
@@ -425,6 +449,9 @@ class ImouDeviceManager:
             imou_device = ImouDevice(
                 device_id, device_name, device_status, brand, device_model
             )
+            imou_device.set_capability_ids(
+                capability_ids_from_raw(device.get(PARAM_CAPABILITY_IDS))
+            )
             if PARAM_DEVICE_ABILITY in device:
                 imou_device.set_device_ability(
                     _text_or_default(device[PARAM_DEVICE_ABILITY])
@@ -463,6 +490,9 @@ class ImouDeviceManager:
                     )
                     parsed = ImouChannel(
                         channel_id, channel_name, channel_status, channel_ability
+                    )
+                    parsed.set_capability_ids(
+                        capability_ids_from_raw(channel.get(PARAM_CAPABILITY_IDS))
                     )
                     raw_cs = _named_field(channel, PARAM_CS_STATUS)
                     if raw_cs is None:

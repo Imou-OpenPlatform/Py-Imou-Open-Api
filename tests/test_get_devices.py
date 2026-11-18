@@ -163,3 +163,27 @@ async def test_access_type_keeps_paas_when_the_field_is_not_text() -> None:
 
     assert result[0].access_type == "IoT"
     assert result[1].access_type == "PaaS"
+
+
+@pytest.mark.asyncio
+async def test_detail_page_keeps_device_and_channel_capability_ids() -> None:
+    entry = make_device("CAM1", "PID1")
+    entry["capabilityIds"] = ["device.reboot.execute", "storage.local.capacity"]
+    entry[PARAM_CHANNEL_LIST] = [
+        {
+            PARAM_CHANNEL_ID: 0,
+            "channelName": "Main",
+            "channelStatus": "online",
+            "capabilityIds": ["detection.motion.enabled", 1, ""],
+        }
+    ]
+    entry[PARAM_CHANNEL_NUM] = 1
+    manager = make_manager({1: {PARAM_DEVICE_LIST: [entry]}})
+
+    devices = await manager.async_get_devices()
+
+    assert devices[0].capability_ids == (
+        "device.reboot.execute",
+        "storage.local.capacity",
+    )
+    assert devices[0].channels[0].capability_ids == ("detection.motion.enabled",)
