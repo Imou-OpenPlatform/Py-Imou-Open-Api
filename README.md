@@ -25,7 +25,6 @@ The top-level `pyimouapi` package re-exports common symbols. Import submodules d
 As declared in `setup.py` / `requirements.txt`:
 
 - `aiohttp>=3.11.9,<4.0`
-- `simpleeval>=1.0.3`
 
 ## Install
 

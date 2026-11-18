@@ -38,6 +38,6 @@ def v2_service_input_data(
             "zoom": "0",
             "duration": duration,
         }
-    if service_id == "light.white.start":
+    if service_id in ("detection.siren.start", "light.white.start"):
         return {"clientLocalTime": client_local_time_iso()}
     return {}

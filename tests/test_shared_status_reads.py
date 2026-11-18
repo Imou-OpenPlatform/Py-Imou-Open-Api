@@ -6,9 +6,7 @@ import pytest
 from pyimouapi.capability.catalog import CapabilitySet, PropertyCapability
 from pyimouapi.const import (
     PARAM_BATTERY,
-    PARAM_CHANNEL_ID,
     PARAM_CHANNELS,
-    PARAM_ONLINE,
     PARAM_OUTPUT_DATA,
     PARAM_PROPERTIES,
     PARAM_STATE,
@@ -99,15 +97,14 @@ async def test_switch_count_prefers_service_output_over_property_fallback() -> N
     device.set_product_id("pid")
     device.sensors["switch_cnt"] = {
         PARAM_V2_TARGET_ID: "power.outlet.read",
-        PARAM_V2_OUTPUT_FIELD: "switch_cnt",
-        PARAM_V2_FALLBACK_TARGET_ID: "control.outlet.switchCount",
+        PARAM_V2_OUTPUT_FIELD: "switchCnt",
     }
     manager = ImouHaDeviceManager(MagicMock())
 
     with (
         patch(
             "pyimouapi.ha_device.async_service_invoke",
-            AsyncMock(return_value={PARAM_OUTPUT_DATA: {"switch_cnt": 7}}),
+            AsyncMock(return_value={PARAM_OUTPUT_DATA: {"switchCnt": 7}}),
         ),
         patch(
             "pyimouapi.ha_device.async_property_get",
@@ -384,14 +381,17 @@ async def test_update_devices_status_shares_online_and_detail_across_channels() 
 
     delegate = MagicMock()
     delegate.api_client = MagicMock()
-    delegate.async_get_device_online_status = AsyncMock(
-        return_value={
-            PARAM_ONLINE: "1",
-            PARAM_CHANNELS: [
-                {PARAM_CHANNEL_ID: 0, PARAM_ONLINE: "1"},
-                {PARAM_CHANNEL_ID: 1, PARAM_ONLINE: "1"},
-            ],
-        }
+    delegate.async_list_device_details = AsyncMock(
+        return_value=[
+            {
+                "deviceId": "nvr1",
+                "deviceStatus": "online",
+                "channelList": [
+                    {"channelId": "0", "channelStatus": "online"},
+                    {"channelId": "1", "channelStatus": "online"},
+                ],
+            }
+        ]
     )
 
     manager = ImouHaDeviceManager(delegate)
@@ -401,25 +401,33 @@ async def test_update_devices_status_shares_online_and_detail_across_channels() 
     ) as prop_get:
         await manager.async_update_devices_status([ch0, ch1])
 
-    assert delegate.async_get_device_online_status.await_count == 1
+    assert delegate.async_list_device_details.await_count == 1
     assert prop_get.await_count == 2
     assert ch0.switches["relay"][PARAM_STATE] is True
     assert ch1.switches["relay"][PARAM_STATE] is True
 
 
 @pytest.mark.asyncio
-async def test_update_devices_status_still_calls_once_per_physical_device() -> None:
-    """Distinct device ids still each get their own online call."""
+async def test_update_devices_status_lists_every_device_once() -> None:
+    """One detail list covers every camera in the poll."""
     a = _v2_device("cam_a", "pid_a")
     b = _v2_device("cam_b", "pid_b")
 
     delegate = MagicMock()
     delegate.api_client = MagicMock()
-    delegate.async_get_device_online_status = AsyncMock(
-        return_value={
-            PARAM_ONLINE: "1",
-            PARAM_CHANNELS: [{PARAM_CHANNEL_ID: 0, PARAM_ONLINE: "1"}],
-        }
+    delegate.async_list_device_details = AsyncMock(
+        return_value=[
+            {
+                "deviceId": "cam_a",
+                "deviceStatus": "online",
+                "channelList": [{"channelId": "0", "channelStatus": "online"}],
+            },
+            {
+                "deviceId": "cam_b",
+                "deviceStatus": "online",
+                "channelList": [{"channelId": "0", "channelStatus": "online"}],
+            },
+        ]
     )
 
     manager = ImouHaDeviceManager(delegate)
@@ -429,7 +437,9 @@ async def test_update_devices_status_still_calls_once_per_physical_device() -> N
     ) as prop_get:
         await manager.async_update_devices_status([a, b])
 
-    assert delegate.async_get_device_online_status.await_count == 2
+    assert delegate.async_list_device_details.await_count == 1
+    requested = delegate.async_list_device_details.await_args.args[0]
+    assert set(requested) == {"cam_a", "cam_b"}
     assert prop_get.await_count == 2
 
 
@@ -441,14 +451,17 @@ async def test_update_devices_status_skips_offline_channel_detail() -> None:
 
     delegate = MagicMock()
     delegate.api_client = MagicMock()
-    delegate.async_get_device_online_status = AsyncMock(
-        return_value={
-            PARAM_ONLINE: "1",
-            PARAM_CHANNELS: [
-                {PARAM_CHANNEL_ID: 0, PARAM_ONLINE: "1"},
-                {PARAM_CHANNEL_ID: 1, PARAM_ONLINE: "0"},
-            ],
-        }
+    delegate.async_list_device_details = AsyncMock(
+        return_value=[
+            {
+                "deviceId": "nvr1",
+                "deviceStatus": "online",
+                "channelList": [
+                    {"channelId": "0", "channelStatus": "online"},
+                    {"channelId": "1", "channelStatus": "offline"},
+                ],
+            }
+        ]
     )
 
     manager = ImouHaDeviceManager(delegate)
@@ -458,7 +471,7 @@ async def test_update_devices_status_skips_offline_channel_detail() -> None:
     ) as prop_get:
         await manager.async_update_devices_status([ch0, ch1])
 
-    assert delegate.async_get_device_online_status.await_count == 1
+    assert delegate.async_list_device_details.await_count == 1
     assert prop_get.await_count == 1
     assert ch0.switches["relay"][PARAM_STATE] is True
     assert ch1.switches["relay"][PARAM_STATE] is False
@@ -466,15 +479,16 @@ async def test_update_devices_status_skips_offline_channel_detail() -> None:
 
 
 @pytest.mark.asyncio
-async def test_apply_online_status_marks_missing_channel_offline() -> None:
-    """A channel absent from deviceOnline must not stay sticky-online."""
+async def test_detail_list_marks_missing_channel_offline() -> None:
+    """A channel absent from the detail list must not stay sticky-online."""
     ch = _channel_device("9")
     manager = ImouHaDeviceManager(MagicMock())
-    manager._apply_online_status(
-        ch,
+    manager._apply_detail_list_item(
+        [ch],
         {
-            PARAM_ONLINE: "1",
-            PARAM_CHANNELS: [{PARAM_CHANNEL_ID: 0, PARAM_ONLINE: "1"}],
+            "deviceId": "nvr1",
+            "deviceStatus": "online",
+            "channelList": [{"channelId": "0", "channelStatus": "online"}],
         },
     )
     assert ch.sensors[PARAM_STATUS][PARAM_STATE] == DeviceStatus.OFFLINE.value
@@ -489,12 +503,18 @@ async def test_one_channel_apply_error_does_not_block_siblings() -> None:
     accessory.sensors[PARAM_STATUS][PARAM_STATE] = DeviceStatus.OFFLINE.value
 
     delegate = MagicMock()
-    delegate.async_get_device_online_status = AsyncMock(
-        return_value={PARAM_ONLINE: "1"}
+    delegate.async_list_device_details = AsyncMock(
+        return_value=[
+            {
+                "deviceId": "nvr1",
+                "deviceStatus": "online",
+                "channelList": [],
+            }
+        ]
     )
     manager = ImouHaDeviceManager(delegate)
 
-    await manager._async_update_status_shared([channel, accessory])
+    await manager._async_refresh_detail_status([channel, accessory])
 
     assert accessory.sensors[PARAM_STATUS][PARAM_STATE] == DeviceStatus.ONLINE.value
 
@@ -507,7 +527,7 @@ async def test_update_devices_status_raises_when_every_group_fails() -> None:
     cam.sensors[PARAM_STATUS][PARAM_STATE] = DeviceStatus.ONLINE.value
 
     delegate = MagicMock()
-    delegate.async_get_device_online_status = AsyncMock(
+    delegate.async_list_device_details = AsyncMock(
         side_effect=RequestFailedException("cloud down")
     )
     manager = ImouHaDeviceManager(delegate)
@@ -528,13 +548,13 @@ async def test_update_devices_status_keeps_going_when_one_group_fails() -> None:
     b.sensors[PARAM_STATUS][PARAM_STATE] = DeviceStatus.OFFLINE.value
 
     delegate = MagicMock()
-    delegate.async_get_device_online_status = AsyncMock(
-        side_effect=[
-            RequestFailedException("cam_a busy"),
+    delegate.async_list_device_details = AsyncMock(
+        return_value=[
             {
-                PARAM_ONLINE: "1",
-                PARAM_CHANNELS: [{PARAM_CHANNEL_ID: 0, PARAM_ONLINE: "1"}],
-            },
+                "deviceId": "cam_b",
+                "deviceStatus": "online",
+                "channelList": [{"channelId": "0", "channelStatus": "online"}],
+            }
         ]
     )
     delegate.async_get_iot_device_detail_info = AsyncMock(

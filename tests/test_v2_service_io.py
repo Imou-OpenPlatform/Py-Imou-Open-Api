@@ -21,6 +21,12 @@ def test_white_light_start_sends_client_local_time() -> None:
     assert len(data["clientLocalTime"]) == 15
 
 
+def test_siren_start_sends_client_local_time() -> None:
+    data = v2_service_input_data("detection.siren.start", "siren_start", 0)
+    assert set(data) == {"clientLocalTime"}
+    assert len(data["clientLocalTime"]) == 15
+
+
 @pytest.fixture
 def ha_manager() -> ImouHaDeviceManager:
     client = ImouOpenApiClient("app", "secret", "api.example.com")

@@ -11,7 +11,7 @@ from typing import Any
 
 import yaml
 
-from ..bulb_light import BULB_V2_PROPERTY_BY_REF, REF_SWITCH
+from ..bulb_light import BULB_PROP_SWITCH
 
 PACKAGE_DATA = files("pyimouapi").joinpath("data")
 MAP_FILE = "v2_target_map.yaml"
@@ -114,7 +114,7 @@ def bulb_gate_satisfied(
     return (
         isinstance(device_type, str)
         and device_type.casefold() == "lamp"
-        and BULB_V2_PROPERTY_BY_REF[REF_SWITCH] in property_ids
+        and BULB_PROP_SWITCH in property_ids
     )
 
 

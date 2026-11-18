@@ -14,7 +14,6 @@ dependencies = [
   "aiohttp>=3.11.9,<4.0",
   "cryptography>=42.0",
   "pyyaml>=6.0",
-  "simpleeval>=1.0.3",
 ]
 
 [project.urls]
@@ -72,7 +71,6 @@ quote-style = "double"
 # py.typed tells downstreams to trust these annotations, so they are checked.
 python_version = "3.11"
 files = ["pyimouapi"]
-# simpleeval ships no stubs.
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

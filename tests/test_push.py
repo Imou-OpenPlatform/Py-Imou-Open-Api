@@ -6,16 +6,14 @@ import pytest
 from pyimouapi.push import (
     NON_ALARM_MSG_TYPES,
     V2_PROPERTY_REPORT_MSG_TYPE,
+    alarm_picture_url,
     event_id_from_push,
-    event_ref_lookup_key,
-    iot_property_values,
     is_alarm_msg_type,
     is_capability_event_payload,
     is_iot_non_event,
     is_unknown_legacy_msg_type,
     is_v2_capability_event_id,
     is_v2_property_report,
-    legacy_msg_type_from_v2_event,
     normalize_push_payload,
     parse_callback_flag,
     pic_urls_from_payload,
@@ -204,19 +202,28 @@ def test_is_iot_non_event() -> None:
     assert is_iot_non_event(0, "videoMotion") is False
 
 
-def test_event_ref_lookup_key() -> None:
-    """Digit msg_type or iotEvent content.event become the product-model ref."""
-    assert event_ref_lookup_key("33000", {}) == "33000"
-    assert event_ref_lookup_key("iotEvent", {"content": {"event": "33000"}}) == "33000"
-    assert event_ref_lookup_key("iotEvent", {"content": {"event": "human"}}) is None
-    assert event_ref_lookup_key("human", {"content": {"event": "33000"}}) is None
-    assert event_ref_lookup_key("iotEvent", {"content": {}}) is None
-
-
 def test_pic_urls_from_payload_extracts_array() -> None:
     """picUrlArray strings are returned in order."""
     urls = pic_urls_from_payload({"picUrlArray": ["https://a/big", "https://a/small"]})
     assert urls == ["https://a/big", "https://a/small"]
+
+
+def test_alarm_picture_url_uses_pic_url_array_first() -> None:
+    """Message pictures use picUrlArray[0], including a lowercase key."""
+    raw = {
+        "thumbUrl": "https://example/thumb.jpg",
+        "picUrlArray": ["https://example/big.jpg", "https://example/small.jpg"],
+    }
+    assert alarm_picture_url(raw) == "https://example/big.jpg"
+    assert (
+        alarm_picture_url(
+            {"picurlarray": ["https://example/first.jpg", "https://example/second.jpg"]}
+        )
+        == "https://example/first.jpg"
+    )
+    assert alarm_picture_url({"thumbUrl": "https://example/thumb.jpg"}) == (
+        "https://example/thumb.jpg"
+    )
 
 
 def test_preferred_pic_url_prefers_small_thumb() -> None:
@@ -224,17 +231,6 @@ def test_preferred_pic_url_prefers_small_thumb() -> None:
     assert preferred_pic_url(["https://a/big", "https://a/small"]) == "https://a/small"
     assert preferred_pic_url(["https://a/big"]) == "https://a/big"
     assert preferred_pic_url([]) is None
-
-
-def test_iot_property_values_from_content() -> None:
-    """Prefer content.properties; stringify keys."""
-    raw = {"content": {"properties": {10001: 1, "15400": 2}}}
-    assert iot_property_values(raw) == {"10001": 1, "15400": 2}
-
-
-def test_iot_property_values_from_top_level() -> None:
-    """Fall back to top-level properties when content has none."""
-    assert iot_property_values({"properties": {"10001": 0}}) == {"10001": 0}
 
 
 def test_parse_callback_flag() -> None:
@@ -246,12 +242,10 @@ def test_parse_callback_flag() -> None:
     assert parse_callback_flag(["iot", "alarm"]) == frozenset({"iot", "alarm"})
 
 
-def test_legacy_msg_type_from_v2_event() -> None:
-    """V2 motion/person events map to legacy alarm keys."""
-    assert legacy_msg_type_from_v2_event("detection.motion.detected") == "videoMotion"
-    assert legacy_msg_type_from_v2_event("detection.person.detected") == "human"
-    assert legacy_msg_type_from_v2_event("videoMotion") == "videoMotion"
-    assert legacy_msg_type_from_v2_event(None) is None
+def test_legacy_alarm_name_is_not_a_capability_event() -> None:
+    """Legacy alarm names are not capability event ids."""
+    assert is_v2_capability_event_id("videoMotion") is False
+    assert is_v2_capability_event_id("detection.motion.detected") is True
 
 
 def test_v2_capability_event_permitted() -> None:
@@ -397,13 +391,6 @@ def test_legacy_human_not_capability_event() -> None:
     payload = {"msgType": "human", "did": "IPC123"}
     assert is_capability_event_payload(payload) is False
     assert event_id_from_push(payload) is None
-
-
-def test_iot_property_values_empty() -> None:
-    """Missing or non-dict properties yield an empty map."""
-    assert iot_property_values({}) == {}
-    assert iot_property_values({"content": "x"}) == {}
-    assert iot_property_values({"content": {"properties": []}}) == {}
 
 
 def test_v2_property_report_helpers() -> None:

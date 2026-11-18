@@ -11,6 +11,7 @@ from ..const import (
     PARAM_BATTERY,
     PARAM_COLLECTION_POINT_PROMPT,
     PARAM_CURRENT_OPTION,
+    PARAM_DEVICE_VOLUME,
     PARAM_HUMIDITY_CURRENT,
     PARAM_OPTIONS,
     PARAM_STATE,
@@ -33,6 +34,7 @@ from ..select_option import (
     enum_desc_to_option_key,
     normalize_options,
     to_friendly,
+    volume_enum_uses_names,
 )
 from .binding import (
     TargetBinding,
@@ -114,35 +116,37 @@ def _add_property_select(
 ) -> None:
     options, current, value_type = _select_options(prop)
     raw_by_option: dict[str, Any] = {}
+    use_names = binding.ha_key in MAPPED_SELECT_TYPES and (
+        binding.ha_key != PARAM_DEVICE_VOLUME
+        or volume_enum_uses_names(prop.enum_options)
+    )
     if prop.enum_options:
+
+        def _option_key(opt_desc: str, opt_value: Any) -> str:
+            if use_names:
+                return to_friendly(binding.ha_key, opt_value)
+            return enum_desc_to_option_key(opt_desc, opt_value)
+
         friendly_options: list[str] = []
         for opt in prop.enum_options:
-            if binding.ha_key in MAPPED_SELECT_TYPES:
-                key = to_friendly(binding.ha_key, opt.value)
-            else:
-                key = enum_desc_to_option_key(opt.desc, opt.value)
+            key = _option_key(opt.desc, opt.value)
             friendly_options.append(key)
             raw_by_option[key] = opt.value
         options = friendly_options
         current = next(
             (
-                (
-                    to_friendly(binding.ha_key, opt.value)
-                    if binding.ha_key in MAPPED_SELECT_TYPES
-                    else enum_desc_to_option_key(opt.desc, opt.value)
-                )
+                _option_key(opt.desc, opt.value)
                 for opt in prop.enum_options
                 if opt.value == current
             ),
-            (
-                to_friendly(binding.ha_key, current)
-                if binding.ha_key in MAPPED_SELECT_TYPES
-                else enum_desc_to_option_key("", current)
-            ),
+            _option_key("", current),
         )
-    elif binding.ha_key in MAPPED_SELECT_TYPES:
+    elif use_names:
         options = normalize_options(binding.ha_key, [str(item) for item in options])
         current = to_friendly(binding.ha_key, current)
+    elif binding.ha_key == PARAM_DEVICE_VOLUME:
+        options = [str(item) for item in options]
+        current = str(current)
     entities[binding.ha_key] = {
         PARAM_V2_TARGET_ID: binding.target_id,
         PARAM_OPTIONS: options,

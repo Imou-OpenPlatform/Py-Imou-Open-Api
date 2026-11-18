@@ -108,22 +108,6 @@ def is_v2_capability_event_id(msg_type: str | None) -> bool:
     return isinstance(msg_type, str) and "." in msg_type
 
 
-# V2 capability eventId → legacy PaaS msg_type for motion, labels, and automations.
-V2_EVENT_LEGACY_MSG_TYPE: dict[str, str] = {
-    "detection.motion.detected": "videoMotion",
-    "detection.person.detected": "human",
-    "detection.pet.detected": "mobileDetect",
-    "detection.sound.detected": "abAlarmSound",
-}
-
-
-def legacy_msg_type_from_v2_event(msg_type: str | None) -> str | None:
-    """Map a V2 eventId to the legacy msg_type Home Assistant already understands."""
-    if not msg_type:
-        return msg_type
-    return V2_EVENT_LEGACY_MSG_TYPE.get(msg_type, msg_type)
-
-
 def v2_capability_event_permitted(
     events: frozenset[str] | None,
     event_id: str,
@@ -215,36 +199,8 @@ def v2_property_report_values(raw: dict[str, Any]) -> dict[str, Any]:
     return {str(key): value for key, value in props.items()}
 
 
-def iot_property_values(raw: dict[str, Any]) -> dict[str, Any]:
-    """Return ref→value from an iotProperty payload. Never raises."""
-    content = raw.get("content")
-    if isinstance(content, dict) and isinstance(content.get("properties"), dict):
-        source = content["properties"]
-    elif isinstance(raw.get("properties"), dict):
-        source = raw["properties"]
-    else:
-        return {}
-    return {str(key): value for key, value in source.items()}
-
-
 def _is_digit_str(value: Any) -> bool:
     return isinstance(value, str) and value.isdigit()
-
-
-def event_ref_lookup_key(msg_type: str | None, raw: dict[str, Any]) -> str | None:
-    """Return the product-model event ref to resolve, or None to skip."""
-    if _is_digit_str(msg_type):
-        return msg_type
-    if msg_type == "iotEvent":
-        content = raw.get("content")
-        if isinstance(content, dict):
-            event_ref = content.get("event")
-            if event_ref is None or event_ref == "":
-                return None
-            key = str(event_ref)
-            if key.isdigit():
-                return key
-    return None
 
 
 def parse_callback_flag(value: str | Iterable[str] | None) -> frozenset[str]:
@@ -267,13 +223,11 @@ def is_capability_event_payload(raw: dict[str, Any]) -> bool:
 
 
 def event_id_from_push(raw: dict[str, Any]) -> str | None:
-    """Return a capability eventId or legacy digit ref, else None."""
+    """Return a capability eventId, else None."""
     if is_capability_event_payload(raw):
         msg_type = raw.get("msgType")
         return str(msg_type) if msg_type is not None else None
-    msg_type = raw.get("msgType")
-    key = msg_type if isinstance(msg_type, str) else None
-    return event_ref_lookup_key(key, raw)
+    return None
 
 
 def _channel_id_from_payload(payload: dict[str, Any]) -> Any:
@@ -375,3 +329,17 @@ def preferred_pic_url(urls: list[str]) -> str | None:
     if len(urls) > 1 and urls[1]:
         return urls[1]
     return urls[0] or None
+
+
+def alarm_picture_url(raw: dict[str, Any]) -> str | None:
+    """Return the alarm still: the first ``picUrlArray`` entry.
+
+    When that array is missing, fall back to the older thumb and url fields.
+    """
+    for key, value in raw.items():
+        if str(key).lower() != "picurlarray":
+            continue
+        urls = _pic_url_strings(value)
+        if urls:
+            return urls[0]
+    return preferred_pic_url(pic_urls_from_payload(raw))

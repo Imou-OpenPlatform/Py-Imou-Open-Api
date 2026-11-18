@@ -116,7 +116,7 @@ async def test_device_discovery_adds_product_type_without_ability_refs() -> None
     ]
     manager = ImouDeviceManager(api_client)
 
-    devices = await manager.async_get_devices(fetch_ability_refs=False)
+    devices = await manager.async_get_devices()
 
     assert devices[0].product_device_type == "Lamp"
     assert api_client.async_request_api.await_args_list[1].args == (
@@ -165,7 +165,7 @@ async def test_device_discovery_batches_product_details_after_all_pages() -> Non
     api_client.async_request_api.side_effect = request
     manager = ImouDeviceManager(api_client)
 
-    devices = await manager.async_get_devices(page_size=3, fetch_ability_refs=False)
+    devices = await manager.async_get_devices(page_size=3)
 
     assert [item.device_id for item in devices] == [
         "lamp",
@@ -211,8 +211,8 @@ async def test_product_detail_failure_keeps_devices_and_retries_discovery(
     ]
     manager = ImouDeviceManager(api_client)
 
-    first = await manager.async_get_devices(fetch_ability_refs=False)
-    second = await manager.async_get_devices(fetch_ability_refs=False)
+    first = await manager.async_get_devices()
+    second = await manager.async_get_devices()
 
     assert first[0].product_device_type is None
     assert second[0].product_device_type == "Lamp"

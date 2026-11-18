@@ -18,6 +18,12 @@ bindings:
     ha_platform: switch
     scope: channel
 
+  - ha_key: alarm_pir
+    target_id: detection.pir.enabled
+    kind: property
+    ha_platform: switch
+    scope: channel
+
   - ha_key: close_camera
     target_id: privacy.cover.enabled
     kind: property
@@ -176,11 +182,10 @@ bindings:
 
   - ha_key: switch_cnt
     target_id: power.outlet.read
-    fallback_target_id: control.outlet.switchCount
     kind: service
     ha_platform: sensor
     scope: device
-    output_field: switch_cnt
+    output_field: switchCnt
 
   - ha_key: use_electricity
     target_id: power.outlet.energy

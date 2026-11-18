@@ -10,7 +10,7 @@ from pyimouapi.capability.binding import (
 )
 
 # imou_life P0 bindings (Canvas has ~71 rows; yaml is the integration subset).
-EXPECTED_P0_HA_KEY_COUNT = 43
+EXPECTED_P0_HA_KEY_COUNT = 44
 
 
 def test_load_packaged_map() -> None:
@@ -47,7 +47,7 @@ def test_power_sensors_share_read_service() -> None:
     fields = {row.ha_key: row.output_field for row in outlet}
     assert fields["power"] == "power"
     assert fields["voltage"] == "voltage"
-    assert fields["switch_cnt"] == "switch_cnt"
+    assert fields["switch_cnt"] == "switchCnt"
 
 
 @pytest.mark.parametrize(

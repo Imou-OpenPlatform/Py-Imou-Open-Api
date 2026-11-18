@@ -15,8 +15,7 @@ from pyimouapi.ha_device import ImouHaDeviceManager
 def _iot_channel_device() -> ImouDevice:
     device = ImouDevice("PLUG1", "Plug", "1", "Imou", "SP")
     device.set_product_id("pid")
-    device.set_device_ability_refs("11900,28800")
-    device.set_channels([ImouChannel("0", "", "1", "11900")])
+    device.set_channels([ImouChannel("0", "", "1", "")])
     return device
 
 
@@ -41,44 +40,14 @@ async def test_device_listing_does_not_fetch_iot_detail_by_default() -> None:
         ]
     )
     manager = ImouDeviceManager(delegate)
-    manager._async_update_device_ability_refs = AsyncMock()
 
     devices = await manager.async_get_devices()
 
-    manager._async_update_device_ability_refs.assert_not_awaited()
     assert devices[0].product_device_type == "Plug"
 
 
 @pytest.mark.asyncio
-async def test_device_listing_can_explicitly_fetch_legacy_ability_refs() -> None:
-    delegate = MagicMock()
-    delegate.async_request_api = AsyncMock(
-        side_effect=[
-            {
-                "deviceList": [
-                    {
-                        "deviceId": "PLUG1",
-                        "deviceName": "Plug",
-                        "deviceStatus": "1",
-                        "brand": "Imou",
-                        "deviceModel": "SP",
-                        "productId": "pid",
-                    }
-                ]
-            },
-            {"item": [{"productId": "pid", "deviceType": "Plug"}]},
-        ]
-    )
-    manager = ImouDeviceManager(delegate)
-    manager._async_update_device_ability_refs = AsyncMock()
-
-    await manager.async_get_devices(fetch_ability_refs=True)
-
-    manager._async_update_device_ability_refs.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_iot_device_skips_ref_fallback_when_capability_list_works() -> None:
+async def test_iot_device_registers_from_capability_list() -> None:
     from pyimouapi.capability.catalog import PropertyCapability
 
     cap = CapabilitySet(
@@ -97,25 +66,17 @@ async def test_iot_device_skips_ref_fallback_when_capability_list_works() -> Non
     delegate = MagicMock()
     delegate.async_get_devices = AsyncMock(return_value=[_iot_channel_device()])
     manager = ImouHaDeviceManager(delegate)
-    with (
-        patch(
-            "pyimouapi.ha_device.async_capability_list",
-            AsyncMock(return_value=cap),
-        ),
-        patch.object(
-            manager,
-            "_async_configure_device_by_ref",
-            AsyncMock(),
-        ) as ref_configure,
+    with patch(
+        "pyimouapi.ha_device.async_capability_list",
+        AsyncMock(return_value=cap),
     ):
-        devices = await manager.async_get_devices(fetch_ability_refs=False)
+        devices = await manager.async_get_devices()
     assert len(devices) == 1
     assert devices[0].capability_set is cap
-    ref_configure.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_iot_device_does_not_ref_fallback_when_capability_list_fails() -> None:
+async def test_iot_device_registers_nothing_when_capability_list_fails() -> None:
     delegate = MagicMock()
     delegate.async_get_devices = AsyncMock(return_value=[_iot_channel_device()])
     manager = ImouHaDeviceManager(delegate)
@@ -124,19 +85,13 @@ async def test_iot_device_does_not_ref_fallback_when_capability_list_fails() -> 
             "pyimouapi.ha_device.async_capability_list",
             AsyncMock(side_effect=ImouException("list down")),
         ),
-        patch.object(
-            manager,
-            "_async_configure_device_by_ref",
-            AsyncMock(),
-        ) as ref_configure,
         patch(
             "pyimouapi.ha_device.configure_imou_ha_device_from_capability",
         ) as configure,
     ):
-        devices = await manager.async_get_devices(fetch_ability_refs=False)
+        devices = await manager.async_get_devices()
     assert len(devices) == 1
     assert devices[0].capability_set is None
-    ref_configure.assert_not_awaited()
     configure.assert_not_called()
 
 
@@ -163,15 +118,11 @@ async def test_paas_channel_registers_entities_from_capability_only() -> None:
     delegate = MagicMock()
     delegate.async_get_devices = AsyncMock(return_value=[device])
     manager = ImouHaDeviceManager(delegate)
-    with (
-        patch(
-            "pyimouapi.ha_device.async_capability_list",
-            AsyncMock(return_value=cap),
-        ),
-        patch.object(manager, "configure_device_by_ability") as ability_configure,
+    with patch(
+        "pyimouapi.ha_device.async_capability_list",
+        AsyncMock(return_value=cap),
     ):
-        devices = await manager.async_get_devices(fetch_ability_refs=False)
-    ability_configure.assert_not_called()
+        devices = await manager.async_get_devices()
     assert PARAM_MOTION_DETECT in devices[0].switches
     assert (
         devices[0].switches[PARAM_MOTION_DETECT][PARAM_V2_TARGET_ID]
@@ -188,15 +139,11 @@ async def test_paas_skips_ability_fallback_when_capability_list_missing() -> Non
     delegate = MagicMock()
     delegate.async_get_devices = AsyncMock(return_value=[device])
     manager = ImouHaDeviceManager(delegate)
-    with (
-        patch(
-            "pyimouapi.ha_device.async_capability_list",
-            AsyncMock(side_effect=ImouException("unavailable")),
-        ),
-        patch.object(manager, "configure_device_by_ability") as ability_configure,
+    with patch(
+        "pyimouapi.ha_device.async_capability_list",
+        AsyncMock(side_effect=ImouException("unavailable")),
     ):
         devices = await manager.async_get_devices()
-    ability_configure.assert_not_called()
     assert devices[0].capability_set is None
     assert devices[0].switches == {}
 

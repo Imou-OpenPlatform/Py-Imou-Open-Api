@@ -12,6 +12,7 @@ from pyimouapi.const import (
     PARAM_V2_RAW_BY_OPTION,
     PARAM_V2_STRUCT_FIELD,
     PARAM_V2_TARGET_ID,
+    STATE_VARIANT_ENUM,
     STATE_VARIANT_NUMERIC,
 )
 from pyimouapi.device import ImouDeviceManager
@@ -74,6 +75,62 @@ def test_storage_capacity_list_becomes_a_used_percentage() -> None:
     assert changed is True
     assert device.sensors["storage_used"][PARAM_STATE] == 45
     assert device.sensors["storage_used"][PARAM_STATE_VARIANT] == STATE_VARIANT_NUMERIC
+
+
+def test_storage_fault_becomes_a_status_instead_of_a_percentage() -> None:
+    """A card with no size keeps its fault instead of an unknown percentage."""
+    device = _switch_device()
+    device.sensors["storage_used"] = {
+        PARAM_V2_TARGET_ID: "storage.local.capacity",
+        PARAM_STATE: None,
+    }
+    device.set_capability_set(_property_capability_set("storage.local.capacity"))
+    manager = ImouHaDeviceManager(MagicMock())
+
+    manager.apply_property_values(
+        device,
+        {
+            "storage.local.capacity": [
+                {
+                    "totalBytes": 0,
+                    "usedBytes": 0,
+                    "storageState": "2",
+                    "storageAbnormal": "7",
+                    "index": 0,
+                }
+            ]
+        },
+    )
+
+    assert device.sensors["storage_used"][PARAM_STATE] == "mount_failed"
+    assert device.sensors["storage_used"][PARAM_STATE_VARIANT] == STATE_VARIANT_ENUM
+
+
+def test_missing_storage_card_is_no_card() -> None:
+    device = _switch_device()
+    device.sensors["storage_used"] = {
+        PARAM_V2_TARGET_ID: "storage.local.capacity",
+        PARAM_STATE: None,
+    }
+    device.set_capability_set(_property_capability_set("storage.local.capacity"))
+    manager = ImouHaDeviceManager(MagicMock())
+
+    manager.apply_property_values(
+        device,
+        {
+            "storage.local.capacity": [
+                {
+                    "totalBytes": 0,
+                    "usedBytes": 0,
+                    "storageState": "0",
+                    "storageAbnormal": "1",
+                    "index": 0,
+                }
+            ]
+        },
+    )
+
+    assert device.sensors["storage_used"][PARAM_STATE] == "no_card"
 
 
 def test_apply_property_values_updates_supported_entity_types() -> None:
@@ -228,35 +285,6 @@ def test_apply_property_values_ignores_property_missing_from_capability() -> Non
     assert (
         manager.apply_property_values(device, {"detection.motion.enabled": 1}) is False
     )
-    assert device.switches["motion_detect"][PARAM_STATE] is False
-
-
-def test_apply_iot_property_values_forwards_to_neutral_method() -> None:
-    device = _switch_device()
-    manager = ImouHaDeviceManager(MagicMock())
-    manager.apply_property_values = MagicMock(return_value=True)
-
-    with pytest.warns(DeprecationWarning):
-        changed = manager.apply_iot_property_values(
-            device, {"detection.motion.enabled": 1}
-        )
-
-    assert changed is True
-    manager.apply_property_values.assert_called_once_with(
-        device, {"detection.motion.enabled": 1}
-    )
-
-
-def test_apply_iot_property_values_preserves_unchanged_semantics() -> None:
-    device = _switch_device()
-    manager = ImouHaDeviceManager(MagicMock())
-
-    with pytest.warns(DeprecationWarning):
-        changed = manager.apply_iot_property_values(
-            device, {"detection.motion.enabled": 0}
-        )
-
-    assert changed is False
     assert device.switches["motion_detect"][PARAM_STATE] is False
 
 

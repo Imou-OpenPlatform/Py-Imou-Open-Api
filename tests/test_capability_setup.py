@@ -8,8 +8,8 @@ from pyimouapi.const import (
     PARAM_COLLECTION_POINT,
     PARAM_RESTART_DEVICE,
     PARAM_STATE,
-    PARAM_V2_FALLBACK_TARGET_ID,
     PARAM_V2_LIST_SERVICE_ID,
+    PARAM_V2_OUTPUT_FIELD,
     PARAM_V2_SOURCE_TARGET_IDS,
     PARAM_V2_TARGET_ID,
     PARAM_V2_WRITE_TARGET_ID,
@@ -178,6 +178,74 @@ def test_v2_wide_dynamic_enum_uses_friendly_option_keys() -> None:
     assert wdr[PARAM_V2_RAW_BY_OPTION]["adaptive"] == 2
 
 
+def test_v2_numeric_volume_keeps_level_numbers() -> None:
+    """A 1-5 level must not turn 1 and 2 into Medium and High."""
+    from pyimouapi.capability.catalog import EnumOption
+    from pyimouapi.const import (
+        PARAM_CURRENT_OPTION,
+        PARAM_OPTIONS,
+        PARAM_V2_RAW_BY_OPTION,
+    )
+
+    device = ImouHaDevice("IPC1", "Cam", "Imou", "IPC", "1.0")
+    device.set_channel_id("0")
+    device.set_is_ipc(True)
+    cap = CapabilitySet(
+        properties={
+            "audio.volume.level": PropertyCapability(
+                property_id="audio.volume.level",
+                access_mode="rw",
+                data_type="enum",
+                enum_options=tuple(
+                    EnumOption(str(level), str(level)) for level in range(1, 6)
+                ),
+                default_data="3",
+            ),
+        },
+        services=frozenset(),
+        events=frozenset(),
+    )
+    configure_imou_ha_device_from_capability(device, cap)
+    volume = device.selects["device_volume"]
+    assert volume[PARAM_OPTIONS] == ["1", "2", "3", "4", "5"]
+    assert volume[PARAM_CURRENT_OPTION] == "3"
+    assert volume[PARAM_V2_RAW_BY_OPTION]["3"] == "3"
+
+
+def test_v2_named_volume_keeps_mute_low_medium_high() -> None:
+    from pyimouapi.capability.catalog import EnumOption
+    from pyimouapi.const import PARAM_OPTIONS
+
+    device = ImouHaDevice("IPC1", "Cam", "Imou", "IPC", "1.0")
+    device.set_channel_id("0")
+    device.set_is_ipc(True)
+    cap = CapabilitySet(
+        properties={
+            "audio.volume.level": PropertyCapability(
+                property_id="audio.volume.level",
+                access_mode="rw",
+                data_type="enum",
+                enum_options=(
+                    EnumOption("99", "Mute"),
+                    EnumOption("0", "Low"),
+                    EnumOption("1", "Medium"),
+                    EnumOption("2", "High"),
+                ),
+                default_data="1",
+            ),
+        },
+        services=frozenset(),
+        events=frozenset(),
+    )
+    configure_imou_ha_device_from_capability(device, cap)
+    assert device.selects["device_volume"][PARAM_OPTIONS] == [
+        "mute",
+        "low",
+        "medium",
+        "high",
+    ]
+
+
 def test_v2_gate_registers_outlet_countdown() -> None:
     device = ImouHaDevice("PLUG1", "Plug", "Imou", "SP", "1.0")
     device.set_product_id("pid")
@@ -248,26 +316,44 @@ def test_v2_battery_records_available_sources_on_one_entity(
     assert device.sensors[PARAM_BATTERY][PARAM_V2_SOURCE_TARGET_IDS] == list(source_ids)
 
 
-def test_v2_switch_count_records_property_fallback() -> None:
+def test_v2_switch_count_reads_outlet_service_switch_cnt() -> None:
     device = ImouHaDevice("PLUG1", "Plug", "Imou", "SP", "1.0")
     device.set_product_id("pid")
     cap = CapabilitySet(
-        properties={
-            "control.outlet.switchCount": PropertyCapability(
-                property_id="control.outlet.switchCount",
-                access_mode="r",
-                data_type="int",
-            )
-        },
+        properties={},
         services=frozenset({"power.outlet.read"}),
         events=frozenset(),
     )
 
     configure_imou_ha_device_from_capability(device, cap)
 
-    assert device.sensors["switch_cnt"][PARAM_V2_FALLBACK_TARGET_ID] == (
-        "control.outlet.switchCount"
+    sensor = device.sensors["switch_cnt"]
+    assert sensor[PARAM_V2_TARGET_ID] == "power.outlet.read"
+    assert sensor[PARAM_V2_OUTPUT_FIELD] == "switchCnt"
+
+
+def test_v2_alarm_pir_uses_detection_pir_enabled() -> None:
+    device = ImouHaDevice("IPC1", "Cam", "Imou", "IPC", "1.0")
+    device.set_channel_id("0")
+    device.set_is_ipc(True)
+    cap = CapabilitySet(
+        properties={
+            "detection.pir.enabled": PropertyCapability(
+                property_id="detection.pir.enabled",
+                access_mode="rw",
+                data_type="int",
+                range_min=0,
+                range_max=1,
+                default_data=0,
+            )
+        },
+        services=frozenset(),
+        events=frozenset(),
     )
+
+    configure_imou_ha_device_from_capability(device, cap)
+
+    assert device.switches["alarm_pir"][PARAM_V2_TARGET_ID] == "detection.pir.enabled"
 
 
 def test_v2_gate_registers_collection_point_when_list_present() -> None:

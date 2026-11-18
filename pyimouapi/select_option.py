@@ -33,6 +33,16 @@ _VOLUME_FRIENDLY_TO_RAW = {
     "medium": "1",
     "high": "2",
 }
+# Older cameras use this set. A 1-5 level must not run through it, or 1 and 2
+# become Medium and High while 3, 4 and 5 stay numbers.
+_VOLUME_NAMED_RAWS = frozenset(_VOLUME_RAW_TO_FRIENDLY)
+
+
+def volume_enum_uses_names(options: tuple[Any, ...] | list[Any]) -> bool:
+    """True when every enum value is the mute/low/medium/high scale."""
+    values = {_as_raw_str(getattr(item, "value", item)) for item in options}
+    return bool(values) and values <= _VOLUME_NAMED_RAWS
+
 
 _NIGHT_VISION_RAW_TO_FRIENDLY = {
     "0": "intelligent",
@@ -117,8 +127,8 @@ def to_friendly(select_type: str, raw: Any) -> str:
 def to_raw(select_type: str, friendly: str) -> str:
     """Map friendly key to vendor/API raw string for IoT writes.
 
-    For PaaS-only night vision keys (`lowlight`, `smartlowlight`), returns the
-    same lowercase string (caller uses NIGHT_VISION_MODE_MAP).
+    For night vision keys such as ``lowlight`` and ``smartlowlight``, returns the
+    same lowercase string.
     Raises ValueError for unknown keys on mapped select types.
     """
     if select_type == PARAM_COLLECTION_POINT or select_type not in MAPPED_SELECT_TYPES:

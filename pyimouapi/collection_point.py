@@ -7,18 +7,6 @@ from typing import Any
 from .const import IOT_COLLECTION_NAME_REF, PARAM_COLLECTION_POINT_PROMPT
 
 
-def parse_paas_collection_names(data: dict[str, Any]) -> list[str]:
-    """Extract preset names from getCollection PaaS response data."""
-    names: list[str] = []
-    for item in data.get("collections") or []:
-        if not isinstance(item, dict):
-            continue
-        name = item.get("name")
-        if name and str(name) != PARAM_COLLECTION_POINT_PROMPT:
-            names.append(str(name))
-    return unique_preserve_order(names)
-
-
 def _name_from_collection_item(item: dict[str, Any]) -> str | None:
     for key in ("Name", "name", IOT_COLLECTION_NAME_REF):
         value = item.get(key)

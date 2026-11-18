@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from pyimouapi.const import PARAM_DEVICE_VOLUME, PARAM_MODE, PARAM_NIGHT_VISION_MODE
-from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
+from pyimouapi.const import PARAM_DEVICE_VOLUME, PARAM_NIGHT_VISION_MODE
 from pyimouapi.select_option import to_friendly, to_raw
 
 
@@ -57,31 +56,3 @@ def test_collection_point_identity() -> None:
 
     assert to_friendly(PARAM_COLLECTION_POINT, "door") == "door"
     assert to_raw(PARAM_COLLECTION_POINT, "door") == "door"
-
-
-def test_configure_select_by_ref_uses_friendly_defaults() -> None:
-    device = ImouHaDevice("d1", "cam", "Imou", "IPC", "1.0")
-    device.set_channel_id("0")
-    device.set_product_id("pid")
-    # refs that match SELECT_TYPE_REF entries
-    ImouHaDeviceManager.configure_select_by_ref(
-        ["15200", "15400", "17400"],
-        True,
-        [],
-        device,
-    )
-    assert PARAM_MODE not in device.selects
-    assert device.selects[PARAM_DEVICE_VOLUME]["options"] == [
-        "mute",
-        "low",
-        "medium",
-        "high",
-    ]
-    assert device.selects[PARAM_DEVICE_VOLUME]["current_option"] == "low"
-    assert device.selects[PARAM_NIGHT_VISION_MODE]["options"] == [
-        "intelligent",
-        "fullcolor",
-        "infrared",
-        "off",
-    ]
-    assert device.selects[PARAM_NIGHT_VISION_MODE]["current_option"] == "intelligent"

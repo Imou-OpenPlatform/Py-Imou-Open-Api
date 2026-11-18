@@ -4,23 +4,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pyimouapi.bulb_light import (
-    REF_BRIGHTNESS,
-    REF_SWITCH,
     apply_bulb_v2_properties,
     bulb_v2_property_ids_for_device,
     empty_bulb_state,
     properties_for_turn_off,
-    ref_payload_to_v2,
 )
 from pyimouapi.capability.catalog import CapabilitySet
 from pyimouapi.device import ImouDevice, ImouDeviceManager
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 from pyimouapi.openapi import ImouOpenApiClient
-
-
-def test_ref_payload_to_v2_maps_switch() -> None:
-    payload = ref_payload_to_v2({REF_SWITCH: 1})
-    assert payload == {"control.outlet.enabled": 1}
 
 
 def test_apply_bulb_v2_properties_reads_switch() -> None:
@@ -122,7 +114,8 @@ async def test_set_bulb_light_v2_omits_unsupported_optional_properties(
         "pyimouapi.ha_device.async_property_set", new_callable=AsyncMock
     ) as mock_set:
         await ha_manager.async_set_bulb_light(
-            device, {REF_SWITCH: 1, REF_BRIGHTNESS: 75}
+            device,
+            {"control.outlet.enabled": 1, "light.white.level": 75},
         )
     assert mock_set.await_args.kwargs["properties"] == {"control.outlet.enabled": 1}
     assert device.bulb_light["brightness"] == 50
