@@ -53,7 +53,7 @@ def test_lamp_without_power_property_is_not_controllable() -> None:
 def test_binding_supports_partial_lamp_property_subset() -> None:
     binding = _bulb_binding()
     props = {"control.outlet.enabled", "light.white.mode"}
-    assert binding_supported(binding, props, set(), set(), device_type="Lamp")
+    assert binding_supported(binding, props, device_type="Lamp")
 
 
 def test_configure_registers_bulb_for_lamp_with_partial_properties() -> None:
@@ -64,6 +64,7 @@ def test_configure_registers_bulb_for_lamp_with_partial_properties() -> None:
     )
     device = ImouHaDevice("LAMP1", "Lamp", "Imou", "M", "1")
     device.set_product_device_type("Lamp")
+    device.set_capability_ids(set(cap.properties) | set(cap.services) | set(cap.events))
     configure_imou_ha_device_from_capability(device, cap, bindings=(_bulb_binding(),))
     assert device.bulb_light is not None
     assert device.bulb_v2 is True
@@ -77,5 +78,6 @@ def test_configure_skips_bulb_for_ipc_with_all_light_properties() -> None:
     )
     device = ImouHaDevice("CAM1", "Cam", "Imou", "M", "1")
     device.set_product_device_type("IPC")
+    device.set_capability_ids(set(cap.properties) | set(cap.services) | set(cap.events))
     configure_imou_ha_device_from_capability(device, cap, bindings=(_bulb_binding(),))
     assert device.bulb_light is None

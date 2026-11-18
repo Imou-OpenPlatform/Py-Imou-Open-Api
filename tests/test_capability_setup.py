@@ -42,6 +42,10 @@ def _motion_cap() -> CapabilitySet:
     )
 
 
+def _copy_ids_from_capability(device: ImouHaDevice, cap: CapabilitySet) -> None:
+    device.set_capability_ids(set(cap.properties) | set(cap.services) | set(cap.events))
+
+
 def test_v2_gate_registers_intrusion_switches() -> None:
     device = ImouHaDevice("IPC1", "Cam", "Imou", "IPC", "1.0")
     device.set_channel_id("0")
@@ -61,10 +65,9 @@ def test_v2_gate_registers_intrusion_switches() -> None:
             "detection.intrusion.petFilter",
         )
     }
-    configure_imou_ha_device_from_capability(
-        device,
-        CapabilitySet(properties=properties, services=frozenset(), events=frozenset()),
-    )
+    cap = CapabilitySet(properties=properties, services=frozenset(), events=frozenset())
+    _copy_ids_from_capability(device, cap)
+    configure_imou_ha_device_from_capability(device, cap)
     assert set(device.switches) == {
         "motion_detect",
         "header_detect",
@@ -99,10 +102,9 @@ def test_dedicated_detection_property_wins_over_intrusion() -> None:
             "detection.intrusion.enabled",
         )
     }
-    configure_imou_ha_device_from_capability(
-        device,
-        CapabilitySet(properties=properties, services=frozenset(), events=frozenset()),
-    )
+    cap = CapabilitySet(properties=properties, services=frozenset(), events=frozenset())
+    _copy_ids_from_capability(device, cap)
+    configure_imou_ha_device_from_capability(device, cap)
     assert device.switches["motion_detect"][PARAM_V2_TARGET_ID] == (
         "detection.motion.enabled"
     )
@@ -113,7 +115,9 @@ def test_v2_gate_registers_motion_switch() -> None:
     device.set_product_id("pid")
     device.set_channel_id("0")
     device.set_is_ipc(True)
-    configure_imou_ha_device_from_capability(device, _motion_cap())
+    cap = _motion_cap()
+    _copy_ids_from_capability(device, cap)
+    configure_imou_ha_device_from_capability(device, cap)
     assert "motion_detect" in device.switches
     assert device.switches["motion_detect"][PARAM_V2_TARGET_ID] == (
         "detection.motion.enabled"
@@ -138,6 +142,7 @@ def test_v2_gate_registers_wide_dynamic_select() -> None:
         services=frozenset(),
         events=frozenset(),
     )
+    _copy_ids_from_capability(device, cap)
     configure_imou_ha_device_from_capability(device, cap)
     assert "wide_dynamic" in device.selects
     assert device.selects["wide_dynamic"][PARAM_V2_TARGET_ID] == "image.wdr.mode"
@@ -171,6 +176,7 @@ def test_v2_wide_dynamic_enum_uses_friendly_option_keys() -> None:
         services=frozenset(),
         events=frozenset(),
     )
+    _copy_ids_from_capability(device, cap)
     configure_imou_ha_device_from_capability(device, cap)
     wdr = device.selects["wide_dynamic"]
     assert wdr[PARAM_OPTIONS] == ["off", "on", "adaptive"]
@@ -205,6 +211,7 @@ def test_v2_numeric_volume_keeps_level_numbers() -> None:
         services=frozenset(),
         events=frozenset(),
     )
+    _copy_ids_from_capability(device, cap)
     configure_imou_ha_device_from_capability(device, cap)
     volume = device.selects["device_volume"]
     assert volume[PARAM_OPTIONS] == ["1", "2", "3", "4", "5"]
@@ -237,6 +244,7 @@ def test_v2_named_volume_keeps_mute_low_medium_high() -> None:
         services=frozenset(),
         events=frozenset(),
     )
+    _copy_ids_from_capability(device, cap)
     configure_imou_ha_device_from_capability(device, cap)
     assert device.selects["device_volume"][PARAM_OPTIONS] == [
         "mute",
@@ -256,6 +264,7 @@ def test_v2_gate_registers_outlet_countdown() -> None:
         ),
         events=frozenset(),
     )
+    _copy_ids_from_capability(device, cap)
     configure_imou_ha_device_from_capability(device, cap)
     assert "count_down_switch" in device.texts
     meta = device.texts["count_down_switch"]
@@ -278,6 +287,7 @@ def test_v2_gate_registers_overcharge_as_switch_only() -> None:
         events=frozenset(),
     )
 
+    _copy_ids_from_capability(device, cap)
     configure_imou_ha_device_from_capability(device, cap)
 
     assert "overcharge_switch" in device.switches
@@ -310,6 +320,7 @@ def test_v2_battery_records_available_sources_on_one_entity(
         events=frozenset(),
     )
 
+    _copy_ids_from_capability(device, cap)
     configure_imou_ha_device_from_capability(device, cap)
 
     assert [key for key in device.sensors if key == PARAM_BATTERY] == [PARAM_BATTERY]
@@ -325,6 +336,7 @@ def test_v2_switch_count_reads_outlet_service_switch_cnt() -> None:
         events=frozenset(),
     )
 
+    _copy_ids_from_capability(device, cap)
     configure_imou_ha_device_from_capability(device, cap)
 
     sensor = device.sensors["switch_cnt"]
@@ -351,6 +363,7 @@ def test_v2_alarm_pir_uses_detection_pir_enabled() -> None:
         events=frozenset(),
     )
 
+    _copy_ids_from_capability(device, cap)
     configure_imou_ha_device_from_capability(device, cap)
 
     assert device.switches["alarm_pir"][PARAM_V2_TARGET_ID] == "detection.pir.enabled"
@@ -365,6 +378,7 @@ def test_v2_gate_registers_collection_point_when_list_present() -> None:
         services=frozenset({"ptz.preset.goto", "ptz.preset.list"}),
         events=frozenset(),
     )
+    _copy_ids_from_capability(device, cap)
     configure_imou_ha_device_from_capability(device, cap)
     assert PARAM_COLLECTION_POINT in device.selects
     assert device.selects[PARAM_COLLECTION_POINT][PARAM_V2_TARGET_ID] == (
@@ -375,16 +389,54 @@ def test_v2_gate_registers_collection_point_when_list_present() -> None:
     )
 
 
-def test_v2_gate_registers_restart_when_named_api_row() -> None:
+def test_restart_registers_only_when_reboot_id_is_present() -> None:
     device = ImouHaDevice("IPC1", "Cam", "Imou", "IPC", "1.0")
     device.set_channel_id("0")
     device.set_is_ipc(True)
-    cap = CapabilitySet(properties={}, services=frozenset(), events=frozenset())
-    configure_imou_ha_device_from_capability(device, cap)
+    device.set_capability_ids({"device.reboot.execute"})
+    configure_imou_ha_device_from_capability(
+        device,
+        CapabilitySet(properties={}, services=frozenset(), events=frozenset()),
+    )
     assert PARAM_RESTART_DEVICE in device.buttons
     assert device.buttons[PARAM_RESTART_DEVICE][PARAM_V2_TARGET_ID] == (
         "device.reboot.execute"
     )
+
+    bare = ImouHaDevice("IPC2", "Cam", "Imou", "IPC", "1.0")
+    bare.set_channel_id("0")
+    bare.set_is_ipc(True)
+    bare.set_capability_ids(frozenset())
+    configure_imou_ha_device_from_capability(
+        bare,
+        CapabilitySet(properties={}, services=frozenset(), events=frozenset()),
+    )
+    assert PARAM_RESTART_DEVICE not in bare.buttons
+
+
+def test_page_id_registers_without_capability_detail() -> None:
+    device = ImouHaDevice("IPC1", "Cam", "Imou", "IPC", "1.0")
+    device.set_channel_id("0")
+    device.set_is_ipc(True)
+    device.set_capability_ids({"detection.motion.enabled"})
+    configure_imou_ha_device_from_capability(
+        device,
+        CapabilitySet(properties={}, services=frozenset(), events=frozenset()),
+    )
+    assert device.switches["motion_detect"][PARAM_V2_TARGET_ID] == (
+        "detection.motion.enabled"
+    )
+    assert device.switches["motion_detect"][PARAM_STATE] is False
+
+
+def test_capability_detail_does_not_add_entities() -> None:
+    device = ImouHaDevice("IPC1", "Cam", "Imou", "IPC", "1.0")
+    device.set_channel_id("0")
+    device.set_is_ipc(True)
+    device.set_capability_ids(frozenset())
+    configure_imou_ha_device_from_capability(device, _motion_cap())
+    assert "motion_detect" not in device.switches
+    assert PARAM_RESTART_DEVICE not in device.buttons
 
 
 def test_v2_gate_skips_missing_targets() -> None:

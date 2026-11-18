@@ -140,20 +140,6 @@ def applicable_capability_ids(
     return frozenset(ids)
 
 
-def binding_applies_to_device(
-    binding: TargetBinding, channel_id: str | None, *, is_ipc: bool
-) -> bool:
-    """Whether a map row applies on this device/channel row."""
-    scope = binding.scope
-    if scope == "device":
-        if channel_id is None:
-            return True
-        return is_ipc and channel_id == "0"
-    if scope == "channel":
-        return channel_id is not None
-    return True
-
-
 def binding_resolved_service_id(
     binding: TargetBinding, capability_services: set[str]
 ) -> str | None:
@@ -165,36 +151,38 @@ def binding_resolved_service_id(
 
 def binding_supported(
     binding: TargetBinding,
-    capability_properties: set[str],
-    capability_services: set[str],
-    capability_events: set[str],
+    capability_ids: AbstractSet[str],
     *,
     device_type: str | None = None,
 ) -> bool:
-    """True when the device list contains the binding's required target."""
+    """True when the page ids contain this row's required targets."""
     if binding.kind == "named_api":
-        return True
+        return bool(binding.target_id and binding.target_id in capability_ids)
     if binding.kind == "composite":
-        return bulb_gate_satisfied(device_type, capability_properties)
+        return bulb_gate_satisfied(device_type, capability_ids)
     if binding.kind == "property":
         return bool(
-            (binding.target_id and binding.target_id in capability_properties)
+            (binding.target_id and binding.target_id in capability_ids)
             or (
                 binding.fallback_target_id
-                and binding.fallback_target_id in capability_properties
+                and binding.fallback_target_id in capability_ids
             )
         )
     if binding.kind == "service":
         target = binding.target_id
         if binding.resolve:
-            target = binding_resolved_service_id(binding, capability_services)
-        if not target or target not in capability_services:
+            target = binding_resolved_service_id(binding, set(capability_ids))
+        if not target or target not in capability_ids:
             return False
         write_id = binding.write_target_id
-        if write_id is not None and write_id not in capability_services:
+        if write_id is not None and write_id not in capability_ids:
             return False
-        list_services = [s for s in binding.extra_services if s.endswith(".list")]
-        return not list_services or any(s in capability_services for s in list_services)
+        list_services = [
+            service for service in binding.extra_services if service.endswith(".list")
+        ]
+        return not list_services or any(
+            service in capability_ids for service in list_services
+        )
     if binding.kind == "event":
-        return bool(binding.target_id and binding.target_id in capability_events)
+        return bool(binding.target_id and binding.target_id in capability_ids)
     return False

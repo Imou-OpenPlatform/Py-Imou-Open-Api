@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Set as AbstractSet
 from typing import TYPE_CHECKING, Any
 
 from ..alarm_mode import ALARM_MODES
@@ -38,7 +39,6 @@ from ..select_option import (
 )
 from .binding import (
     TargetBinding,
-    binding_applies_to_device,
     binding_resolved_service_id,
     binding_supported,
     cached_v2_target_map,
@@ -156,15 +156,41 @@ def _add_property_select(
     }
 
 
+def _add_property_without_detail(
+    entities: dict[str, Any], binding: TargetBinding
+) -> None:
+    target_id = binding.target_id or binding.fallback_target_id
+    if binding.ha_platform in ("switch", "light", "binary_sensor"):
+        entities[binding.ha_key] = {
+            PARAM_STATE: False,
+            PARAM_V2_TARGET_ID: target_id,
+        }
+        return
+    if binding.ha_platform == "select":
+        entities[binding.ha_key] = {
+            PARAM_V2_TARGET_ID: target_id,
+            PARAM_OPTIONS: [],
+            PARAM_CURRENT_OPTION: "",
+            PARAM_VALUE_TYPE: "str",
+        }
+        return
+    if binding.ha_platform == "sensor":
+        entities[binding.ha_key] = {
+            PARAM_V2_TARGET_ID: target_id,
+            PARAM_V2_SOURCE_TARGET_IDS: [target_id],
+            PARAM_STATE: "0" if binding.ha_key in NUMBER_TYPE else "unknown",
+        }
+
+
 def _add_property_sensor(
     entities: dict[str, Any],
     binding: TargetBinding,
-    capability: CapabilitySet,
+    capability_ids: AbstractSet[str],
 ) -> None:
     source_ids = [
         target_id
         for target_id in (binding.target_id, binding.fallback_target_id)
-        if target_id and target_id in capability.properties
+        if target_id and target_id in capability_ids
     ]
     if not source_ids:
         return
@@ -183,26 +209,25 @@ def _add_property_sensor(
 def _add_service_button(
     entities: dict[str, Any],
     binding: TargetBinding,
-    capability: CapabilitySet,
+    capability_ids: AbstractSet[str],
 ) -> None:
-    service_id = binding_resolved_service_id(binding, set(capability.services))
+    service_id = binding_resolved_service_id(binding, set(capability_ids))
     if not service_id:
         return
     entities[binding.ha_key] = {PARAM_V2_TARGET_ID: service_id}
 
 
 def _add_service_sensor(
-    entities: dict[str, Any], binding: TargetBinding, capability: CapabilitySet
+    entities: dict[str, Any],
+    binding: TargetBinding,
+    capability_ids: AbstractSet[str],
 ) -> None:
     entry = {
         PARAM_V2_TARGET_ID: binding.target_id,
         PARAM_V2_OUTPUT_FIELD: binding.output_field,
         PARAM_STATE: "unknown" if binding.ha_key not in NUMBER_TYPE else "0",
     }
-    if (
-        binding.fallback_target_id
-        and binding.fallback_target_id in capability.properties
-    ):
+    if binding.fallback_target_id and binding.fallback_target_id in capability_ids:
         entry[PARAM_V2_FALLBACK_TARGET_ID] = binding.fallback_target_id
     entities[binding.ha_key] = entry
 
@@ -211,6 +236,7 @@ def _configure_binding(
     ha_device: ImouHaDevice,
     binding: TargetBinding,
     capability: CapabilitySet,
+    capability_ids: AbstractSet[str],
 ) -> None:
     prop = capability.properties.get(
         binding.target_id or ""
@@ -272,13 +298,16 @@ def _configure_binding(
         bucket[binding.ha_key] = entry
         return
 
-    if binding.kind == "property" and prop is not None:
+    if binding.kind == "property":
+        if prop is None:
+            _add_property_without_detail(bucket, binding)
+            return
         if platform in ("switch", "light"):
             _add_property_switch(bucket, binding, prop)
         elif platform == "select":
             _add_property_select(bucket, binding, prop)
         elif platform == "sensor":
-            _add_property_sensor(bucket, binding, capability)
+            _add_property_sensor(bucket, binding, capability_ids)
         elif platform == "binary_sensor":
             default_on = property_is_on(prop.default_data)
             bucket[binding.ha_key] = {
@@ -289,9 +318,9 @@ def _configure_binding(
 
     if binding.kind == "service":
         if platform == "button":
-            _add_service_button(bucket, binding, capability)
+            _add_service_button(bucket, binding, capability_ids)
         elif platform == "sensor":
-            _add_service_sensor(bucket, binding, capability)
+            _add_service_sensor(bucket, binding, capability_ids)
 
 
 def configure_imou_ha_device_from_capability(
@@ -300,22 +329,14 @@ def configure_imou_ha_device_from_capability(
     *,
     bindings: tuple[TargetBinding, ...] | None = None,
 ) -> None:
-    """Populate entity dicts whose targets appear in ``capability``."""
+    """Populate entity dicts whose targets appear in the page capability ids."""
     rows = bindings if bindings is not None else cached_v2_target_map()
-    property_ids = set(capability.properties)
-    service_ids = set(capability.services)
-    event_ids = set(capability.events)
+    capability_ids = ha_device.capability_ids or frozenset()
     for binding in rows:
-        if not binding_applies_to_device(
-            binding, ha_device.channel_id, is_ipc=ha_device.is_ipc
-        ):
-            continue
         if not binding_supported(
             binding,
-            property_ids,
-            service_ids,
-            event_ids,
+            capability_ids,
             device_type=ha_device.product_device_type,
         ):
             continue
-        _configure_binding(ha_device, binding, capability)
+        _configure_binding(ha_device, binding, capability, capability_ids)
