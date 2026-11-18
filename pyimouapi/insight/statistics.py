@@ -72,12 +72,13 @@ class InsightBriefing:
 
 
 def detection_totals(events: tuple[IdentifiedEvent, ...]) -> dict[str, int]:
-    """Fold label codes into the five groups shown on the daily screen."""
-    totals = dict.fromkeys(_DETECTION_KEYS, 0)
+    """Fold returned label codes into groups. Missing labels stay absent."""
+    totals: dict[str, int] = {}
     for event in events:
         key = _detection_key(event.code)
-        if key is not None:
-            totals[key] += event.count
+        if key is None:
+            continue
+        totals[key] = totals.get(key, 0) + event.count
     return totals
 
 
@@ -308,10 +309,11 @@ def format_briefing_markdown(briefing: InsightBriefing) -> str:
     lines.append(sentences[0] if sentences else "Nothing unusual today.")
     for row in briefing.daily:
         totals = detection_totals(row.events)
-        lines.append(
-            "Detections: "
-            + ", ".join(f"{key} {totals[key]}" for key in _DETECTION_KEYS)
-        )
+        shown = [key for key in _DETECTION_KEYS if key in totals]
+        if shown:
+            lines.append(
+                "Detections: " + ", ".join(f"{key} {totals[key]}" for key in shown)
+            )
         if row.events:
             lines.append("Identified events:")
             lines.extend(f"- {event.code} {event.count}" for event in row.events)
