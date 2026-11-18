@@ -17,6 +17,7 @@ from .bulb_light import (
     apply_bulb_v2_properties,
     bulb_v2_property_ids_for_device,
 )
+from .capability.binding import applicable_capability_ids
 from .capability.catalog import CapabilitySet
 from .capability.client import (
     async_capability_list,
@@ -1447,7 +1448,7 @@ class ImouHaDeviceManager:
         configure_device_ids: set[str] | None = None,
         skip_device_ids: set[str] | None = None,
     ) -> list[ImouHaDevice]:
-        """Return Imou HA devices registered from ``device.capability.list`` only."""
+        """Return Imou HA devices registered from page capability ids."""
         devices = []
         for device in await self.delegate.async_get_devices():
             should_configure = (
@@ -1462,17 +1463,9 @@ class ImouHaDeviceManager:
                     imou_ha_device.set_channel_ability(channel.channel_ability)
                     imou_ha_device.set_cs_status(channel.cs_status)
                     imou_ha_device.set_ai_insight_status(channel.ai_insight_status)
-                    if (
-                        should_configure
-                        and not await self._async_try_configure_by_capability(
+                    if should_configure:
+                        await self._async_try_configure_by_capability(
                             device, channel, imou_ha_device
-                        )
-                    ):
-                        _LOGGER.warning(
-                            "device.capability.list missing for %s ch%s; "
-                            "no entities registered",
-                            device.device_id,
-                            channel.channel_id,
                         )
                     devices.append(imou_ha_device)
             elif device.product_id is not None:
@@ -1482,15 +1475,9 @@ class ImouHaDeviceManager:
                     device.product_id,
                 )
                 imou_ha_device = self.build_device(device)
-                if (
-                    should_configure
-                    and not await self._async_try_configure_by_capability(
+                if should_configure:
+                    await self._async_try_configure_by_capability(
                         device, None, imou_ha_device
-                    )
-                ):
-                    _LOGGER.warning(
-                        "device.capability.list missing for %s; no entities registered",
-                        device.device_id,
                     )
                 devices.append(imou_ha_device)
         return devices
@@ -1603,12 +1590,20 @@ class ImouHaDeviceManager:
         channel: Any,
         imou_ha_device: ImouHaDevice,
     ) -> bool:
-        """Return True when v2 list + map registration succeeded.
+        """Register entities from page ids, then attach a cached capability list.
 
-        A successful list is kept for this process. Later discovery reuses it
-        instead of calling ``device.capability.list`` on every poll.
+        A successful list, including an empty one, is kept for this process.
+        A failed list is not cached. Entities still come from the page ids.
         """
         channel_id = channel.channel_id if channel is not None else None
+        imou_ha_device.set_capability_ids(
+            applicable_capability_ids(
+                device.capability_ids,
+                channel.capability_ids if channel is not None else (),
+                is_ipc=device.is_ipc,
+                channel_id=channel_id,
+            )
+        )
         cache_key = (device.device_id, channel_id, device.product_id)
         capability = self._capability_by_channel.get(cache_key)
         if capability is None:
@@ -1627,32 +1622,30 @@ class ImouHaDeviceManager:
                     device.device_id,
                     exc,
                 )
-                return False
+                capability = None
             except (TypeError, ValueError, AttributeError) as exc:
                 _LOGGER.debug(
                     "device.capability.list unavailable for %s: %s",
                     device.device_id,
                     exc,
                 )
-                return False
-            self._capability_by_channel[cache_key] = capability
-        if not (capability.properties or capability.services or capability.events):
-            _LOGGER.debug(
-                "device.capability.list empty for %s ch%s",
-                device.device_id,
-                channel_id,
-            )
-            return False
-        imou_ha_device.set_capability_set(capability)
-        configure_imou_ha_device_from_capability(imou_ha_device, capability)
+                capability = None
+            else:
+                self._capability_by_channel[cache_key] = capability
+        detail = capability or CapabilitySet(
+            properties={}, services=frozenset(), events=frozenset()
+        )
+        if capability is not None:
+            imou_ha_device.set_capability_set(capability)
+        configure_imou_ha_device_from_capability(imou_ha_device, detail)
         _LOGGER.debug(
             "device.capability.list %s ch%s properties=%s services=%s events=%s "
             "switches=%s buttons=%s",
             device.device_id,
             channel_id,
-            sorted(capability.properties),
-            sorted(capability.services),
-            sorted(capability.events),
+            sorted(detail.properties),
+            sorted(detail.services),
+            sorted(detail.events),
             sorted(imou_ha_device.switches),
             sorted(imou_ha_device.buttons),
         )

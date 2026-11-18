@@ -402,7 +402,7 @@ class ImouDeviceManager:
     ) -> list[ImouDevice]:
         """Return the account device list.
 
-        Entities are registered later from ``device.capability.list``.
+        Entities are registered later from page capability ids.
         """
         devices = await self._async_get_devices(page, page_size)
         product_ids = {
