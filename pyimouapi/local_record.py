@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .capability.client import async_service_invoke
-from .cloud_record import parse_cloud_record_bitmap_days
+from .cloud_record import cover_url_from_record, parse_cloud_record_bitmap_days
 from .openapi import ImouOpenApiClient
 
 SERVICE_RECORD_FILE_BITMAP = "record.file.bitmap"
@@ -88,6 +88,7 @@ class LocalRecordSegment:
     begin_time: str
     end_time: str
     file_length: int | None = None
+    thumb_url: str | None = None
 
 
 def _output_data(payload: Any) -> dict[str, Any]:
@@ -142,6 +143,7 @@ def parse_local_record_list(output_data: Any) -> list[LocalRecordSegment]:
                 begin_time=begin_time,
                 end_time=end_time,
                 file_length=file_length,
+                thumb_url=cover_url_from_record(item),
             )
         )
     return segments

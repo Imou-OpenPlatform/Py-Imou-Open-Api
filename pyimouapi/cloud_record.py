@@ -21,6 +21,18 @@ class CloudRecordSegment:
     record_type: str | None = None
 
 
+def cover_url_from_record(item: dict[str, Any]) -> str | None:
+    """Return a clip cover URL when the record carries one."""
+    for key in ("thumbUrl", "coverUrl", "picUrl", "coverPicUrl"):
+        value = item.get(key)
+        if not isinstance(value, str):
+            continue
+        text = value.strip()
+        if text.startswith(("http://", "https://")):
+            return text
+    return None
+
+
 def parse_cloud_record_bitmap_days(bitmap: str, *, year: int, month: int) -> list[int]:
     """Return day-of-month values that have cloud recordings (1-based)."""
     if not bitmap or month < 1 or month > 12 or year < 1:
@@ -50,8 +62,7 @@ def parse_cloud_records_data(data: Any) -> list[CloudRecordSegment]:
         end_time = str(item.get("endTime") or "").strip()
         if not record_id or not begin_time or not end_time:
             continue
-        thumb = item.get("thumbUrl")
-        thumb_url = str(thumb).strip() if thumb else None
+        thumb_url = cover_url_from_record(item)
         encrypt_raw = item.get("encryptMode")
         encrypt_mode = None
         if encrypt_raw is not None and str(encrypt_raw).strip() != "":

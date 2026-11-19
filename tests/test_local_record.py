@@ -38,6 +38,25 @@ def test_parse_local_records() -> None:
     rows = parse_local_record_list(payload)
     assert rows[0].file_name == "a"
     assert rows[0].file_length == 42
+    assert rows[0].thumb_url is None
+
+
+def test_parse_local_records_keeps_a_cover_url() -> None:
+    payload = {
+        "outputData": {
+            "records": [
+                {
+                    "fileName": "a",
+                    "beginTime": "2026-01-02 08:00:00",
+                    "endTime": "2026-01-02 08:10:00",
+                    "thumbUrl": "https://example.test/cover.jpg",
+                    "picId": 0,
+                }
+            ]
+        }
+    }
+    rows = parse_local_record_list(payload)
+    assert rows[0].thumb_url == "https://example.test/cover.jpg"
 
 
 def test_day_time_window() -> None:
