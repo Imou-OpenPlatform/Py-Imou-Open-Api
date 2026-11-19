@@ -137,14 +137,48 @@ def test_replace_capabilities_syncs_complete_v2_snapshot() -> None:
         events=frozenset(),
     )
     fresh.set_product_device_type("Lamp")
+    fresh.set_capability_ids({"control.outlet.enabled"})
     fresh.set_capability_set(capability)
     fresh.bulb_light = empty_bulb_state()
     fresh.set_bulb_v2(True)
 
-    assert current.capability_snapshot == (None, None)
+    assert current.capability_snapshot == (None, None, None)
 
     current.replace_capabilities(fresh)
 
-    assert current.capability_snapshot == ("Lamp", capability)
+    assert current.capability_snapshot == (
+        "Lamp",
+        frozenset({"control.outlet.enabled"}),
+        capability,
+    )
     assert current.bulb_light == fresh.bulb_light
     assert current.bulb_v2 is True
+
+
+@pytest.mark.asyncio
+async def test_bulb_light_works_with_page_capability_ids_without_detail(
+    ha_manager: ImouHaDeviceManager,
+) -> None:
+    device = ImouHaDevice("B1", "Bulb", "Imou", "L1", "1.0")
+    device.set_product_id("pid")
+    device.set_capability_ids({"control.outlet.enabled", "light.white.level"})
+    device.bulb_light = empty_bulb_state()
+    device.set_bulb_v2(True)
+
+    with patch(
+        "pyimouapi.ha_device.async_property_set", new_callable=AsyncMock
+    ) as mock_set:
+        await ha_manager.async_set_bulb_light(
+            device, {"control.outlet.enabled": 1, "light.white.level": 80}
+        )
+    assert mock_set.await_count == 2
+    assert device.bulb_light["on"] is True
+    assert device.bulb_light["brightness"] == 80
+
+    with patch(
+        "pyimouapi.ha_device.async_property_get", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {"control.outlet.enabled": 0, "light.white.level": 35}
+        assert await ha_manager._async_update_v2_bulb_state(device) is True
+    assert device.bulb_light["on"] is False
+    assert device.bulb_light["brightness"] == 35

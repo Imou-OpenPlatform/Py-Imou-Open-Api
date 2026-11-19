@@ -4,34 +4,28 @@
 
 All notable changes to this project will be documented in this file.
 
-### [Unreleased]
-
-#### Fixed
-
-- A collection-point read the account is not allowed to make (`OP1009`) is logged at debug and keeps the previous options.
-
 ### [2.0.0]
 
 #### Breaking
 
-- **Entity registration** uses Open API **`device.capability.list`** intersected with packaged `v2_target_map.yaml` for IoT and PaaS devices. Thing-model **ability refs** and PaaS **ability-name** registration are no longer used on the discovery path.
-- **`ImouHaDeviceManager.async_get_devices`** always lists devices with `fetch_ability_refs=False`; the `fetch_ability_refs` argument on `ImouDeviceManager` is deprecated for entity setup.
-- Reads and writes on entities with a **`capability_set`** use **`device.property.get/set`** and **`device.service.invoke`** only (no ref / `iotDeviceControl` on that path).
-- **`wide_dynamic`** maps to property `image.wdr.mode` and is exposed as a **select** when registered via capabilities (not a bool switch).
+- **Entity registration** uses `device.detail.page` **`device.capabilityIds`** and **`channel.capabilityIds`** (with IPC channel `0` inheriting device-level ids, matching v1 placement) intersected with packaged `v2_target_map.yaml`. **`device.capability.list`** is fetched per selected device/channel only to enrich enum options, ranges, access modes, and request scopes. Legacy ability-ref and ability-name entity tables are removed.
+- **`ImouHaDeviceManager.async_get_devices`** accepts `configure_device_ids` / `skip_device_ids` so unselected devices skip `device.capability.list`.
+- All device control and polling paths use Open API V2 (**`device.detail.list`**, **`device.property.get/set`**, **`device.service.invoke`**, and **`device.reboot.execute`** when `device.reboot.execute` is in `capabilityIds`). Multi-property reads and writes split different capability scopes into separate requests.
+- **`wide_dynamic`** maps to `image.wdr.mode` and is exposed as a **select** (not a bool switch); plug overcharge protection **`overcharge_switch`** is exposed as a **switch** (`control.outlet.overchargeProtection`) instead of a wattage number.
 
 #### Added
 
-- Package `pyimouapi.capability` — `CapabilitySet`, `async_capability_list`, `async_property_get/set`, `async_service_invoke`, `configure_imou_ha_device_from_capability`.
+- Package `pyimouapi.capability` — `CapabilitySet`, `applicable_capability_ids`, `async_capability_list`, `async_property_get/set`, `async_service_invoke`, `configure_imou_ha_device_from_capability`.
 - `pyimouapi/data/v2_target_map.yaml` — authoritative `ha_key` → V2 `target_id` bindings for Imou Life.
-- Push helpers: V2 `eventId` normalization, `legacy_msg_type_from_v2_event`, capability event gating helpers.
-- V2 bulb, outlet countdown, collection point, PTZ, restart (`device.reboot.execute`), and composite outlet metrics via capability services.
-- Cloud and local recording helpers (`cloud_record`, `local_record`, `playback.hls`) and `createDeviceRecordHls` wrapper.
-- AI Insight helpers (`insight.cloud`, `insight.search`, `insight.statistics`) and push AI copy/tag fields.
+- Push helpers: V2 `eventId` and `device.property.report` normalization, capability event gating helpers, and AI tag / copywriting extraction.
+- V2 color bulb, outlet countdown, collection point, PTZ, conditional restart (`device.reboot.execute`), and composite outlet metrics via capability services.
+- Cloud and local recording helpers (`cloud_record`, `local_record`, `playback.hls`, `playback.flv`) and `createDeviceRecordHls` wrapper.
+- AI Insight helpers (`insight.cloud`, `insight.search`, `insight.statistics` including identified events, risk windows, and two-hour timing buckets).
 - `deviceSnapDetect` client and result parsing.
 
 #### Changed
 
-- Event push ingestion remains **dual-track** (legacy `msgType` and V2 `eventId`). All **device control** paths target V2 capabilities when a `capability_set` is present.
+- A collection-point read the account is not allowed to make (`OP1009`) is logged at debug and keeps the previous options.
 - Ships with Imou Life 2.0.0.
 
 ### [1.4.4]
@@ -244,32 +238,26 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 本项目的重要变更均记录于此。
 
-### [Unreleased]
-
-#### 修复
-
-- 账号无权读取收藏点（`OP1009`）时改为 debug 日志，并保留已有选项，不再每次刷新都打 warning。
-
 ### [2.0.0]
 
 #### 破坏性变更
 
-- **实体注册**统一为 **`device.capability.list`** 与包内 `v2_target_map.yaml` 的交集（IoT 与 PaaS）。发现路径不再使用物模型 **ability refs** 或 PaaS **能力名** 注册表。
-- **`ImouHaDeviceManager.async_get_devices`** 列举时固定 `fetch_ability_refs=False`；`ImouDeviceManager` 上的 `fetch_ability_refs` 对实体搭建已废弃。
-- 带 **`capability_set`** 的实体读写仅走 **`device.property.get/set`**、**`device.service.invoke`**（该路径下不用 ref / `iotDeviceControl`）。
-- **`wide_dynamic`** 对应能力 `image.wdr.mode`，经能力门控后注册为 **select**（不再是 bool 开关）。
+- **实体注册**统一按 `device.detail.page` 的 **`device.capabilityIds`** 与 **`channel.capabilityIds`**（IPC 的 `0` 通道合并设备级标识，与 v1 挂载一致）匹配包内 `v2_target_map.yaml`。**`device.capability.list`** 仅对已选设备/通道请求，用于补充枚举选项、范围、读写方式与作用域。旧物模型 ability refs 与 PaaS 能力名注册表已移除。
+- **`ImouHaDeviceManager.async_get_devices`** 支持 `configure_device_ids` / `skip_device_ids`，未勾选设备不请求 `device.capability.list`。
+- 所有控制与状态轮询统一走开放平台 V2（**`device.detail.list`**、**`device.property.get/set`**、**`device.service.invoke`**，以及 `capabilityIds` 含 `device.reboot.execute` 时的重启接口）。多属性读写按作用域拆分为独立请求。
+- **`wide_dynamic`** 对应 `image.wdr.mode`，注册为 **select**（不再是 bool 开关）；插座过充保护 **`overcharge_switch`** 改为 **switch**（`control.outlet.overchargeProtection`），不再是功率数值。
 
 #### 新增
 
-- `pyimouapi.capability` — `CapabilitySet`、能力列表与属性/服务客户端、基于 map 的实体注册。
+- `pyimouapi.capability` — `CapabilitySet`、`applicable_capability_ids`、能力列表与属性/服务客户端、基于映射表的实体注册。
 - `v2_target_map.yaml` — Imou Life 已支持功能的 V2 绑定表。
-- 推送：V2 `eventId` 归一化、与 legacy 告警键映射、能力事件门控辅助函数。
-- 彩灯、插座倒计时、收藏点、云台、重启及插座计量等 V2 读写路径。
-- 云/本地录像与 HLS 播放封装；智见云存、搜索、简报解析；`deviceSnapDetect`；推送 AI 文案字段。
+- 推送：V2 `eventId` 与 `device.property.report` 归一化、能力事件门控辅助函数、AI 标签与文案字段抽取。
+- 彩灯、插座倒计时、收藏点、云台、按能力注册的重启及插座计量等 V2 读写路径。
+- 云/本地录像与 HLS/FLV 播放封装；智见云存、搜索、简报（含识别事件、风险时段与分时段统计）解析；`deviceSnapDetect`。
 
 #### 变更
 
-- **事件推送**仍为 **双轨**（legacy `msgType` + V2 `eventId`）；**设备操作**在具备能力集时统一走 V2。
+- 账号无权读取收藏点（`OP1009`）时改为 debug 日志，并保留已有选项，不再每次刷新都打 warning。
 - 与 Imou Life 2.0.0 一起发布。
 
 ### [1.4.4]

@@ -288,6 +288,17 @@ def test_apply_property_values_ignores_property_missing_from_capability() -> Non
     assert device.switches["motion_detect"][PARAM_STATE] is False
 
 
+def test_apply_property_values_accepts_page_capability_id_without_detail() -> None:
+    device = _switch_device()
+    device.set_capability_ids({"detection.motion.enabled"})
+    manager = ImouHaDeviceManager(MagicMock())
+
+    assert (
+        manager.apply_property_values(device, {"detection.motion.enabled": 1}) is True
+    )
+    assert device.switches["motion_detect"][PARAM_STATE] is True
+
+
 @pytest.mark.asyncio
 async def test_switch_operation_uses_property_set(
     ha_manager: ImouHaDeviceManager,

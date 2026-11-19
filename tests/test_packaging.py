@@ -28,6 +28,18 @@ def test_version_is_declared_consistently() -> None:
     assert pyimouapi.__version__ == pyproject == setup_py
 
 
+def test_runtime_dependencies_match_between_pyproject_and_setup_py() -> None:
+    """setup.py and pyproject.toml must declare the same runtime dependencies."""
+    import tomllib
+
+    pyproject_deps = tomllib.loads((ROOT / "pyproject.toml").read_text("utf-8"))[
+        "project"
+    ]["dependencies"]
+    setup_text = (ROOT / "setup.py").read_text("utf-8")
+    for dep in pyproject_deps:
+        assert f'"{dep}"' in setup_text
+
+
 def test_push_dispatch_allowlist_is_packaged() -> None:
     module = importlib.import_module("pyimouapi.push_dispatch_allowlist")
     assert "iotproperty" in module.PUSH_DISPATCH_MSG_TYPES_LOWER

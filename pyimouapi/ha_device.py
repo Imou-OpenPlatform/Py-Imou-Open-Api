@@ -455,9 +455,11 @@ class ImouHaDevice:
         self._capability_ids = frozenset(capability_ids)
 
     @property
-    def capability_snapshot(self) -> tuple[str | None, CapabilitySet | None]:
-        """Return the product type and V2 capabilities used for entity setup."""
-        return (self._product_device_type, self._capability_set)
+    def capability_snapshot(
+        self,
+    ) -> tuple[str | None, frozenset[str] | None, CapabilitySet | None]:
+        """Return the product type, page ids, and V2 capabilities for entity setup."""
+        return (self._product_device_type, self._capability_ids, self._capability_set)
 
     def set_bulb_v2(self, enabled: bool = True) -> None:
         self._bulb_v2 = enabled
@@ -545,7 +547,13 @@ class ImouHaDevice:
         self._is_ipc = is_ipc
 
     def set_view_count(self, view_count: int) -> None:
-        self._view_count = view_count if view_count > 0 else 1
+        self._view_count = (
+            view_count
+            if isinstance(view_count, int)
+            and not isinstance(view_count, bool)
+            and view_count > 0
+            else 1
+        )
 
 
 class ImouHaDeviceManager:
@@ -588,6 +596,28 @@ class ImouHaDeviceManager:
             wait_seconds=self._dormant_write_retry_wait_seconds,
         )
 
+    @staticmethod
+    def _supported_v2_property_ids(device: ImouHaDevice) -> frozenset[str] | None:
+        """Property ids accepted on this device row, or None when unconfigured."""
+        if device.capability_ids is not None:
+            return device.capability_ids
+        if device.capability_set is not None:
+            return frozenset(device.capability_set.properties)
+        return None
+
+    def _device_has_v2_state(self, device: ImouHaDevice) -> bool:
+        """True when this row has v2 entities, bulb state, or capability metadata."""
+        if device.capability_ids is not None or device.capability_set is not None:
+            return True
+        if device.bulb_v2 and device.bulb_light is not None:
+            return True
+        if self._collect_v2_property_entities(device):
+            return True
+        return any(
+            meta.get(PARAM_V2_OUTPUT_FIELD) and meta.get(PARAM_V2_TARGET_ID)
+            for meta in device.sensors.values()
+        )
+
     async def async_set_bulb_light(
         self, device: ImouHaDevice, properties: dict[str, int]
     ) -> None:
@@ -598,9 +628,7 @@ class ImouHaDeviceManager:
 
         if device.bulb_v2:
             supported_property_ids = (
-                set(device.capability_set.properties)
-                if device.capability_set is not None
-                else set()
+                self._supported_v2_property_ids(device) or frozenset()
             )
             v2_payload = {
                 property_id: value
@@ -791,12 +819,9 @@ class ImouHaDeviceManager:
         self, device: ImouHaDevice, values: Mapping[str, Any]
     ) -> bool:
         """Apply accepted property values to matching device entities."""
-        if device.capability_set is not None:
-            values = {
-                key: value
-                for key, value in values.items()
-                if device.capability_set.has_property(key)
-            }
+        supported = self._supported_v2_property_ids(device)
+        if supported is not None:
+            values = {key: value for key, value in values.items() if key in supported}
             changed = False
             for kind, key, meta in self._collect_v2_property_entities(device):
                 found, raw = self._v2_entity_raw_value(key, meta, values)
@@ -929,10 +954,17 @@ class ImouHaDeviceManager:
     async def _async_update_v2_bulb_state(self, device: ImouHaDevice) -> bool:
         if device.bulb_light is None or not device.bulb_v2:
             return True
-        capability = device.capability_set
-        if capability is None:
+        supported = self._supported_v2_property_ids(device)
+        if supported is None:
             return True
-        property_ids = list(bulb_v2_property_ids_for_device(set(capability.properties)))
+        capability = device.capability_set
+        property_ids = [
+            pid
+            for pid in bulb_v2_property_ids_for_device(supported)
+            if capability is None
+            or (prop := capability.properties.get(pid)) is None
+            or prop.readable
+        ]
         if not property_ids:
             return True
         try:
@@ -1165,8 +1197,8 @@ class ImouHaDeviceManager:
             return set()
 
         fetched: set[str] = set()
-        all_v2_devices = [d for d in devices if d.capability_set is not None]
-        v2_devices = [d for d in online_devices if d.capability_set is not None]
+        all_v2_devices = [d for d in devices if self._device_has_v2_state(d)]
+        v2_devices = [d for d in online_devices if self._device_has_v2_state(d)]
         snapshot_complete = len(v2_devices) == len(all_v2_devices)
         for device in v2_devices:
             physical_id = self._resolve_device_id(device)
@@ -1455,7 +1487,9 @@ class ImouHaDeviceManager:
         for device in await self.delegate.async_get_devices():
             should_configure = (
                 configure_device_ids is None or device.device_id in configure_device_ids
-            ) and not (bool(skip_device_ids) and device.device_id in skip_device_ids)
+            ) and not (
+                skip_device_ids is not None and device.device_id in skip_device_ids
+            )
             # Prioritize whether it's a video device.
             if device.channels:
                 for channel in device.channels:
@@ -1816,9 +1850,9 @@ class ImouHaDeviceManager:
             return False
         try:
             if device.bulb_v2:
-                capability = device.capability_set
+                supported = self._supported_v2_property_ids(device)
                 outlet_id = BULB_PROP_SWITCH
-                if capability is None or outlet_id not in capability.properties:
+                if supported is None or outlet_id not in supported:
                     return bool(state["on"])
                 properties = await self._async_read_scoped_properties(
                     device, [outlet_id]

@@ -11,6 +11,8 @@ setup(
     python_requires=">=3.11",
     install_requires=[
         "aiohttp>=3.11.9,<4.0",
+        "cryptography>=42.0",
+        "pyyaml>=6.0",
     ],
     description="A package for imou open api",
     long_description=Path("README.md").read_text(encoding="utf-8"),

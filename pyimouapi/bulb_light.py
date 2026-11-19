@@ -62,7 +62,7 @@ _SCENE_BY_NAME = dict(BULB_SCENES)
 _NAME_BY_SCENE = {value: name for name, value in BULB_SCENES}
 
 
-def empty_bulb_state() -> dict[str, int | bool]:
+def empty_bulb_state() -> dict[str, Any]:
     """Defaults match the thing model until the first property read."""
     return {
         "on": False,
@@ -131,9 +131,9 @@ def apply_bulb_properties(state: dict[str, Any], values: dict[str, Any]) -> bool
         else:
             parsed = _as_int(raw)
             if parsed is not None:
-                normalized = parsed == 1
-                if state.get("on") is not normalized:
-                    state["on"] = normalized
+                is_on = parsed == 1
+                if state.get("on") is not is_on:
+                    state["on"] = is_on
                     changed = True
     for key, property_id in (
         ("mode", BULB_PROP_MODE),
