@@ -64,3 +64,6 @@ def parse_device_snap_detect_data(data: Any) -> DeviceSnapDetectResult:
         detect_result,
         tuple(targets),
     )
+
+
+parse_detect_device_snap_data = parse_device_snap_detect_data

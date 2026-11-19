@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 from .const import (
     API_ENDPOINT_BIND_DEVICE,
-    API_ENDPOINT_DEVICE_SNAP_DETECT,
+    API_ENDPOINT_DETECT_DEVICE_SNAP,
     API_ENDPOINT_GET_ALARM_MESSAGE_STATISTICS,
     API_ENDPOINT_GET_STREAM_URL,
     API_ENDPOINT_LIST_DEVICE_DETAILS,
@@ -625,14 +625,16 @@ class ImouDeviceManager:
             API_ENDPOINT_SET_DEVICE_SNAP, params
         )
 
-    async def async_device_snap_detect(
+    async def async_detect_device_snap(
         self, device_id: str, channel_id: str | None
     ) -> dict[str, Any]:
         """Capture a still and run on-device detection (human / vehicle / animal)."""
         params = {PARAM_DEVICE_ID: device_id, PARAM_CHANNEL_ID: channel_id}
         return await self._imou_api_client.async_request_api(
-            API_ENDPOINT_DEVICE_SNAP_DETECT, params
+            API_ENDPOINT_DETECT_DEVICE_SNAP, params
         )
+
+    async_device_snap_detect = async_detect_device_snap
 
     async def async_query_cloud_record_bitmap(
         self, device_id: str, channel_id: str, *, year: int, month: int

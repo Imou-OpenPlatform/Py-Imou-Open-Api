@@ -21,7 +21,7 @@ All notable changes to this project will be documented in this file.
 - V2 color bulb, outlet countdown, collection point, PTZ, conditional restart (`device.reboot.execute`), and composite outlet metrics via capability services.
 - Cloud and local recording helpers (`cloud_record`, `local_record`, `playback.hls`, `playback.flv`) and `createDeviceRecordHls` wrapper.
 - AI Insight helpers (`insight.cloud`, `insight.search`, `insight.statistics` including identified events, risk windows, and two-hour timing buckets).
-- `deviceSnapDetect` client and result parsing.
+- `detectDeviceSnap` (`deviceSnapDetect`) client and result parsing.
 
 #### Changed
 
@@ -253,7 +253,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 - `v2_target_map.yaml` — Imou Life 已支持功能的 V2 绑定表。
 - 推送：V2 `eventId` 与 `device.property.report` 归一化、能力事件门控辅助函数、AI 标签与文案字段抽取。
 - 彩灯、插座倒计时、收藏点、云台、按能力注册的重启及插座计量等 V2 读写路径。
-- 云/本地录像与 HLS/FLV 播放封装；智见云存、搜索、简报（含识别事件、风险时段与分时段统计）解析；`deviceSnapDetect`。
+- 云/本地录像与 HLS/FLV 播放封装；智见云存、搜索、简报（含识别事件、风险时段与分时段统计）解析；`detectDeviceSnap`（`deviceSnapDetect`）。
 
 #### 变更
 
