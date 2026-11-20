@@ -28,6 +28,10 @@ All notable changes to this project will be documented in this file.
 - A collection-point read the account is not allowed to make (`OP1009`) is logged at debug and keeps the previous options.
 - Ships with Imou Life 2.0.0.
 
+#### Fixed
+
+- A channel whose step move is rejected with DV2116 or DV1026 uses ptz.aim.relative for that press and later presses until the process restarts.
+
 ### [1.4.4]
 
 #### Added
@@ -259,6 +263,10 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 - 账号无权读取收藏点（`OP1009`）时改为 debug 日志，并保留已有选项，不再每次刷新都打 warning。
 - 与 Imou Life 2.0.0 一起发布。
+
+#### 修复
+
+- 云台 step 被 DV2116 或 DV1026 拒绝、且该通道有 ptz.aim.relative 时，这一下和之后的转动改调 relative，直到进程重启。
 
 ### [1.4.4]
 

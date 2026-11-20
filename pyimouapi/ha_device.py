@@ -69,7 +69,11 @@ from .const import (
     PARAM_VALUE_TYPE,
 )
 from .device import ImouDevice, ImouDeviceManager, compose_iot_device_id
-from .dormant_retry import DORMANT_WRITE_RETRY_WAIT_SECONDS, async_dormant_write_retry
+from .dormant_retry import (
+    DORMANT_WRITE_RETRY_WAIT_SECONDS,
+    async_dormant_write_retry,
+    device_is_sleeping,
+)
 from .exceptions import (
     ImouException,
     InvalidAppIdOrSecretException,
@@ -573,6 +577,7 @@ class ImouHaDeviceManager:
     ):
         self._delegate = device_manager
         self._dormant_write_retry_wait_seconds = dormant_write_retry_wait_seconds
+        self._ptz_relative_channels: set[tuple[str, str | None]] = set()
         self._capability_by_channel: dict[
             tuple[str, str | None, str | None], CapabilitySet
         ] = {}
@@ -1543,12 +1548,63 @@ class ImouHaDeviceManager:
             imou_ha_device.set_play_token_v2(token)
         return imou_ha_device
 
+    _PTZ_RELATIVE_CODES = frozenset({"DV2116", "DV1026"})
+
+    @staticmethod
+    def _ptz_code(exc: RequestFailedException) -> str | None:
+        if exc.api_code in ImouHaDeviceManager._PTZ_RELATIVE_CODES:
+            return exc.api_code
+        message = exc.message or ""
+        for code in ImouHaDeviceManager._PTZ_RELATIVE_CODES:
+            if code in message:
+                return code
+        return None
+
+    async def _async_press_ptz_or_service(
+        self,
+        device: ImouHaDevice,
+        button_type: str,
+        service_id: str,
+        duration: int,
+    ) -> None:
+        key = (device.device_id, device.channel_id)
+        if service_id == "ptz.aim.step" and key in self._ptz_relative_channels:
+            service_id = "ptz.aim.relative"
+        try:
+            await self._async_press_button_by_v2(
+                device, button_type, service_id, duration
+            )
+        except RequestFailedException as exc:
+            code = self._ptz_code(exc)
+            relative_ok = bool(
+                device.capability_ids and "ptz.aim.relative" in device.capability_ids
+            )
+            if service_id == "ptz.aim.step" and code and relative_ok:
+                self._ptz_relative_channels.add(key)
+                await self._async_press_button_by_v2(
+                    device, button_type, "ptz.aim.relative", duration
+                )
+                return
+            if (
+                service_id == "ptz.aim.step"
+                and code == "DV1026"
+                and device_is_sleeping(device)
+            ):
+                await self._async_dormant_write_retry(
+                    device,
+                    lambda: self._async_press_button_by_v2(
+                        device, button_type, "ptz.aim.step", duration
+                    ),
+                )
+                return
+            raise
+
     async def async_press_button(
         self, device: ImouHaDevice, button_type: str, duration: int
     ):
         button_state = device.buttons.get(button_type, {})
         if service_id := button_state.get(PARAM_V2_TARGET_ID):
-            await self._async_press_button_by_v2(
+            await self._async_press_ptz_or_service(
                 device, button_type, str(service_id), duration
             )
             return
