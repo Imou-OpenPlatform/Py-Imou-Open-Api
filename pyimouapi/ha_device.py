@@ -32,6 +32,8 @@ from .collection_point import (
     parse_iot_collection_names,
 )
 from .const import (
+    ERROR_CODE_LIVE_ALREADY_EXIST,
+    ERROR_CODE_LIVE_NOT_EXIST,
     ERROR_CODE_NO_PERMISSION,
     PARAM_AI_INSIGHT_STATUS,
     PARAM_BATTERY,
@@ -45,6 +47,7 @@ from .const import (
     PARAM_DEVICE_ID,
     PARAM_DEVICE_STATUS,
     PARAM_HD,
+    PARAM_HLS,
     PARAM_HUMIDITY_CURRENT,
     PARAM_OPTIONS,
     PARAM_OUTPUT_DATA,
@@ -53,6 +56,8 @@ from .const import (
     PARAM_STATE_VARIANT,
     PARAM_STATUS,
     PARAM_STORAGE_USED,
+    PARAM_STREAM_ID,
+    PARAM_STREAMS,
     PARAM_SUPPORTED,
     PARAM_TEMPERATURE_CURRENT,
     PARAM_TOTAL_BYTES,
@@ -274,6 +279,7 @@ class ImouHaDevice:
         self._cs_status: str | None = None
         self._ai_insight_status: str | None = None
         self._play_token_v2: str | None = None
+        self._source = ""
 
     @property
     def device_id(self) -> str:
@@ -406,6 +412,14 @@ class ImouHaDevice:
 
     def set_play_token_v2(self, play_token_v2: str | None) -> None:
         self._play_token_v2 = play_token_v2 or None
+
+    @property
+    def source(self) -> str:
+        """Device detail ``source``, such as ``bind`` or ``share``."""
+        return self._source
+
+    def set_source(self, source: str) -> None:
+        self._source = source
 
     def set_channel_ability(self, channel_ability: str) -> None:
         self._channel_ability = channel_ability
@@ -1438,12 +1452,21 @@ class ImouHaDeviceManager:
     async def async_get_device_stream(
         self, device: ImouHaDevice, live_resolution: str, live_protocol: str = ""
     ) -> str:
-        """Return a fresh cloud RTSP URL from getStreamUrl.
+        """Return a live URL for this camera.
 
-        ``live_protocol`` is unused (kept so Home Assistant callers that
-        still pass https keep working). Shared-account viewers cannot use
-        HLS live addresses; getStreamUrl works for the owner and sharers.
+        A device whose detail ``source`` is ``bind`` uses the owner HLS
+        address. Every other source, including a share, keeps getStreamUrl.
         """
+        if (device.source or "") == "bind":
+            return await self._async_get_bind_live(
+                device, live_resolution, live_protocol
+            )
+        return await self._async_get_rtsp_live(device, live_resolution, live_protocol)
+
+    async def _async_get_rtsp_live(
+        self, device: ImouHaDevice, live_resolution: str, live_protocol: str = ""
+    ) -> str:
+        """Return a fresh cloud RTSP URL from getStreamUrl."""
         del live_protocol
         stream_id = 0 if live_resolution == PARAM_HD else 1
         data = await self.delegate.async_get_rtsp_stream_url(
@@ -1457,6 +1480,56 @@ class ImouHaDeviceManager:
             raise RequestFailedException(
                 f"device {device.device_id} answered getStreamUrl without a url"
             )
+        _LOGGER.debug("get_device_stream host=%s", urlparse(url).netloc)
+        return url
+
+    @staticmethod
+    def _live_code(exc: RequestFailedException, code: str) -> bool:
+        return exc.api_code == code or code in (exc.message or "")
+
+    @staticmethod
+    def _pick_hls_url(data: dict[str, Any], resolution: str, protocol: str) -> str:
+        streams = data.get(PARAM_STREAMS) if isinstance(data, dict) else None
+        if not isinstance(streams, list) or not streams:
+            raise RequestFailedException("live stream list is empty")
+        wanted_id = 0 if resolution == PARAM_HD else 1
+        prefix = f"{protocol}:"
+        first: str | None = None
+        for stream in streams:
+            if not isinstance(stream, dict):
+                continue
+            hls = stream.get(PARAM_HLS)
+            if not isinstance(hls, str) or not hls:
+                continue
+            if first is None:
+                first = hls
+            if stream.get(PARAM_STREAM_ID) == wanted_id and hls.startswith(prefix):
+                return hls
+        if first is None:
+            raise RequestFailedException("live stream list is empty")
+        return first
+
+    async def _async_get_bind_live(
+        self, device: ImouHaDevice, resolution: str, protocol: str
+    ) -> str:
+        try:
+            data = await self.delegate.async_get_stream_url(
+                device.device_id, device.channel_id
+            )
+        except RequestFailedException as exc:
+            if not self._live_code(exc, ERROR_CODE_LIVE_NOT_EXIST):
+                raise
+            try:
+                data = await self.delegate.async_create_stream_url(
+                    device.device_id, device.channel_id
+                )
+            except RequestFailedException as created:
+                if not self._live_code(created, ERROR_CODE_LIVE_ALREADY_EXIST):
+                    raise
+                data = await self.delegate.async_get_stream_url(
+                    device.device_id, device.channel_id
+                )
+        url = self._pick_hls_url(data, resolution, protocol)
         _LOGGER.debug("get_device_stream host=%s", urlparse(url).netloc)
         return url
 
@@ -1546,6 +1619,7 @@ class ImouHaDeviceManager:
         token = getattr(device, "play_token_v2", None)
         if isinstance(token, str) and token:
             imou_ha_device.set_play_token_v2(token)
+        imou_ha_device.set_source(device.source)
         return imou_ha_device
 
     _PTZ_RELATIVE_CODES = frozenset({"DV2116", "DV1026"})

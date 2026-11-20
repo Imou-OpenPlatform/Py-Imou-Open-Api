@@ -13,8 +13,10 @@ if TYPE_CHECKING:
 
 from .const import (
     API_ENDPOINT_BIND_DEVICE,
+    API_ENDPOINT_BIND_DEVICE_LIVE,
     API_ENDPOINT_DETECT_DEVICE_SNAP,
     API_ENDPOINT_GET_ALARM_MESSAGE_STATISTICS,
+    API_ENDPOINT_GET_DEVICE_LIVE_INFO,
     API_ENDPOINT_GET_STREAM_URL,
     API_ENDPOINT_LIST_DEVICE_DETAILS,
     API_ENDPOINT_LIST_PRODUCT_DETAIL,
@@ -232,6 +234,7 @@ class ImouDevice:
         self._is_ipc = False
         self._access_type = "PaaS"
         self._play_token_v2: str | None = None
+        self._source = ""
         self._capability_ids: tuple[str, ...] = ()
 
     @property
@@ -337,6 +340,14 @@ class ImouDevice:
 
     def set_play_token_v2(self, play_token_v2: str | None) -> None:
         self._play_token_v2 = play_token_v2 or None
+
+    @property
+    def source(self) -> str:
+        """Device detail ``source``, such as ``bind`` or ``share``."""
+        return self._source
+
+    def set_source(self, source: str) -> None:
+        self._source = source
 
     def set_device_version(self, device_version: str):
         self._device_version = device_version
@@ -472,6 +483,10 @@ class ImouDeviceManager:
             play_token = device.get("playTokenV2")
             if isinstance(play_token, str) and play_token:
                 imou_device.set_play_token_v2(play_token)
+            raw_source = device.get("source")
+            imou_device.set_source(
+                raw_source.strip() if isinstance(raw_source, str) else ""
+            )
             if PARAM_CHANNEL_LIST in device:
                 channel_list = device[PARAM_CHANNEL_LIST] or []
                 if not isinstance(channel_list, list):
@@ -615,6 +630,28 @@ class ImouDeviceManager:
             params[PARAM_PRODUCT_ID] = product_id
         return await self._imou_api_client.async_request_api(
             API_ENDPOINT_GET_STREAM_URL, params
+        )
+
+    async def async_get_stream_url(
+        self, device_id: str, channel_id: str | None
+    ) -> dict[str, Any]:
+        """Return the bound camera's live streams (getLiveStreamInfo)."""
+        params = {PARAM_DEVICE_ID: device_id, PARAM_CHANNEL_ID: channel_id}
+        return await self._imou_api_client.async_request_api(
+            API_ENDPOINT_GET_DEVICE_LIVE_INFO, params
+        )
+
+    async def async_create_stream_url(
+        self, device_id: str, channel_id: str | None
+    ) -> dict[str, Any]:
+        """Create the bound camera's live address (bindDeviceLive)."""
+        params = {
+            PARAM_DEVICE_ID: device_id,
+            PARAM_CHANNEL_ID: channel_id,
+            PARAM_STREAM_ID: 0,
+        }
+        return await self._imou_api_client.async_request_api(
+            API_ENDPOINT_BIND_DEVICE_LIVE, params
         )
 
     async def async_get_device_snap(

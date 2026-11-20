@@ -31,6 +31,7 @@ All notable changes to this project will be documented in this file.
 #### Fixed
 
 - A channel whose step move is rejected with DV2116 or DV1026 uses ptz.aim.relative for that press and later presses until the process restarts.
+- Cameras with detail source bind get a live HLS address from getLiveStreamInfo, creating it with bindDeviceLive when the code is LV1002. share and every other source keep getStreamUrl.
 
 ### [1.4.4]
 
@@ -267,6 +268,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 #### 修复
 
 - 云台 step 被 DV2116 或 DV1026 拒绝、且该通道有 ptz.aim.relative 时，这一下和之后的转动改调 relative，直到进程重启。
+- 设备详情 source 为 bind 时，直播先查 getLiveStreamInfo，LV1002 时用 bindDeviceLive 创建；LV1001 再查一次。share 和其他值仍用 getStreamUrl。
 
 ### [1.4.4]
 
