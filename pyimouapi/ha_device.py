@@ -275,6 +275,7 @@ class ImouHaDevice:
         self._channel_ability = "unknown"
         self._capability_set: CapabilitySet | None = None
         self._capability_ids: frozenset[str] | None = None
+        self._device_capability_ids: frozenset[str] = frozenset()
         self._bulb_v2: bool = False
         self._cs_status: str | None = None
         self._ai_insight_status: str | None = None
@@ -473,6 +474,14 @@ class ImouHaDevice:
         self._capability_ids = frozenset(capability_ids)
 
     @property
+    def device_capability_ids(self) -> frozenset[str]:
+        """Capability ids from the parent device, on every channel row."""
+        return self._device_capability_ids
+
+    def set_device_capability_ids(self, capability_ids: AbstractSet[str]) -> None:
+        self._device_capability_ids = frozenset(capability_ids)
+
+    @property
     def capability_snapshot(
         self,
     ) -> tuple[str | None, frozenset[str] | None, CapabilitySet | None]:
@@ -545,6 +554,7 @@ class ImouHaDevice:
         self._product_device_type = other.product_device_type
         self._capability_set = other.capability_set
         self._capability_ids = other.capability_ids
+        self._device_capability_ids = other.device_capability_ids
         self._bulb_v2 = other.bulb_v2
         return removed
 
@@ -1620,6 +1630,7 @@ class ImouHaDeviceManager:
         if isinstance(token, str) and token:
             imou_ha_device.set_play_token_v2(token)
         imou_ha_device.set_source(device.source)
+        imou_ha_device.set_device_capability_ids(device.capability_ids)
         return imou_ha_device
 
     _PTZ_RELATIVE_CODES = frozenset({"DV2116", "DV1026"})
