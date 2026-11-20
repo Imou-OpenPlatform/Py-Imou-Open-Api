@@ -80,14 +80,19 @@ from .exceptions import (
     RequestFailedException,
 )
 from .insight.cloud import (
+    ai_insight_cloud_label_from_service,
     ai_insight_label_from_status,
     cloud_storage_label_from_cs_status,
+    parse_device_cloud_data,
 )
 from .property_on import property_is_on
 from .select_option import to_friendly, to_raw
 from .sensor import apply_sensor_state, normalize_sensor_state
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
+
+_CLOUD_PLAN_CONCURRENCY = 10
+_CLOUD_PLAN_NO_PACKAGE = frozenset({"ST1002", "ST1004"})
 
 
 def _state_values_equal(current: Any, new: Any) -> bool:
@@ -274,6 +279,7 @@ class ImouHaDevice:
         self._bulb_v2: bool = False
         self._cs_status: str | None = None
         self._ai_insight_status: str | None = None
+        self._ai_insight_cloud_label: str = "inactive"
         self._play_token_v2: str | None = None
         self._source = ""
 
@@ -450,6 +456,24 @@ class ImouHaDevice:
     def ai_insight_active(self) -> bool:
         """True when the device list says this channel has AI Insight."""
         return self.ai_insight_label == "active"
+
+    @property
+    def ai_insight_cloud_label(self) -> str:
+        """AI Insight cloud plan from getDeviceCloud when cloud storage is active."""
+        return self._ai_insight_cloud_label
+
+    def set_ai_insight_cloud_label(self, label: str) -> None:
+        if label in ("active", "inactive", "unavailable"):
+            self._ai_insight_cloud_label = label
+
+    @property
+    def ai_insight_cloud_active(self) -> bool:
+        return self._ai_insight_cloud_label == "active"
+
+    @property
+    def insight_features_active(self) -> bool:
+        """Briefing and search when AI Insight or AI Insight cloud storage is on."""
+        return self.ai_insight_active or self.ai_insight_cloud_active
 
     def set_capability_set(self, capability_set: CapabilitySet) -> None:
         self._capability_set = capability_set
@@ -1153,6 +1177,7 @@ class ImouHaDeviceManager:
         if not devices:
             return set()
         await self._async_refresh_detail_status(devices)
+        await self._async_refresh_ai_insight_cloud_plans(devices)
         skip = skip_iot_property_ids or frozenset()
         groups: dict[str, list[ImouHaDevice]] = {}
         for device in devices:
@@ -1192,6 +1217,7 @@ class ImouHaDeviceManager:
         """
         try:
             await self._async_refresh_detail_status([device])
+            await self._async_refresh_ai_insight_cloud_plans([device])
             return await self._async_update_device_group([device])
         except InvalidAppIdOrSecretException:
             raise
@@ -1254,6 +1280,50 @@ class ImouHaDeviceManager:
         for device in online_devices:
             _LOGGER.debug("update_device_status finish: %s", device)
         return fetched
+
+    async def _async_refresh_ai_insight_cloud_plans(
+        self, devices: list[ImouHaDevice]
+    ) -> None:
+        """Read getDeviceCloud for channels whose device list shows cloud storage on."""
+        for device in devices:
+            if device.channel_id is not None and device.cloud_storage_label != "active":
+                device.set_ai_insight_cloud_label("inactive")
+
+        targets = [
+            device
+            for device in devices
+            if device.channel_id is not None and device.cloud_storage_label == "active"
+        ]
+        if not targets:
+            return
+
+        async def _fetch_one(device: ImouHaDevice) -> None:
+            try:
+                raw = await self.delegate.async_get_device_cloud(
+                    device.device_id,
+                    str(device.channel_id),
+                )
+            except ImouException as err:
+                if err.api_code in _CLOUD_PLAN_NO_PACKAGE:
+                    device.set_ai_insight_cloud_label("inactive")
+                    return
+                _LOGGER.debug(
+                    "getDeviceCloud failed for %s ch%s: %s",
+                    device.device_id,
+                    device.channel_id,
+                    err,
+                )
+                return
+            snap = parse_device_cloud_data(raw)
+            device.set_ai_insight_cloud_label(ai_insight_cloud_label_from_service(snap))
+
+        semaphore = asyncio.Semaphore(_CLOUD_PLAN_CONCURRENCY)
+
+        async def _bounded(device: ImouHaDevice) -> None:
+            async with semaphore:
+                await _fetch_one(device)
+
+        await asyncio.gather(*(_bounded(device) for device in targets))
 
     async def _async_refresh_detail_status(self, devices: list[ImouHaDevice]) -> None:
         """Set status, cloud storage, and AI Insight from one detail list.

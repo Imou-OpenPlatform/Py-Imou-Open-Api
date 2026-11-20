@@ -4,6 +4,13 @@
 
 All notable changes to this project will be documented in this file.
 
+### [2.0.1]
+
+#### Added
+
+- `getDeviceCloud` client and poll-time refresh on `ImouHaDeviceManager` for channels with active cloud storage.
+- `ImouHaDevice.insight_features_active` combines device-list AI Insight with AI Insight cloud plan type 6 in use.
+
 ### [2.0.0]
 
 #### Breaking

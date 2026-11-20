@@ -23,11 +23,7 @@ class DeviceCloudService:
     @property
     def ai_insight_active(self) -> bool:
         """True when an insight (strategyType 6) plan is in use."""
-        return (
-            self.strategy_type == INSIGHT_STRATEGY_TYPE
-            and self.strategy_status == 1
-            and bool(self.has_default)
-        )
+        return self.strategy_type == INSIGHT_STRATEGY_TYPE and self.strategy_status == 1
 
     @property
     def cloud_storage_label(self) -> str:
@@ -98,3 +94,8 @@ def parse_device_cloud_data(data: Any) -> DeviceCloudService:
         begin_time,
         end_time,
     )
+
+
+def ai_insight_cloud_label_from_service(snap: DeviceCloudService) -> str:
+    """Map getDeviceCloud data onto the AI Insight cloud storage sensor states."""
+    return "active" if snap.ai_insight_active else "inactive"

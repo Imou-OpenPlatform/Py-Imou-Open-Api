@@ -1,6 +1,7 @@
 """Insight cloud parsing tests."""
 
 from pyimouapi.insight.cloud import (
+    ai_insight_cloud_label_from_service,
     ai_insight_label_from_status,
     cloud_storage_label_from_cs_status,
     parse_device_cloud_data,
@@ -18,6 +19,18 @@ def test_ai_insight_active_when_strategy_type_six() -> None:
     )
     assert snap.ai_insight_active
     assert snap.cloud_storage_label == "active"
+
+
+def test_ai_insight_active_without_has_default() -> None:
+    snap = parse_device_cloud_data({"strategyType": "6", "strategyStatus": 1})
+    assert snap.ai_insight_active
+
+
+def test_ai_insight_cloud_label_from_service() -> None:
+    active = parse_device_cloud_data({"strategyType": "6", "strategyStatus": 1})
+    assert ai_insight_cloud_label_from_service(active) == "active"
+    other = parse_device_cloud_data({"strategyType": "1", "strategyStatus": 1})
+    assert ai_insight_cloud_label_from_service(other) == "inactive"
 
 
 def test_no_plan() -> None:

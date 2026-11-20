@@ -16,6 +16,7 @@ from .const import (
     API_ENDPOINT_BIND_DEVICE_LIVE,
     API_ENDPOINT_DETECT_DEVICE_SNAP,
     API_ENDPOINT_GET_ALARM_MESSAGE_STATISTICS,
+    API_ENDPOINT_GET_DEVICE_CLOUD,
     API_ENDPOINT_GET_DEVICE_LIVE_INFO,
     API_ENDPOINT_GET_STREAM_URL,
     API_ENDPOINT_LIST_DEVICE_DETAILS,
@@ -593,6 +594,16 @@ class ImouDeviceManager:
             if isinstance(listed, list):
                 rows.extend(item for item in listed if isinstance(item, dict))
         return rows
+
+    async def async_get_device_cloud(
+        self, device_id: str, channel_id: str
+    ) -> dict[str, Any]:
+        """Current cloud plan for one channel (getDeviceCloud)."""
+        data = await self._imou_api_client.async_request_api(
+            API_ENDPOINT_GET_DEVICE_CLOUD,
+            {PARAM_DEVICE_ID: device_id, PARAM_CHANNEL_ID: channel_id},
+        )
+        return data if isinstance(data, dict) else {}
 
     async def async_restart_device(
         self, device_id: str, product_id: str | None = None
