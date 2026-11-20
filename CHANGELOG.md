@@ -4,13 +4,6 @@
 
 All notable changes to this project will be documented in this file.
 
-### [2.0.1]
-
-#### Added
-
-- `getDeviceCloud` client and poll-time refresh on `ImouHaDeviceManager` for channels with active cloud storage.
-- `ImouHaDevice.insight_features_active` combines device-list AI Insight with AI Insight cloud plan type 6 in use.
-
 ### [2.0.0]
 
 #### Breaking
@@ -27,7 +20,7 @@ All notable changes to this project will be documented in this file.
 - Push helpers: V2 `eventId` and `device.property.report` normalization, capability event gating helpers, and AI tag / copywriting extraction.
 - V2 color bulb, outlet countdown, collection point, PTZ, conditional restart (`device.reboot.execute`, shown when `system.maintenance.rebootInvoke` is listed), and composite outlet metrics via capability services.
 - Cloud and local recording helpers (`cloud_record`, `local_record`, `playback.hls`, `playback.flv`) and `createDeviceRecordHls` wrapper.
-- AI Insight helpers (`insight.cloud`, `insight.search`, `insight.statistics` including identified events, risk windows, and two-hour timing buckets).
+- AI Insight helpers (`insight.cloud`, `insight.search`, `insight.statistics` including identified events, risk windows, and two-hour timing buckets), `getDeviceCloud` polling on active cloud-storage channels, and `insight_features_active` on `ImouHaDevice`.
 - `detectDeviceSnap` (`deviceSnapDetect`) client and result parsing.
 
 #### Changed
