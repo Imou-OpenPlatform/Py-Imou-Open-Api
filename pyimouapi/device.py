@@ -642,13 +642,13 @@ class ImouDeviceManager:
         )
 
     async def async_create_stream_url(
-        self, device_id: str, channel_id: str | None
+        self, device_id: str, channel_id: str | None, stream_id: int = 0
     ) -> dict[str, Any]:
         """Create the bound camera's live address (bindDeviceLive)."""
         params = {
             PARAM_DEVICE_ID: device_id,
             PARAM_CHANNEL_ID: channel_id,
-            PARAM_STREAM_ID: 0,
+            PARAM_STREAM_ID: stream_id,
         }
         return await self._imou_api_client.async_request_api(
             API_ENDPOINT_BIND_DEVICE_LIVE, params

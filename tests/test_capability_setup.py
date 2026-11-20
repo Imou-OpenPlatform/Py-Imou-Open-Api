@@ -393,7 +393,7 @@ def test_restart_registers_only_when_reboot_id_is_present() -> None:
     device = ImouHaDevice("IPC1", "Cam", "Imou", "IPC", "1.0")
     device.set_channel_id("0")
     device.set_is_ipc(True)
-    device.set_capability_ids({"device.reboot.execute"})
+    device.set_capability_ids({"system.maintenance.rebootInvoke"})
     configure_imou_ha_device_from_capability(
         device,
         CapabilitySet(properties={}, services=frozenset(), events=frozenset()),
@@ -402,6 +402,15 @@ def test_restart_registers_only_when_reboot_id_is_present() -> None:
     assert device.buttons[PARAM_RESTART_DEVICE][PARAM_V2_TARGET_ID] == (
         "device.reboot.execute"
     )
+    api_only = ImouHaDevice("IPC3", "Cam", "Imou", "IPC", "1.0")
+    api_only.set_channel_id("0")
+    api_only.set_is_ipc(True)
+    api_only.set_capability_ids({"device.reboot.execute"})
+    configure_imou_ha_device_from_capability(
+        api_only,
+        CapabilitySet(properties={}, services=frozenset(), events=frozenset()),
+    )
+    assert PARAM_RESTART_DEVICE not in api_only.buttons
 
     bare = ImouHaDevice("IPC2", "Cam", "Imou", "IPC", "1.0")
     bare.set_channel_id("0")

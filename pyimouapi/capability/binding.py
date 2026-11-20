@@ -27,6 +27,7 @@ class TargetBinding:
     ha_platform: str
     scope: str = "channel"
     target_id: str | None = None
+    capability_id: str | None = None
     write_target_id: str | None = None
     alternate_target_id: str | None = None
     fallback_target_id: str | None = None
@@ -53,6 +54,7 @@ def _parse_binding(raw: dict[str, Any]) -> TargetBinding:
         ha_platform=str(raw["ha_platform"]),
         scope=str(raw.get("scope", "channel")),
         target_id=raw.get("target_id"),
+        capability_id=raw.get("capability_id"),
         write_target_id=raw.get("write_target_id"),
         alternate_target_id=raw.get("alternate_target_id"),
         fallback_target_id=raw.get("fallback_target_id"),
@@ -157,7 +159,8 @@ def binding_supported(
 ) -> bool:
     """True when the page ids contain this row's required targets."""
     if binding.kind == "named_api":
-        return bool(binding.target_id and binding.target_id in capability_ids)
+        gate_id = binding.capability_id or binding.target_id
+        return bool(gate_id and gate_id in capability_ids)
     if binding.kind == "composite":
         return bulb_gate_satisfied(device_type, capability_ids)
     if binding.kind == "property":

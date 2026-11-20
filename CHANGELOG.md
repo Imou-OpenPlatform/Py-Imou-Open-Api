@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 
 - **Entity registration** uses `device.detail.page` **`device.capabilityIds`** and **`channel.capabilityIds`** (with IPC channel `0` inheriting device-level ids, matching v1 placement) intersected with packaged `v2_target_map.yaml`. **`device.capability.list`** is fetched per selected device/channel only to enrich enum options, ranges, access modes, and request scopes. Legacy ability-ref and ability-name entity tables are removed.
 - **`ImouHaDeviceManager.async_get_devices`** accepts `configure_device_ids` / `skip_device_ids` so unselected devices skip `device.capability.list`.
-- All device control and polling paths use Open API V2 (**`device.detail.list`**, **`device.property.get/set`**, **`device.service.invoke`**, and **`device.reboot.execute`** when `device.reboot.execute` is in `capabilityIds`). Multi-property reads and writes split different capability scopes into separate requests.
+- All device control and polling paths use Open API V2 (**`device.detail.list`**, **`device.property.get/set`**, **`device.service.invoke`**, and **`device.reboot.execute`** when `system.maintenance.rebootInvoke` is in `capabilityIds`). Multi-property reads and writes split different capability scopes into separate requests.
 - **`wide_dynamic`** maps to `image.wdr.mode` and is exposed as a **select** (not a bool switch); plug overcharge protection **`overcharge_switch`** is exposed as a **switch** (`control.outlet.overchargeProtection`) instead of a wattage number.
 
 #### Added
@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file.
 - Package `pyimouapi.capability` — `CapabilitySet`, `applicable_capability_ids`, `async_capability_list`, `async_property_get/set`, `async_service_invoke`, `configure_imou_ha_device_from_capability`.
 - `pyimouapi/data/v2_target_map.yaml` — authoritative `ha_key` → V2 `target_id` bindings for Imou Life.
 - Push helpers: V2 `eventId` and `device.property.report` normalization, capability event gating helpers, and AI tag / copywriting extraction.
-- V2 color bulb, outlet countdown, collection point, PTZ, conditional restart (`device.reboot.execute`), and composite outlet metrics via capability services.
+- V2 color bulb, outlet countdown, collection point, PTZ, conditional restart (`device.reboot.execute`, shown when `system.maintenance.rebootInvoke` is listed), and composite outlet metrics via capability services.
 - Cloud and local recording helpers (`cloud_record`, `local_record`, `playback.hls`, `playback.flv`) and `createDeviceRecordHls` wrapper.
 - AI Insight helpers (`insight.cloud`, `insight.search`, `insight.statistics` including identified events, risk windows, and two-hour timing buckets).
 - `detectDeviceSnap` (`deviceSnapDetect`) client and result parsing.
@@ -30,8 +30,9 @@ All notable changes to this project will be documented in this file.
 
 #### Fixed
 
+- Snapshot downloads read the whole picture. A single buffered read was returning a truncated JPEG, so the camera preview and the downloaded still showed only the top of the frame.
 - A channel whose step move is rejected with DV2116 or DV1026 uses ptz.aim.relative for that press and later presses until the process restarts.
-- Cameras with detail source bind get a live HLS address from getLiveStreamInfo, creating it with bindDeviceLive when the code is LV1002. share and every other source keep getStreamUrl.
+- Live view returns a short-lived RTSP address from getStreamUrl for owner and shared cameras alike.
 
 ### [1.4.4]
 
@@ -249,7 +250,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 - **实体注册**统一按 `device.detail.page` 的 **`device.capabilityIds`** 与 **`channel.capabilityIds`**（IPC 的 `0` 通道合并设备级标识，与 v1 挂载一致）匹配包内 `v2_target_map.yaml`。**`device.capability.list`** 仅对已选设备/通道请求，用于补充枚举选项、范围、读写方式与作用域。旧物模型 ability refs 与 PaaS 能力名注册表已移除。
 - **`ImouHaDeviceManager.async_get_devices`** 支持 `configure_device_ids` / `skip_device_ids`，未勾选设备不请求 `device.capability.list`。
-- 所有控制与状态轮询统一走开放平台 V2（**`device.detail.list`**、**`device.property.get/set`**、**`device.service.invoke`**，以及 `capabilityIds` 含 `device.reboot.execute` 时的重启接口）。多属性读写按作用域拆分为独立请求。
+- 所有控制与状态轮询统一走开放平台 V2（**`device.detail.list`**、**`device.property.get/set`**、**`device.service.invoke`**，以及 `capabilityIds` 含 `system.maintenance.rebootInvoke` 时调用 **`device.reboot.execute`**）。多属性读写按作用域拆分为独立请求。
 - **`wide_dynamic`** 对应 `image.wdr.mode`，注册为 **select**（不再是 bool 开关）；插座过充保护 **`overcharge_switch`** 改为 **switch**（`control.outlet.overchargeProtection`），不再是功率数值。
 
 #### 新增
@@ -267,8 +268,9 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 #### 修复
 
+- 抓图下载会读完整张图片。以前只拿到已经缓冲的第一段，JPEG 被截断，预览和下载的静止画面只剩上半部分。
 - 云台 step 被 DV2116 或 DV1026 拒绝、且该通道有 ptz.aim.relative 时，这一下和之后的转动改调 relative，直到进程重启。
-- 设备详情 source 为 bind 时，直播先查 getLiveStreamInfo，LV1002 时用 bindDeviceLive 创建；LV1001 再查一次。share 和其他值仍用 getStreamUrl。
+- 直播统一走 getStreamUrl 返回短时 RTSP 地址，自有与分享设备一致。
 
 ### [1.4.4]
 

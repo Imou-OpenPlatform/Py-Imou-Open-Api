@@ -242,7 +242,7 @@ async def test_unselected_device_does_not_request_capability_list() -> None:
 async def test_ipc_channel_zero_registers_device_reboot_id() -> None:
     device = ImouDevice("CAM1", "Cam", "1", "Imou", "IPC")
     device.set_channel_number(1)
-    device.set_capability_ids(("device.reboot.execute",))
+    device.set_capability_ids(("system.maintenance.rebootInvoke",))
     channel = ImouChannel("0", "Main", "1", "")
     channel.set_capability_ids(())
     device.set_channels([channel])
@@ -261,7 +261,7 @@ async def test_ipc_channel_zero_registers_device_reboot_id() -> None:
 async def test_nvr_channel_zero_does_not_register_device_reboot_id() -> None:
     device = ImouDevice("NVR1", "Nvr", "1", "Imou", "NVR")
     device.set_channel_number(4)
-    device.set_capability_ids(("device.reboot.execute",))
+    device.set_capability_ids(("system.maintenance.rebootInvoke",))
     channel = ImouChannel("0", "Main", "1", "")
     channel.set_capability_ids(("detection.motion.enabled",))
     device.set_channels([channel])

@@ -10,10 +10,10 @@ from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 from pyimouapi.openapi import ImouOpenApiClient
 
 
-def _manager() -> ImouHaDeviceManager:
+def _manager(wait_seconds: int = 5) -> ImouHaDeviceManager:
     client = ImouOpenApiClient("app", "secret", "api.example.com")
     manager = ImouHaDeviceManager(ImouDeviceManager(client))
-    manager.set_dormant_write_retry_wait_seconds(0)
+    manager.set_dormant_write_retry_wait_seconds(wait_seconds)
     return manager
 
 
@@ -51,20 +51,102 @@ async def test_dv2116_retries_relative_and_later_press_skips_step() -> None:
 
 
 @pytest.mark.asyncio
-async def test_dv1026_without_relative_retries_step_when_asleep() -> None:
+async def test_dv1026_with_relative_switches_without_sleeping_across_poll() -> None:
+    manager = _manager(wait_seconds=7)
+    first_device = _camera()
+    first_device.sensors[PARAM_STATUS][PARAM_STATE] = "sleep"
+    refreshed_device = _camera()
+    with (
+        patch(
+            "pyimouapi.ha_device.async_service_invoke", new_callable=AsyncMock
+        ) as invoke,
+        patch(
+            "pyimouapi.ha_device.asyncio.sleep", new_callable=AsyncMock
+        ) as sleep_mock,
+    ):
+        invoke.side_effect = [
+            RequestFailedException("asleep", api_code="DV1026"),
+            None,
+            None,
+        ]
+        await manager.async_press_button(first_device, "ptz_up", 400)
+        await manager.async_press_button(refreshed_device, "ptz_left", 400)
+
+    sleep_mock.assert_not_awaited()
+    assert [call.kwargs["service_id"] for call in invoke.await_args_list] == [
+        "ptz.aim.step",
+        "ptz.aim.relative",
+        "ptz.aim.relative",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_message_only_error_code_triggers_relative() -> None:
     manager = _manager()
     device = _camera()
-    device.set_capability_ids({"ptz.aim.step"})
-    device.sensors[PARAM_STATUS][PARAM_STATE] = "sleep"
     with patch(
         "pyimouapi.ha_device.async_service_invoke", new_callable=AsyncMock
     ) as invoke:
+        invoke.side_effect = [
+            RequestFailedException("platform error DV2116"),
+            None,
+        ]
+        await manager.async_press_button(device, "ptz_up", 400)
+
+    assert [call.kwargs["service_id"] for call in invoke.await_args_list] == [
+        "ptz.aim.step",
+        "ptz.aim.relative",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_dv1026_without_relative_waits_and_retries_step_once_when_asleep() -> (
+    None
+):
+    manager = _manager(wait_seconds=5)
+    device = _camera()
+    device.set_capability_ids({"ptz.aim.step"})
+    device.sensors[PARAM_STATUS][PARAM_STATE] = "sleep"
+    with (
+        patch(
+            "pyimouapi.ha_device.async_service_invoke", new_callable=AsyncMock
+        ) as invoke,
+        patch(
+            "pyimouapi.ha_device.asyncio.sleep", new_callable=AsyncMock
+        ) as sleep_mock,
+    ):
         invoke.side_effect = [
             RequestFailedException("asleep", api_code="DV1026"),
             None,
         ]
         await manager.async_press_button(device, "ptz_up", 400)
 
+    sleep_mock.assert_awaited_once_with(5)
+    assert [call.kwargs["service_id"] for call in invoke.await_args_list] == [
+        "ptz.aim.step",
+        "ptz.aim.step",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_dv1026_without_relative_stops_after_one_sleep_retry() -> None:
+    manager = _manager(wait_seconds=5)
+    device = _camera()
+    device.set_capability_ids({"ptz.aim.step"})
+    device.sensors[PARAM_STATUS][PARAM_STATE] = "sleep"
+    with (
+        patch(
+            "pyimouapi.ha_device.async_service_invoke", new_callable=AsyncMock
+        ) as invoke,
+        patch(
+            "pyimouapi.ha_device.asyncio.sleep", new_callable=AsyncMock
+        ) as sleep_mock,
+    ):
+        invoke.side_effect = RequestFailedException("asleep", api_code="DV1026")
+        with pytest.raises(RequestFailedException):
+            await manager.async_press_button(device, "ptz_up", 400)
+
+    sleep_mock.assert_awaited_once_with(5)
     assert [call.kwargs["service_id"] for call in invoke.await_args_list] == [
         "ptz.aim.step",
         "ptz.aim.step",

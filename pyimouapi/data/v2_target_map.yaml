@@ -210,6 +210,7 @@ bindings:
 
   - ha_key: restart_device
     target_id: device.reboot.execute
+    capability_id: system.maintenance.rebootInvoke
     kind: named_api
     ha_platform: button
     scope: device
