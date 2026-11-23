@@ -70,6 +70,9 @@ def test_insight_features_active() -> None:
     device.set_ai_insight_status("off")
     device.set_ai_insight_cloud_label("active")
     assert device.insight_features_active
+    device.set_ai_insight_cloud_label("paused")
+    assert device.insight_features_active
+    assert not device.ai_insight_cloud_active
     device.set_ai_insight_cloud_label("inactive")
     device.set_ai_insight_status("on")
     assert device.insight_features_active

@@ -471,9 +471,14 @@ class ImouHaDevice:
         return self._ai_insight_cloud_label == "active"
 
     @property
+    def ai_insight_cloud_usable(self) -> bool:
+        """True when the cloud plan is in use or paused (briefing still applies)."""
+        return self._ai_insight_cloud_label in ("active", "paused")
+
+    @property
     def insight_features_active(self) -> bool:
-        """Briefing and search when AI Insight or AI Insight cloud storage is on."""
-        return self.ai_insight_active or self.ai_insight_cloud_active
+        """Briefing and search when AI Insight or AI Insight cloud storage applies."""
+        return self.ai_insight_active or self.ai_insight_cloud_usable
 
     def set_capability_set(self, capability_set: CapabilitySet) -> None:
         self._capability_set = capability_set
