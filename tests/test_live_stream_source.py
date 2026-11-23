@@ -1,4 +1,4 @@
-"""Owner cameras prefer FLV, then HLS; shared cameras keep getStreamUrl."""
+"""Owner cameras use cloud HLS; shared cameras keep getStreamUrl."""
 
 from unittest.mock import AsyncMock
 
@@ -30,57 +30,28 @@ def _camera(source: str) -> ImouHaDevice:
 def _streams() -> dict:
     return {
         "streams": [
-            {"streamId": 1, "hls": "https://cdn.example/sd.m3u8"},
+            {"streamId": 1, "hls": "http://cdn.example/sd.m3u8"},
             {"streamId": 0, "hls": "http://cdn.example/hd.m3u8"},
         ]
     }
 
 
 @pytest.mark.asyncio
-async def test_bind_prefers_realtime_flv(ha_manager) -> None:
+async def test_bind_uses_cloud_hls(ha_manager) -> None:
     device = _camera("bind")
-    ha_manager.delegate.async_create_device_realtime_flv = AsyncMock(
-        return_value={"url": "https://flv.example/live.flv"}
-    )
-    ha_manager.delegate.async_get_stream_url = AsyncMock()
+    ha_manager.delegate.async_get_stream_url = AsyncMock(return_value=_streams())
+    ha_manager.delegate.async_create_device_realtime_flv = AsyncMock()
 
     url = await ha_manager.async_get_device_stream(device, "HD", "http")
 
-    assert url == "https://flv.example/live.flv"
-    ha_manager.delegate.async_get_stream_url.assert_not_awaited()
-    ha_manager.delegate.async_create_device_realtime_flv.assert_awaited_once_with(
-        "IPC1", "0", prefer_hd=True
-    )
+    assert url == "http://cdn.example/hd.m3u8"
+    ha_manager.delegate.async_get_stream_url.assert_awaited_once_with("IPC1", "0")
+    ha_manager.delegate.async_create_device_realtime_flv.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_bind_queries_flv_when_create_says_it_exists(ha_manager) -> None:
+async def test_bind_creates_hls_when_live_missing(ha_manager) -> None:
     device = _camera("bind")
-    ha_manager.delegate.async_create_device_realtime_flv = AsyncMock(
-        side_effect=RequestFailedException(
-            "exists", api_code=ERROR_CODE_LIVE_ALREADY_EXIST
-        )
-    )
-    ha_manager.delegate.async_query_device_realtime_flv = AsyncMock(
-        return_value={"url": "https://flv.example/live.flv"}
-    )
-    ha_manager.delegate.async_get_stream_url = AsyncMock()
-
-    url = await ha_manager.async_get_device_stream(device, "SD", "http")
-
-    assert url == "https://flv.example/live.flv"
-    ha_manager.delegate.async_query_device_realtime_flv.assert_awaited_once_with(
-        "IPC1", "0", prefer_hd=False
-    )
-    ha_manager.delegate.async_get_stream_url.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_bind_falls_back_to_hls_when_flv_unavailable(ha_manager) -> None:
-    device = _camera("bind")
-    ha_manager.delegate.async_create_device_realtime_flv = AsyncMock(
-        side_effect=RequestFailedException("unsupported", api_code="DV1026")
-    )
     ha_manager.delegate.async_get_stream_url = AsyncMock(
         side_effect=RequestFailedException(
             "missing", api_code=ERROR_CODE_LIVE_NOT_EXIST
@@ -94,6 +65,27 @@ async def test_bind_falls_back_to_hls_when_flv_unavailable(ha_manager) -> None:
     assert url == "http://cdn.example/hd.m3u8"
     ha_manager.delegate.async_get_rtsp_stream_url.assert_not_awaited()
     ha_manager.delegate.async_create_stream_url.assert_awaited_once_with("IPC1", "0")
+
+
+@pytest.mark.asyncio
+async def test_bind_reuses_hls_when_create_says_it_exists(ha_manager) -> None:
+    device = _camera("bind")
+    ha_manager.delegate.async_get_stream_url = AsyncMock(
+        side_effect=[
+            RequestFailedException("missing", api_code=ERROR_CODE_LIVE_NOT_EXIST),
+            _streams(),
+        ]
+    )
+    ha_manager.delegate.async_create_stream_url = AsyncMock(
+        side_effect=RequestFailedException(
+            "exists", api_code=ERROR_CODE_LIVE_ALREADY_EXIST
+        )
+    )
+
+    url = await ha_manager.async_get_device_stream(device, "SD", "http")
+
+    assert url == "http://cdn.example/sd.m3u8"
+    assert ha_manager.delegate.async_get_stream_url.await_count == 2
 
 
 @pytest.mark.asyncio

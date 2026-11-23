@@ -1541,8 +1541,8 @@ class ImouHaDeviceManager:
     ) -> str:
         """Return a live URL for this camera.
 
-        Owner cameras prefer a continuous real-time FLV address, then fall
-        back to the 1.3 cloud HLS address. Shared cameras use getStreamUrl.
+        Owner cameras use the cloud HLS address (bindDeviceLive). Shared
+        cameras use getStreamUrl. Overseas regions often reject real-time FLV.
         """
         if (device.source or "") == "bind":
             return await self._async_get_bind_live(
@@ -1597,10 +1597,6 @@ class ImouHaDeviceManager:
     async def _async_get_bind_live(
         self, device: ImouHaDevice, resolution: str, protocol: str
     ) -> str:
-        prefer_hd = resolution == PARAM_HD
-        flv = await self._async_get_bind_flv(device, prefer_hd=prefer_hd)
-        if flv is not None:
-            return flv
         try:
             data = await self.delegate.async_get_stream_url(
                 device.device_id, device.channel_id
@@ -1619,40 +1615,6 @@ class ImouHaDeviceManager:
                     device.device_id, device.channel_id
                 )
         url = self._pick_hls_url(data, resolution, protocol)
-        _LOGGER.debug("get_device_stream host=%s", urlparse(url).netloc)
-        return url
-
-    async def _async_get_bind_flv(
-        self, device: ImouHaDevice, *, prefer_hd: bool
-    ) -> str | None:
-        """Return a continuous real-time FLV URL when the cloud allows it."""
-        try:
-            data = await self.delegate.async_create_device_realtime_flv(
-                device.device_id, device.channel_id, prefer_hd=prefer_hd
-            )
-        except RequestFailedException as exc:
-            if self._live_code(exc, ERROR_CODE_LIVE_ALREADY_EXIST):
-                try:
-                    data = await self.delegate.async_query_device_realtime_flv(
-                        device.device_id, device.channel_id, prefer_hd=prefer_hd
-                    )
-                except RequestFailedException as queried:
-                    _LOGGER.debug(
-                        "queryDeviceFlvLive unavailable for %s: %s",
-                        device.device_id,
-                        queried,
-                    )
-                    return None
-            else:
-                _LOGGER.debug(
-                    "createDeviceFlvLive unavailable for %s: %s",
-                    device.device_id,
-                    exc,
-                )
-                return None
-        url = data.get(PARAM_URL) if data else None
-        if not isinstance(url, str) or not url:
-            return None
         _LOGGER.debug("get_device_stream host=%s", urlparse(url).netloc)
         return url
 

@@ -32,7 +32,7 @@ All notable changes to this project will be documented in this file.
 
 - Snapshot downloads read the whole picture. A single buffered read was returning a truncated JPEG, so the camera preview and the downloaded still showed only the top of the frame.
 - A channel whose step move is rejected with DV2116 or DV1026 uses ptz.aim.relative for that press and later presses until the process restarts.
-- Owner cameras (`source` **bind**) prefer continuous real-time FLV (`createDeviceFlvLive`), then fall back to cloud HLS. Shared cameras use `getStreamUrl` RTSP.
+- Owner cameras (`source` **bind**) use cloud HLS (`bindDeviceLive`). Shared cameras use `getStreamUrl` RTSP. Real-time FLV is not preferred (overseas regions often reject it).
 
 ### [1.4.4]
 
@@ -270,7 +270,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 - 抓图下载会读完整张图片。以前只拿到已经缓冲的第一段，JPEG 被截断，预览和下载的静止画面只剩上半部分。
 - 云台 step 被 DV2116 或 DV1026 拒绝、且该通道有 ptz.aim.relative 时，这一下和之后的转动改调 relative，直到进程重启。
-- 自有设备（`source` 为 **bind**）优先用连续的实时 FLV（`createDeviceFlvLive`），失败再回退云端 HLS。分享设备走 `getStreamUrl` RTSP。
+- 自有设备（`source` 为 **bind**）使用云端 HLS（`bindDeviceLive`）。分享设备走 `getStreamUrl` RTSP。不再优先实时 FLV（海外区域经常不支持）。
 
 ### [1.4.4]
 
