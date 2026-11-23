@@ -32,6 +32,8 @@ from .collection_point import (
     parse_iot_collection_names,
 )
 from .const import (
+    ERROR_CODE_LIVE_ALREADY_EXIST,
+    ERROR_CODE_LIVE_NOT_EXIST,
     ERROR_CODE_NO_PERMISSION,
     PARAM_AI_INSIGHT_STATUS,
     PARAM_BATTERY,
@@ -45,6 +47,7 @@ from .const import (
     PARAM_DEVICE_ID,
     PARAM_DEVICE_STATUS,
     PARAM_HD,
+    PARAM_HLS,
     PARAM_HUMIDITY_CURRENT,
     PARAM_OPTIONS,
     PARAM_OUTPUT_DATA,
@@ -53,6 +56,8 @@ from .const import (
     PARAM_STATE_VARIANT,
     PARAM_STATUS,
     PARAM_STORAGE_USED,
+    PARAM_STREAM_ID,
+    PARAM_STREAMS,
     PARAM_SUPPORTED,
     PARAM_TEMPERATURE_CURRENT,
     PARAM_TOTAL_BYTES,
@@ -1534,8 +1539,21 @@ class ImouHaDeviceManager:
     async def async_get_device_stream(
         self, device: ImouHaDevice, live_resolution: str, live_protocol: str = ""
     ) -> str:
+        """Return a live URL for this camera.
+
+        Owner cameras prefer a continuous real-time FLV address, then fall
+        back to the 1.3 cloud HLS address. Shared cameras use getStreamUrl.
+        """
+        if (device.source or "") == "bind":
+            return await self._async_get_bind_live(
+                device, live_resolution, live_protocol
+            )
+        return await self._async_get_rtsp_live(device, live_resolution)
+
+    async def _async_get_rtsp_live(
+        self, device: ImouHaDevice, live_resolution: str
+    ) -> str:
         """Return a fresh cloud RTSP URL from getStreamUrl."""
-        del live_protocol
         stream_id = 0 if live_resolution == PARAM_HD else 1
         data = await self.delegate.async_get_rtsp_stream_url(
             device.device_id,
@@ -1548,6 +1566,93 @@ class ImouHaDeviceManager:
             raise RequestFailedException(
                 f"device {device.device_id} answered getStreamUrl without a url"
             )
+        _LOGGER.debug("get_device_stream host=%s", urlparse(url).netloc)
+        return url
+
+    @staticmethod
+    def _live_code(exc: RequestFailedException, code: str) -> bool:
+        return exc.api_code == code or code in (exc.message or "")
+
+    @staticmethod
+    def _pick_hls_url(data: dict[str, Any], resolution: str, protocol: str) -> str:
+        """Pick the HLS URL the way 1.3 did: protocol plus stream id."""
+        streams = data.get(PARAM_STREAMS) if isinstance(data, dict) else None
+        if not isinstance(streams, list) or not streams:
+            raise RequestFailedException("live stream list is empty")
+        wanted_id = 0 if resolution == PARAM_HD else 1
+        prefix = f"{protocol}:"
+        for stream in streams:
+            if not isinstance(stream, dict):
+                continue
+            hls = stream.get(PARAM_HLS)
+            if not isinstance(hls, str) or not hls.startswith(prefix):
+                continue
+            if stream.get(PARAM_STREAM_ID) == wanted_id:
+                return hls
+        first = streams[0].get(PARAM_HLS) if isinstance(streams[0], dict) else None
+        if not isinstance(first, str) or not first:
+            raise RequestFailedException("live stream list is empty")
+        return first
+
+    async def _async_get_bind_live(
+        self, device: ImouHaDevice, resolution: str, protocol: str
+    ) -> str:
+        prefer_hd = resolution == PARAM_HD
+        flv = await self._async_get_bind_flv(device, prefer_hd=prefer_hd)
+        if flv is not None:
+            return flv
+        try:
+            data = await self.delegate.async_get_stream_url(
+                device.device_id, device.channel_id
+            )
+        except RequestFailedException as exc:
+            if not self._live_code(exc, ERROR_CODE_LIVE_NOT_EXIST):
+                raise
+            try:
+                data = await self.delegate.async_create_stream_url(
+                    device.device_id, device.channel_id
+                )
+            except RequestFailedException as created:
+                if not self._live_code(created, ERROR_CODE_LIVE_ALREADY_EXIST):
+                    raise
+                data = await self.delegate.async_get_stream_url(
+                    device.device_id, device.channel_id
+                )
+        url = self._pick_hls_url(data, resolution, protocol)
+        _LOGGER.debug("get_device_stream host=%s", urlparse(url).netloc)
+        return url
+
+    async def _async_get_bind_flv(
+        self, device: ImouHaDevice, *, prefer_hd: bool
+    ) -> str | None:
+        """Return a continuous real-time FLV URL when the cloud allows it."""
+        try:
+            data = await self.delegate.async_create_device_realtime_flv(
+                device.device_id, device.channel_id, prefer_hd=prefer_hd
+            )
+        except RequestFailedException as exc:
+            if self._live_code(exc, ERROR_CODE_LIVE_ALREADY_EXIST):
+                try:
+                    data = await self.delegate.async_query_device_realtime_flv(
+                        device.device_id, device.channel_id, prefer_hd=prefer_hd
+                    )
+                except RequestFailedException as queried:
+                    _LOGGER.debug(
+                        "queryDeviceFlvLive unavailable for %s: %s",
+                        device.device_id,
+                        queried,
+                    )
+                    return None
+            else:
+                _LOGGER.debug(
+                    "createDeviceFlvLive unavailable for %s: %s",
+                    device.device_id,
+                    exc,
+                )
+                return None
+        url = data.get(PARAM_URL) if data else None
+        if not isinstance(url, str) or not url:
+            return None
         _LOGGER.debug("get_device_stream host=%s", urlparse(url).netloc)
         return url
 

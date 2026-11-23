@@ -868,6 +868,42 @@ class ImouDeviceManager:
         )
         return {"url": url} if url else {}
 
+    async def async_create_device_realtime_flv(
+        self,
+        device_id: str,
+        channel_id: str | None,
+        *,
+        prefer_hd: bool = True,
+    ) -> dict[str, Any]:
+        """Create a real-time HTTP-FLV live URL (createDeviceFlvLive)."""
+        from .playback.flv import async_create_device_realtime_flv
+
+        url = await async_create_device_realtime_flv(
+            self._imou_api_client,
+            device_id=device_id,
+            channel_id=channel_id or "0",
+            prefer_hd=prefer_hd,
+        )
+        return {"url": url} if url else {}
+
+    async def async_query_device_realtime_flv(
+        self,
+        device_id: str,
+        channel_id: str | None,
+        *,
+        prefer_hd: bool = True,
+    ) -> dict[str, Any]:
+        """Query an existing real-time HTTP-FLV live URL."""
+        from .playback.flv import async_query_device_realtime_flv
+
+        url = await async_query_device_realtime_flv(
+            self._imou_api_client,
+            device_id=device_id,
+            channel_id=channel_id or "0",
+            prefer_hd=prefer_hd,
+        )
+        return {"url": url} if url else {}
+
     async def async_local_record_bitmap(
         self,
         device_id: str,

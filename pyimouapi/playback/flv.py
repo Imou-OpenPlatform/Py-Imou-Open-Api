@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from ..const import (
     API_ENDPOINT_CREATE_DEVICE_FLV_LIVE,
+    API_ENDPOINT_QUERY_DEVICE_FLV_LIVE,
     PARAM_CHANNEL_ID,
     PARAM_DEVICE_ID,
 )
@@ -13,6 +14,7 @@ from ..openapi import ImouOpenApiClient
 from .hls import RECORD_TYPE_CLOUD, RECORD_TYPE_LOCAL
 
 PLAYBACK_TYPE_PLAYBACK = "playback"
+PLAYBACK_TYPE_REALTIME = "realTime"
 
 
 def is_flv_playback_url(url: str) -> bool:
@@ -40,6 +42,41 @@ def parse_record_flv_urls(
     if primary is None:
         primary = flv if prefer_hd else flv_hd
     return primary, flv_hd if prefer_hd else flv
+
+
+async def async_create_device_realtime_flv(
+    client: ImouOpenApiClient,
+    *,
+    device_id: str,
+    channel_id: str,
+    prefer_hd: bool = True,
+) -> str | None:
+    """Request an HTTP-FLV live URL (createDeviceFlvLive type=realTime)."""
+    params: dict[str, Any] = {
+        PARAM_DEVICE_ID: device_id,
+        PARAM_CHANNEL_ID: channel_id,
+        "type": PLAYBACK_TYPE_REALTIME,
+    }
+    data = await client.async_request_api(API_ENDPOINT_CREATE_DEVICE_FLV_LIVE, params)
+    url, _ = parse_record_flv_urls(data, prefer_hd=prefer_hd)
+    return url
+
+
+async def async_query_device_realtime_flv(
+    client: ImouOpenApiClient,
+    *,
+    device_id: str,
+    channel_id: str,
+    prefer_hd: bool = True,
+) -> str | None:
+    """Return an existing real-time FLV URL (queryDeviceFlvLive)."""
+    params: dict[str, Any] = {
+        PARAM_DEVICE_ID: device_id,
+        PARAM_CHANNEL_ID: channel_id,
+    }
+    data = await client.async_request_api(API_ENDPOINT_QUERY_DEVICE_FLV_LIVE, params)
+    url, _ = parse_record_flv_urls(data, prefer_hd=prefer_hd)
+    return url
 
 
 async def async_create_device_record_flv(
