@@ -98,4 +98,9 @@ def parse_device_cloud_data(data: Any) -> DeviceCloudService:
 
 def ai_insight_cloud_label_from_service(snap: DeviceCloudService) -> str:
     """Map getDeviceCloud data onto the AI Insight cloud storage sensor states."""
-    return "active" if snap.ai_insight_active else "inactive"
+    if snap.strategy_type == INSIGHT_STRATEGY_TYPE:
+        if snap.strategy_status == 1:
+            return "active"
+        if snap.strategy_status == 2:
+            return "paused"
+    return "inactive"

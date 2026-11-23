@@ -29,6 +29,8 @@ def test_ai_insight_active_without_has_default() -> None:
 def test_ai_insight_cloud_label_from_service() -> None:
     active = parse_device_cloud_data({"strategyType": "6", "strategyStatus": 1})
     assert ai_insight_cloud_label_from_service(active) == "active"
+    paused = parse_device_cloud_data({"strategyType": "6", "strategyStatus": 2})
+    assert ai_insight_cloud_label_from_service(paused) == "paused"
     other = parse_device_cloud_data({"strategyType": "1", "strategyStatus": 1})
     assert ai_insight_cloud_label_from_service(other) == "inactive"
 

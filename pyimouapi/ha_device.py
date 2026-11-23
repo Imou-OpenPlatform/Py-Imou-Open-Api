@@ -463,7 +463,7 @@ class ImouHaDevice:
         return self._ai_insight_cloud_label
 
     def set_ai_insight_cloud_label(self, label: str) -> None:
-        if label in ("active", "inactive", "unavailable"):
+        if label in ("active", "paused", "inactive", "unavailable"):
             self._ai_insight_cloud_label = label
 
     @property
