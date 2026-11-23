@@ -139,10 +139,22 @@ class ImouOpenApiClient:
                         f"request failed,status code {response.status}"
                     )
                 reader = getattr(response, "content", None)
-                if reader is not None and hasattr(reader, "read"):
-                    body = await reader.read(DOWNLOAD_MAX_BYTES + 1)
-                else:
-                    body = await response.read()
+                if reader is not None and hasattr(reader, "readany"):
+                    # StreamReader.read(n) returns only the bytes already
+                    # buffered, not the rest of the body. One call leaves a
+                    # snapshot JPEG cut off, and the picture shows the top only.
+                    chunks: list[bytes] = []
+                    total = 0
+                    while True:
+                        block = await reader.readany()
+                        if not block:
+                            break
+                        total += len(block)
+                        if total > DOWNLOAD_MAX_BYTES:
+                            raise RequestFailedException("download exceeded size limit")
+                        chunks.append(block)
+                    return b"".join(chunks)
+                body = await response.read()
                 if len(body) > DOWNLOAD_MAX_BYTES:
                     raise RequestFailedException("download exceeded size limit")
                 return body

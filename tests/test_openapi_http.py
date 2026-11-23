@@ -19,7 +19,7 @@ from pyimouapi.exceptions import (
     InvalidAppIdOrSecretException,
     RequestFailedException,
 )
-from pyimouapi.openapi import CONNECTION_LIMIT, ImouOpenApiClient
+from pyimouapi.openapi import CONNECTION_LIMIT, DOWNLOAD_MAX_BYTES, ImouOpenApiClient
 
 ENDPOINT = "/openapi/deviceBaseList"
 
@@ -91,13 +91,40 @@ class FakeResponse:
         return response
 
 
+class _ChunkedBody:
+    """Body that arrives in several reads, like aiohttp's StreamReader."""
+
+    def __init__(self, chunks: list[bytes]) -> None:
+        """Initialize with the chunks a single read(n) would split across."""
+        self._chunks = list(chunks)
+
+    async def read(self, n: int = -1) -> bytes:
+        """Return one buffered chunk, matching StreamReader.read(n) for n > 0."""
+        if not self._chunks:
+            return b""
+        if n < 0:
+            data = b"".join(self._chunks)
+            self._chunks.clear()
+            return data
+        return self._chunks.pop(0)
+
+    async def readany(self) -> bytes:
+        """Return the next chunk, or empty once the body is finished."""
+        if not self._chunks:
+            return b""
+        return self._chunks.pop(0)
+
+
 class FakeBinaryResponse:
     """Minimal aiohttp response stand-in for binary downloads."""
 
-    def __init__(self, status: int, payload: bytes) -> None:
+    def __init__(
+        self, status: int, payload: bytes, *, content: _ChunkedBody | None = None
+    ) -> None:
         """Initialize the response."""
         self.status = status
         self._payload = payload
+        self.content = content
         self.released = False
 
     async def __aenter__(self) -> "FakeBinaryResponse":
@@ -123,6 +150,7 @@ class FakeSession:
         delay: float = 0,
         download_status: int = 200,
         download_payload: bytes = b"jpeg-bytes",
+        download_content: _ChunkedBody | None = None,
         text_error: Exception | None = None,
     ) -> None:
         """Initialize with a queue of responses or exceptions to raise."""
@@ -130,6 +158,7 @@ class FakeSession:
         self._delay = delay
         self._download_status = download_status
         self._download_payload = download_payload
+        self._download_content = download_content
         self._text_error = text_error
         self.closed = False
         self.requests: list[tuple[str, dict[str, Any]]] = []
@@ -142,7 +171,9 @@ class FakeSession:
         """Return the configured binary payload as a response context manager."""
         self.downloads.append(url)
         self.last_download = FakeBinaryResponse(
-            self._download_status, self._download_payload
+            self._download_status,
+            self._download_payload,
+            content=self._download_content,
         )
         return self.last_download
 
@@ -351,6 +382,37 @@ async def test_download_uses_the_shared_session(client: ImouOpenApiClient) -> No
         "https://cdn.example.com/snap2.jpg",
     ]
     assert await client._async_get_session() is session
+
+
+@pytest.mark.asyncio
+async def test_download_reads_every_chunk(client: ImouOpenApiClient) -> None:
+    """A snapshot split across reads is kept whole, not cut after the first chunk."""
+    install_session(
+        client,
+        [],
+        download_content=_ChunkedBody([b"jpeg-", b"bytes", b"-rest"]),
+    )
+
+    assert await client.async_download("https://cdn.example.com/snap.jpg") == (
+        b"jpeg-bytes-rest"
+    )
+
+
+@pytest.mark.asyncio
+async def test_download_rejects_a_body_over_the_size_cap(
+    client: ImouOpenApiClient,
+) -> None:
+    """The size cap still applies when the body arrives in more than one read."""
+    install_session(
+        client,
+        [],
+        download_content=_ChunkedBody(
+            [b"a" * DOWNLOAD_MAX_BYTES, b"b"],
+        ),
+    )
+
+    with pytest.raises(RequestFailedException, match="size limit"):
+        await client.async_download("https://cdn.example.com/huge.jpg")
 
 
 @pytest.mark.asyncio

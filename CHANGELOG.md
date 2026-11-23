@@ -4,6 +4,16 @@
 
 All notable changes to this project will be documented in this file.
 
+### [1.4.5]
+
+#### Fixed
+
+- Snapshot downloads read the full JPEG body. A single buffered `read()` could return only the first chunk, so Home Assistant camera previews showed the top half of the picture.
+
+#### Changed
+
+- Ship with Home Assistant Core Imou integration when pinned to pyimouapi 1.4.5.
+
 ### [1.4.4]
 
 #### Added
