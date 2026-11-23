@@ -1638,7 +1638,7 @@ class ImouHaDeviceManager:
         if isinstance(token, str) and token:
             imou_ha_device.set_play_token_v2(token)
         imou_ha_device.set_source(device.source)
-        imou_ha_device.set_device_capability_ids(device.capability_ids)
+        imou_ha_device.set_device_capability_ids(frozenset(device.capability_ids))
         return imou_ha_device
 
     _PTZ_RELATIVE_CODES = frozenset({"DV2116", "DV1026"})
