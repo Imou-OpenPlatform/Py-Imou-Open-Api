@@ -403,12 +403,38 @@ async def test_repeated_expired_token_exposes_structured_code(
 @pytest.mark.asyncio
 async def test_transport_error_raises_connect_failed(
     client: ImouOpenApiClient,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Transport failures surface as ConnectFailedException."""
+    """Transport failures surface as ConnectFailedException and are logged."""
     install_session(client, [OSError("no route to host")])
 
-    with pytest.raises(ConnectFailedException):
+    with (
+        caplog.at_level(logging.WARNING, logger="pyimouapi"),
+        pytest.raises(ConnectFailedException, match="OSError"),
+    ):
         await client.async_get_token()
+
+    assert "OpenAPI request failed" in caplog.text
+    assert "/openapi/accessToken" in caplog.text
+    assert "OSError" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_timeout_names_timeout_error_in_message_and_log(
+    client: ImouOpenApiClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """TimeoutError has an empty str(); the type name must still appear."""
+    install_session(client, [TimeoutError()])
+
+    with (
+        caplog.at_level(logging.WARNING, logger="pyimouapi"),
+        pytest.raises(ConnectFailedException, match="TimeoutError") as caught,
+    ):
+        await client.async_get_token()
+
+    assert caught.value.message == "connect failed,TimeoutError"
+    assert "TimeoutError" in caplog.text
 
 
 @pytest.mark.asyncio

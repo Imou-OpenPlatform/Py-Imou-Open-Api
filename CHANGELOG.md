@@ -34,6 +34,7 @@ All notable changes to this project will be documented in this file.
 - A channel whose step move is rejected with DV2116 or DV1026 uses ptz.aim.relative for that press and later presses until the process restarts.
 - Owner cameras (`source` **bind**) use cloud HLS (`bindDeviceLive`). Shared cameras use `getStreamUrl` RTSP. Real-time FLV is not preferred (overseas regions often reject it).
 - When the device list says AI Insight is on, status polls call `queryDeviceAiInsight` and map `strategyStatus` onto active / paused / inactive for the AI Insight sensor.
+- Transport timeouts, HTTP errors, and OpenAPI error codes are logged at warning with the endpoint. `TimeoutError` is named in the exception text (its own ``str()`` is empty).
 
 ### [1.4.4]
 
@@ -273,6 +274,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 - 云台 step 被 DV2116 或 DV1026 拒绝、且该通道有 ptz.aim.relative 时，这一下和之后的转动改调 relative，直到进程重启。
 - 自有设备（`source` 为 **bind**）使用云端 HLS（`bindDeviceLive`）。分享设备走 `getStreamUrl` RTSP。不再优先实时 FLV（海外区域经常不支持）。
 - 设备列表显示智见已开通时，状态轮询会调用 `queryDeviceAiInsight`，按 `strategyStatus` 把 AI 智见传感器写成已开通 / 暂停中 / 未开通。
+- 请求超时、HTTP 错误和开放平台错误码会以 warning 打出接口路径。`TimeoutError` 会写进异常文案（它自己的 ``str()`` 是空的）。
 
 ### [1.4.4]
 

@@ -100,6 +100,26 @@ def _redacted_response(body: dict[str, Any]) -> dict[str, Any]:
     return _redacted_value(body)
 
 
+def _exception_reason(exception: BaseException) -> str:
+    """Name a transport failure. TimeoutError has an empty ``str()``."""
+    text = str(exception).strip()
+    name = type(exception).__name__
+    if text:
+        return f"{name}: {text}"
+    return name
+
+
+def _download_log_host(url: str) -> str:
+    """Host only: snapshot URLs can carry signed paths."""
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+    if not host:
+        return REDACTED
+    if parsed.port:
+        return f"{host}:{parsed.port}"
+    return host
+
+
 class ImouOpenApiClient:
     """Async client for Imou Open Platform HTTP API."""
 
@@ -152,6 +172,11 @@ class ImouOpenApiClient:
                 url, timeout=aiohttp.ClientTimeout(total=timeout)
             ) as response:
                 if response.status != 200:
+                    _LOGGER.warning(
+                        "download failed host=%s status=%s",
+                        _download_log_host(url),
+                        response.status,
+                    )
                     raise RequestFailedException(
                         f"request failed,status code {response.status}",
                         status_code=response.status,
@@ -181,7 +206,13 @@ class ImouOpenApiClient:
         except Exception as exception:
             # Reaching storage is its own network hop; report it the way a failed
             # API call is reported so callers have one family to catch.
-            raise ConnectFailedException(f"connect failed,{exception}") from exception
+            reason = _exception_reason(exception)
+            _LOGGER.warning(
+                "download failed host=%s reason=%s",
+                _download_log_host(url),
+                reason,
+            )
+            raise ConnectFailedException(f"connect failed,{reason}") from exception
 
     async def async_close(self) -> None:
         """Close the HTTP session this client created.
@@ -289,16 +320,32 @@ class ImouOpenApiClient:
                     status = response.status
                     text = await response.text()
         except Exception as exception:
-            raise ConnectFailedException(f"connect failed,{exception}") from exception
+            reason = _exception_reason(exception)
+            _LOGGER.warning(
+                "OpenAPI request failed endpoint=%s reason=%s",
+                endpoint,
+                reason,
+            )
+            raise ConnectFailedException(f"connect failed,{reason}") from exception
         # A 5xx is the far side being unable to serve, which reads to a user as
         # not getting through; a 4xx is this request being refused. Parsing the
         # body first used to report either as a connection failure, because an
         # error page is not JSON.
         if status >= 500:
+            _LOGGER.warning(
+                "OpenAPI request failed endpoint=%s status=%s",
+                endpoint,
+                status,
+            )
             raise ConnectFailedException(
                 f"connect failed,status code {status}", status_code=status
             )
         if status != 200:
+            _LOGGER.warning(
+                "OpenAPI request refused endpoint=%s status=%s",
+                endpoint,
+                status,
+            )
             raise RequestFailedException(
                 f"request failed,status code {status}", status_code=status
             )
@@ -327,14 +374,29 @@ class ImouOpenApiClient:
         if result_code != ERROR_CODE_SUCCESS:
             msg = result_code + ":" + result_message
             if result_code in (ERROR_CODE_INVALID_SIGN, ERROR_CODE_INVALID_APP):
+                _LOGGER.warning(
+                    "OpenAPI auth failed endpoint=%s code=%s",
+                    endpoint,
+                    result_code,
+                )
                 raise InvalidAppIdOrSecretException(
                     msg, status_code=status, api_code=result_code
                 )
             if result_code == ERROR_CODE_TOKEN_OVERDUE and refresh_on_expiry:
+                _LOGGER.debug(
+                    "OpenAPI token expired endpoint=%s; refreshing",
+                    endpoint,
+                )
                 await self._async_ensure_token(stale_token=token_used)
                 return await self._async_request_api(
                     endpoint, params, refresh_on_expiry=False
                 )
+            _LOGGER.warning(
+                "OpenAPI request failed endpoint=%s code=%s msg=%s",
+                endpoint,
+                result_code,
+                result_message,
+            )
             raise RequestFailedException(msg, status_code=status, api_code=result_code)
         response_data = result.get(PARAM_DATA, {})
         if response_data is None:
