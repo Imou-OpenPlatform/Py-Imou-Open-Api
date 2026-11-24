@@ -60,6 +60,9 @@ from .product_detail import ProductDetail, parse_product_details
 
 _LOGGER = logging.getLogger(__name__)
 
+# A malformed or looping page contract must not walk forever.
+_MAX_DEVICE_PAGES = 50
+
 _MSG_ANALYSIS_LABELS = ("humanAlarm", "carAlarm", "petAlarm", "packageAlarm")
 _MSG_ANALYSIS = {
     "analysisHourInterval": 2,
@@ -441,6 +444,9 @@ class ImouDeviceManager:
         page: int,
         page_size: int,
     ) -> list[ImouDevice]:
+        if page > _MAX_DEVICE_PAGES:
+            _LOGGER.warning("Stopped listing devices after %s pages", _MAX_DEVICE_PAGES)
+            return []
         params = {
             PARAM_PAGE: page,
             PARAM_PAGE_SIZE: page_size,
@@ -453,10 +459,14 @@ class ImouDeviceManager:
             return []
         devices = []
         for device in device_list:
-            device_id = device[PARAM_DEVICE_ID]
-            device_name = device[PARAM_DEVICE_NAME]
-            device_status = device[PARAM_DEVICE_STATUS]
-            brand = device[PARAM_BRAND]
+            if not isinstance(device, dict):
+                continue
+            device_id = device.get(PARAM_DEVICE_ID)
+            if not isinstance(device_id, str) or not device_id:
+                continue
+            device_name = str(device.get(PARAM_DEVICE_NAME) or device_id)
+            device_status = str(device.get(PARAM_DEVICE_STATUS, "0"))
+            brand = str(device.get(PARAM_BRAND, ""))
             device_model = device.get(PARAM_DEVICE_MODEL, "unknown")
             imou_device = ImouDevice(
                 device_id, device_name, device_status, brand, device_model
@@ -494,10 +504,11 @@ class ImouDeviceManager:
                     channel_list = []
                 channels = []
                 for channel in channel_list:
+                    if not isinstance(channel, dict):
+                        continue
+                    raw_channel_id = channel.get(PARAM_CHANNEL_ID)
                     channel_id = (
-                        str(channel[PARAM_CHANNEL_ID])
-                        if isinstance(channel[PARAM_CHANNEL_ID], int)
-                        else channel[PARAM_CHANNEL_ID]
+                        str(raw_channel_id) if raw_channel_id not in (None, "") else "0"
                     )
                     channel_name = channel.get(PARAM_CHANNEL_NAME) or ""
                     channel_status = channel.get(PARAM_CHANNEL_STATUS) or ""
@@ -543,6 +554,11 @@ class ImouDeviceManager:
     async def async_get_device_summaries(
         self, page: int = 1, page_size: int = 50
     ) -> list[ImouDeviceSummary]:
+        if page > _MAX_DEVICE_PAGES:
+            _LOGGER.warning(
+                "Stopped listing device summaries after %s pages", _MAX_DEVICE_PAGES
+            )
+            return []
         params = {
             PARAM_PAGE: page,
             PARAM_PAGE_SIZE: page_size,
@@ -555,11 +571,13 @@ class ImouDeviceManager:
             return []
         summaries: list[ImouDeviceSummary] = []
         for device in device_list:
-            device_id = device.get(PARAM_DEVICE_ID)
-            if not device_id:
+            if not isinstance(device, dict):
                 continue
-            name = device.get(PARAM_DEVICE_NAME) or device_id
-            model = device.get(PARAM_DEVICE_MODEL, "")
+            device_id = device.get(PARAM_DEVICE_ID)
+            if not isinstance(device_id, str) or not device_id:
+                continue
+            name = str(device.get(PARAM_DEVICE_NAME) or device_id)
+            model = str(device.get(PARAM_DEVICE_MODEL, ""))
             status = str(device.get(PARAM_DEVICE_STATUS, ""))
             summaries.append(
                 ImouDeviceSummary(

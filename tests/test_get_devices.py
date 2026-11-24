@@ -187,3 +187,29 @@ async def test_detail_page_keeps_device_and_channel_capability_ids() -> None:
         "storage.local.capacity",
     )
     assert devices[0].channels[0].capability_ids == ("detection.motion.enabled",)
+
+
+@pytest.mark.asyncio
+async def test_device_rows_without_an_id_are_skipped() -> None:
+    """One malformed row must not abort the whole account listing."""
+    entry = make_device("good")
+    manager = make_manager(
+        {
+            1: {
+                PARAM_COUNT: 3,
+                PARAM_DEVICE_LIST: [{}, {"deviceName": "no id"}, entry],
+            }
+        }
+    )
+
+    result = await manager.async_get_devices()
+
+    assert [device.device_id for device in result] == ["good"]
+
+
+@pytest.mark.asyncio
+async def test_device_paging_has_a_hard_limit() -> None:
+    """A looping page contract must not walk pages forever."""
+    manager = make_manager({})
+
+    assert await manager._async_get_devices(51, 10) == []

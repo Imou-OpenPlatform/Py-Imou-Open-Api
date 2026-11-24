@@ -97,6 +97,45 @@ def _safe_hostname(hostname: str) -> str | None:
     return f"[{hostname}]" if ":" in hostname else hostname
 
 
+def _is_public_hostname(hostname: str) -> bool:
+    """Reject loopback, local names, and literal private addresses."""
+    lowered = hostname.rstrip(".").lower()
+    if not lowered or lowered == "localhost" or lowered.endswith(".local"):
+        return False
+    try:
+        address = ipaddress.ip_address(lowered)
+    except ValueError:
+        return True
+    return not (
+        address.is_private
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_multicast
+        or address.is_reserved
+    )
+
+
+def _validated_download_url(url: str) -> str:
+    """Return a public http(s) URL, or reject it before any request is made."""
+    if any(not character.isprintable() or character.isspace() for character in url):
+        raise RequestFailedException("download URL is not printable")
+    try:
+        parsed = urlsplit(url)
+        hostname = parsed.hostname or ""
+        port = parsed.port
+    except ValueError as err:
+        raise RequestFailedException("download URL is malformed") from err
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or port == 0
+    ):
+        raise RequestFailedException("download URL is not a public http(s) URL")
+    return url
+
+
 def _redacted_url(url: str) -> str:
     """Keep only a validated scheme, hostname, and port from a logged URL.
 
@@ -210,6 +249,7 @@ class ImouOpenApiClient:
         it covers connecting and reading as one budget, which is what a caller
         downloading a snapshot over a slow link actually wants to bound.
         """
+        url = _validated_download_url(url)
         session = await self._async_get_session()
         try:
             # Released via the context manager: an error status returns early, and
@@ -306,11 +346,32 @@ class ImouOpenApiClient:
         self._access_token = response[PARAM_ACCESS_TOKEN]
         if PARAM_CURRENT_DOMAIN in response:
             raw = response[PARAM_CURRENT_DOMAIN]
+            if not isinstance(raw, str) or not raw:
+                return
             if "://" not in raw:
                 raw = f"https://{raw}"
-            parsed = urlparse(raw)
-            if parsed.netloc:
+            try:
+                parsed = urlparse(raw)
+                hostname = parsed.hostname or ""
+                port = parsed.port
+            except ValueError:
+                parsed = None
+                hostname = ""
+                port = None
+            if (
+                parsed is not None
+                and parsed.scheme in {"http", "https"}
+                and parsed.netloc
+                and not parsed.username
+                and not parsed.password
+                and port != 0
+                and _is_public_hostname(hostname)
+            ):
                 self._api_url = parsed.netloc
+            else:
+                _LOGGER.warning(
+                    "Ignoring an unsafe currentDomain redirect from the token response"
+                )
 
     async def async_request_api(
         self, endpoint: str, params: dict[str, Any] | None = None

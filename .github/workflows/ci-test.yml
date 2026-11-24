@@ -15,8 +15,12 @@ permissions:
 
 jobs:
   test:
-    name: Test
+    name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
     env:
       TZ: UTC
     steps:
@@ -24,6 +28,6 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - run: uv sync --dev
       - run: uv run pytest tests/ -q --timeout=30

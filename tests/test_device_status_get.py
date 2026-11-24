@@ -70,3 +70,25 @@ async def test_detail_list_request_posts_serials() -> None:
             ]
         },
     )
+
+
+@pytest.mark.asyncio
+async def test_detail_list_null_channel_status_falls_back_to_device_status() -> None:
+    """A present but null channelStatus must not make the whole device offline."""
+    device = ImouHaDevice("SN1", "Cam", "Imou", "IPC", "1.0")
+    device.set_product_id("PID1")
+    device.set_channel_id("0")
+    delegate = MagicMock()
+    delegate.async_list_device_details = AsyncMock(
+        return_value=[
+            {
+                "deviceId": "SN1",
+                "deviceStatus": "online",
+                "channelList": [{"channelId": "0", "channelStatus": None}],
+            }
+        ]
+    )
+
+    await ImouHaDeviceManager(delegate)._async_refresh_detail_status([device])
+
+    assert device.sensors[PARAM_STATUS]["state"] == DeviceStatus.ONLINE.value
