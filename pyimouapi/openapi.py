@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import ipaddress
 import json
 import logging
 import secrets
@@ -9,7 +10,7 @@ import time
 import uuid
 from collections.abc import Iterable
 from typing import Any, Literal
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit
 
 import aiohttp
 
@@ -50,6 +51,8 @@ _LOGGER: logging.Logger = logging.getLogger(__package__)
 
 CONNECTION_LIMIT = 10
 DOWNLOAD_MAX_BYTES = 8 * 1024 * 1024
+REQUEST_TIMEOUT = 60
+REQUEST_ATTEMPT_TIMEOUT = 30
 
 REDACTED = "***"
 _SECRET_RESPONSE_FIELDS = frozenset(
@@ -61,35 +64,98 @@ _SECRET_RESPONSE_FIELDS = frozenset(
         "playTokenKeyV2",
     }
 )
+_URL_FIELDS = frozenset({"url", "hls", "flv", "flvhd", "callbackurl"})
+
+
+def _safe_hostname(hostname: str) -> str | None:
+    """Validate a hostname before including it in a log message."""
+    if not hostname or len(hostname) > 253 or "%" in hostname:
+        return None
+    try:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        try:
+            ascii_hostname = hostname.encode("idna").decode("ascii").lower()
+        except UnicodeError:
+            return None
+        candidate = ascii_hostname.rstrip(".")
+        if not candidate or len(candidate) > 253:
+            return None
+        labels = candidate.split(".")
+        if len(labels) > 1 and all(label.isdigit() for label in labels):
+            return None
+        if any(
+            not label
+            or len(label) > 63
+            or label.startswith("-")
+            or label.endswith("-")
+            or not all(character.isalnum() or character == "-" for character in label)
+            for label in labels
+        ):
+            return None
+        return ascii_hostname
+    return f"[{hostname}]" if ":" in hostname else hostname
+
+
+def _redacted_url(url: str) -> str:
+    """Keep only a validated scheme, hostname, and port from a logged URL.
+
+    Paths can contain webhook identifiers or signed stream names, so none of the
+    path is retained. Userinfo, query parameters, and fragments are discarded as
+    well. Malformed URLs reveal nothing rather than risking a partial leak.
+    """
+    if any(not character.isprintable() or character.isspace() for character in url):
+        return REDACTED
+    try:
+        parsed = urlsplit(url)
+        hostname = _safe_hostname(parsed.hostname or "")
+        port = parsed.port
+    except ValueError:
+        return REDACTED
+    if parsed.scheme not in {"http", "https"} or hostname is None or port == 0:
+        return REDACTED
+    authority = f"{hostname}:{port}" if port is not None else hostname
+    return f"{parsed.scheme}://{authority}"
 
 
 def _redacted_request(body: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy of a request body with its credentials masked.
+    """Return a copy of a request body with its credentials and URLs masked.
 
     ``sign`` is an MD5 over the app secret together with the ``time`` and
     ``nonce`` printed beside it, so logging it in full is enough for a reader of
     the log to attack the secret offline. The app id is left alone: it names the
     account but cannot authenticate on its own.
     """
-    system = {**body[PARAM_SYSTEM], PARAM_SIGN: REDACTED}
-    params = body[PARAM_PARAMS]
-    if PARAM_TOKEN in params:
-        params = {**params, PARAM_TOKEN: REDACTED}
-    # bindDevice sends the device password in params.code.
-    if "code" in params:
-        params = {**params, "code": REDACTED}
-    return {**body, PARAM_SYSTEM: system, PARAM_PARAMS: params}
+    redacted = _redacted_value(body)
+    system = redacted.get(PARAM_SYSTEM)
+    if isinstance(system, dict):
+        system[PARAM_SIGN] = REDACTED
+    params = redacted.get(PARAM_PARAMS)
+    if isinstance(params, dict):
+        if PARAM_TOKEN in params:
+            params[PARAM_TOKEN] = REDACTED
+        # bindDevice sends the device password in params.code.
+        if "code" in params:
+            params["code"] = REDACTED
+    return redacted
 
 
 def _redacted_value(value: Any) -> Any:
-    """Mask play tokens, play-token keys, and access tokens in a logged value."""
+    """Recursively mask credentials and reduce URL fields to safe authorities."""
     if isinstance(value, dict):
-        return {
-            key: REDACTED
-            if key in _SECRET_RESPONSE_FIELDS and isinstance(item, str) and item
-            else _redacted_value(item)
-            for key, item in value.items()
-        }
+        redacted: dict[Any, Any] = {}
+        for key, item in value.items():
+            if key in _SECRET_RESPONSE_FIELDS and isinstance(item, str) and item:
+                redacted[key] = REDACTED
+                continue
+            normalized_key = key.lower() if isinstance(key, str) else ""
+            if isinstance(item, str) and (
+                normalized_key in _URL_FIELDS or normalized_key.endswith("url")
+            ):
+                redacted[key] = _redacted_url(item)
+            else:
+                redacted[key] = _redacted_value(item)
+        return redacted
     if isinstance(value, list):
         return [_redacted_value(item) for item in value]
     return value
@@ -203,9 +269,15 @@ class ImouOpenApiClient:
         return self._app_id
 
     async def async_get_token(self) -> None:
-        """Fetch and store accessToken."""
-        async with self._token_lock:
-            await self._async_fetch_token()
+        """Fetch and store accessToken within one overall request deadline."""
+        try:
+            async with asyncio.timeout(REQUEST_TIMEOUT):
+                async with self._token_lock:
+                    await self._async_fetch_token()
+        except TimeoutError as exception:
+            raise ConnectFailedException(
+                "connect failed,request deadline exceeded"
+            ) from exception
 
     def _has_usable_token(self, stale_token: str | None) -> bool:
         """Return True when a token is held and it is not the rejected one."""
@@ -243,8 +315,20 @@ class ImouOpenApiClient:
     async def async_request_api(
         self, endpoint: str, params: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        """POST to an API endpoint; returns the result data object."""
-        return await self._async_request_api(endpoint, params, refresh_on_expiry=True)
+        """POST to an API endpoint; returns the result data object.
+
+        Token acquisition, an expired-token refresh, and the retried request all
+        share one deadline instead of each receiving a fresh timeout budget.
+        """
+        try:
+            async with asyncio.timeout(REQUEST_TIMEOUT):
+                return await self._async_request_api(
+                    endpoint, params, refresh_on_expiry=True
+                )
+        except TimeoutError as exception:
+            raise ConnectFailedException(
+                "connect failed,request deadline exceeded"
+            ) from exception
 
     async def _async_request_api(
         self,
@@ -279,12 +363,17 @@ class ImouOpenApiClient:
         url = f"https://{self._api_url}{endpoint}"
         session = await self._async_get_session()
         try:
-            async with asyncio.timeout(30):
+            async with asyncio.timeout(REQUEST_ATTEMPT_TIMEOUT):
                 # Released by the context manager: the pool is capped, so a body
                 # that dies mid-read must not strand its connection and starve
-                # every poll that follows.
+                # every poll that follows. Redirects are disabled so a 307/308
+                # cannot replay this credential-bearing JSON body elsewhere.
                 async with session.request(
-                    "POST", url, json=body, headers=headers
+                    "POST",
+                    url,
+                    json=body,
+                    headers=headers,
+                    allow_redirects=False,
                 ) as response:
                     status = response.status
                     text = await response.text()
@@ -311,7 +400,7 @@ class ImouOpenApiClient:
         if _LOGGER.isEnabledFor(logging.DEBUG):
             _LOGGER.debug(
                 "url: %s request body: %s response: %s",
-                url,
+                _redacted_url(url),
                 _redacted_request(body),
                 _redacted_response(response_body),
             )
@@ -338,7 +427,11 @@ class ImouOpenApiClient:
             raise RequestFailedException(msg, status_code=status, api_code=result_code)
         response_data = result.get(PARAM_DATA, {})
         if response_data is None:
-            response_data = {}
+            return {}
+        if not isinstance(response_data, dict):
+            raise RequestFailedException(
+                "malformed response,data is not an object", status_code=status
+            )
         return response_data
 
     async def async_set_message_callback(

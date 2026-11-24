@@ -177,7 +177,7 @@ class FakeSession:
         self._download_content = download_content
         self._text_error = text_error
         self.closed = False
-        self.requests: list[tuple[str, dict[str, Any]]] = []
+        self.requests: list[tuple[str, dict[str, Any], bool]] = []
         self.issued: list[FakeResponse] = []
         self.downloads: list[str] = []
         self.last_download: FakeBinaryResponse | None = None
@@ -194,10 +194,16 @@ class FakeSession:
         return self.last_download
 
     def request(
-        self, method: str, url: str, *, json: dict[str, Any], headers: dict[str, str]
+        self,
+        method: str,
+        url: str,
+        *,
+        json: dict[str, Any],
+        headers: dict[str, str],
+        allow_redirects: bool,
     ) -> FakeResponse:
         """Return the next queued response as a request context manager."""
-        self.requests.append((url, json))
+        self.requests.append((url, json, allow_redirects))
         if not self._responses:
             raise AssertionError(f"unexpected request to {url}")
         result = self._responses.pop(0)
@@ -237,7 +243,7 @@ def install_session(
 
 def endpoints_called(session: FakeSession) -> list[str]:
     """Return the request path of every call, in order."""
-    return [url.split("api.example.com", 1)[1] for url, _ in session.requests]
+    return [url.split("api.example.com", 1)[1] for url, _, _ in session.requests]
 
 
 @pytest.mark.asyncio
@@ -412,6 +418,76 @@ async def test_transport_error_raises_connect_failed(
 
 
 @pytest.mark.asyncio
+async def test_token_lock_wait_counts_toward_the_overall_deadline(
+    client: ImouOpenApiClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A caller stuck behind another token fetch cannot wait indefinitely."""
+    monkeypatch.setattr("pyimouapi.openapi.REQUEST_TIMEOUT", 0.02)
+    session = install_session(client, [])
+    await client._token_lock.acquire()
+    try:
+        with pytest.raises(ConnectFailedException, match="deadline"):
+            await asyncio.wait_for(client.async_get_token(), timeout=1)
+    finally:
+        client._token_lock.release()
+
+    assert session.requests == []
+
+
+@pytest.mark.asyncio
+async def test_token_and_request_share_one_overall_deadline(
+    client: ImouOpenApiClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The initial token request cannot give the endpoint a fresh 60 seconds."""
+    monkeypatch.setattr("pyimouapi.openapi.REQUEST_TIMEOUT", 0.05)
+    session = install_session(
+        client, [token_result(), api_result(data={"ok": True})], delay=0.03
+    )
+
+    with pytest.raises(ConnectFailedException, match="deadline"):
+        await asyncio.wait_for(client.async_request_api(ENDPOINT, {}), timeout=1)
+
+    assert endpoints_called(session) == [API_ENDPOINT_ACCESS_TOKEN, ENDPOINT]
+
+
+@pytest.mark.asyncio
+async def test_token_refresh_and_retry_share_one_overall_deadline(
+    client: ImouOpenApiClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Refresh and retry are bounded by the original call's remaining budget."""
+    monkeypatch.setattr("pyimouapi.openapi.REQUEST_TIMEOUT", 0.05)
+    client._access_token = "stale"
+    session = install_session(
+        client,
+        [
+            api_result(code=ERROR_CODE_TOKEN_OVERDUE, msg="expired"),
+            token_result("tok-2"),
+            api_result(data={"ok": True}),
+        ],
+        delay=0.03,
+    )
+
+    with pytest.raises(ConnectFailedException, match="deadline"):
+        await asyncio.wait_for(client.async_request_api(ENDPOINT, {}), timeout=1)
+
+    assert endpoints_called(session) == [ENDPOINT, API_ENDPOINT_ACCESS_TOKEN]
+
+
+@pytest.mark.asyncio
+async def test_caller_cancellation_is_not_converted_to_connect_failed(
+    client: ImouOpenApiClient,
+) -> None:
+    """An outer cancellation remains CancelledError instead of a timeout error."""
+    install_session(client, [FakeResponse({}, delay=10)])
+    task = asyncio.create_task(client.async_get_token())
+    await asyncio.sleep(0)
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+
+@pytest.mark.asyncio
 async def test_current_domain_updates_api_host(client: ImouOpenApiClient) -> None:
     """accessToken may redirect the client to a regional host."""
     install_session(
@@ -553,6 +629,22 @@ async def test_a_refused_request_names_its_status(client: ImouOpenApiClient) -> 
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
+async def test_redirects_are_not_followed_with_credentials(
+    client: ImouOpenApiClient, status: int
+) -> None:
+    """A redirect must use the normal error path, not replay the signed JSON."""
+    session = install_session(client, [FakeResponse.raw(status, "redirect")])
+
+    with pytest.raises(RequestFailedException, match=str(status)) as caught:
+        await client.async_get_token()
+
+    assert caught.value.status_code == status
+    assert len(session.requests) == 1
+    assert session.requests[0][2] is False
+
+
+@pytest.mark.asyncio
 async def test_unparseable_success_body_is_a_request_failure(
     client: ImouOpenApiClient,
 ) -> None:
@@ -561,6 +653,42 @@ async def test_unparseable_success_body_is_a_request_failure(
 
     with pytest.raises(RequestFailedException, match="malformed"):
         await client.async_get_token()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("response_data", [[], "unexpected", 1, True])
+async def test_success_data_must_be_an_object(
+    client: ImouOpenApiClient, response_data: Any
+) -> None:
+    """The public return contract permits only an object, None, or omitted data."""
+    client._access_token = "tok-1"
+    install_session(
+        client,
+        [{"result": {"code": ERROR_CODE_SUCCESS, "data": response_data}}],
+    )
+
+    with pytest.raises(RequestFailedException, match="data is not an object") as caught:
+        await client.async_request_api(ENDPOINT, {})
+
+    assert caught.value.status_code == 200
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"result": {"code": ERROR_CODE_SUCCESS}},
+        {"result": {"code": ERROR_CODE_SUCCESS, "data": None}},
+    ],
+)
+async def test_missing_or_null_success_data_returns_an_empty_object(
+    client: ImouOpenApiClient, response: dict[str, Any]
+) -> None:
+    """Existing callers rely on absent data being normalized to an empty dict."""
+    client._access_token = "tok-1"
+    install_session(client, [response])
+
+    assert await client.async_request_api(ENDPOINT, {}) == {}
 
 
 @pytest.mark.asyncio
@@ -594,20 +722,51 @@ async def test_debug_log_keeps_credentials_out(
 
     ``sign`` is an MD5 over the app secret and the ``time`` and ``nonce`` that
     are logged next to it, so leaking it hands over everything needed to attack
-    the secret offline.
+    the secret offline. Signed media URLs and webhook paths are sensitive too.
     """
-    install_session(client, [token_result("tok-secret"), api_result(data={"ok": True})])
+    callback_url = (
+        "https://user:password@callbacks.example:8443/webhooks/webhook-secret"
+        "?token=query-secret#fragment-secret"
+    )
+    stream_url = (
+        "https://user:password@cdn.example:7088/live/stream-secret.flv"
+        "?token=stream-token-secret#fragment-secret"
+    )
+    install_session(
+        client,
+        [
+            token_result("tok-secret"),
+            api_result(
+                data={
+                    "ok": True,
+                    "callbackUrl": callback_url,
+                    "streams": [{"hls": stream_url, "flv": stream_url}],
+                }
+            ),
+        ],
+    )
 
     with caplog.at_level(logging.DEBUG, logger="pyimouapi"):
-        await client.async_request_api(ENDPOINT, {})
+        await client.async_request_api(ENDPOINT, {"callbackUrl": callback_url})
 
-    assert "tok-secret" not in caplog.text
-    assert "app_secret" not in caplog.text
-    signs = [body["system"]["sign"] for _, body in client._session.requests]
+    for secret in (
+        "tok-secret",
+        "app_secret",
+        "password",
+        "webhook-secret",
+        "query-secret",
+        "stream-secret",
+        "stream-token-secret",
+        "fragment-secret",
+    ):
+        assert secret not in caplog.text
+    signs = [body["system"]["sign"] for _, body, _ in client._session.requests]
     for sign in signs:
         assert sign not in caplog.text
-    # Still useful for debugging: the endpoint and the outcome survive.
-    assert ENDPOINT in caplog.text
+    # Still useful for debugging: safe authorities and the outcome survive.
+    assert "api.example.com" in caplog.text
+    assert "callbacks.example:8443" in caplog.text
+    assert "cdn.example:7088" in caplog.text
     assert "'ok': True" in caplog.text
 
 
