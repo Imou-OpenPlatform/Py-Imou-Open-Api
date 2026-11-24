@@ -6,6 +6,7 @@ import pytest
 from pyimouapi.capability.binding import (
     cached_v2_target_map,
     load_v2_target_map,
+    property_scope_from_target_map,
     resolve_ptz_target_id,
 )
 
@@ -60,6 +61,15 @@ def test_power_sensors_share_read_service() -> None:
 )
 def test_resolve_ptz_target_id(services: set[str], expected: str | None) -> None:
     assert resolve_ptz_target_id(services) == expected
+
+
+def test_device_scoped_storage_and_volume_in_map() -> None:
+    """Local storage and volume are device-level; channel id must not be sent."""
+    bindings = {row.ha_key: row for row in load_v2_target_map()}
+    assert bindings["storage_used"].scope == "device"
+    assert bindings["device_volume"].scope == "device"
+    assert property_scope_from_target_map("storage.local.capacity") == "device"
+    assert property_scope_from_target_map("audio.volume.level") == "device"
 
 
 def test_map_file_path_override(tmp_path: Path) -> None:

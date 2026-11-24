@@ -17,7 +17,10 @@ from .bulb_light import (
     apply_bulb_v2_properties,
     bulb_v2_property_ids_for_device,
 )
-from .capability.binding import applicable_capability_ids
+from .capability.binding import (
+    applicable_capability_ids,
+    property_scope_from_target_map,
+)
 from .capability.catalog import CapabilitySet
 from .capability.client import (
     async_capability_list,
@@ -1056,12 +1059,22 @@ class ImouHaDeviceManager:
         return all(property_id in values for property_id in property_ids)
 
     def _property_scope(self, device: ImouHaDevice, property_id: str) -> str:
-        """Scope from capability.list. Unknown properties are not grouped together."""
+        """Scope from capability.list, else the packaged map, else a unique bucket.
+
+        ``storage.local.capacity`` and ``audio.volume.level`` are device-level.
+        A channel id on those reads makes the cloud reject the call, so the
+        packaged map wins when it marks a property as device-scope.
+        """
+        mapped = property_scope_from_target_map(property_id)
+        if mapped == "device":
+            return "device"
         capability = device.capability_set
         if capability is not None:
             prop = capability.properties.get(property_id)
             if prop is not None and prop.scope:
                 return prop.scope
+        if mapped is not None:
+            return mapped
         return f"unknown:{property_id}"
 
     def _channel_id_for_service(

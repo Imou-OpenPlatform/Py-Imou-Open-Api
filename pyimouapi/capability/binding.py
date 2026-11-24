@@ -126,6 +126,21 @@ def binding_by_ha_key(bindings: list[TargetBinding]) -> dict[str, TargetBinding]
     return {row.ha_key: row for row in bindings}
 
 
+@lru_cache
+def property_scope_from_target_map(property_id: str) -> str | None:
+    """Return device/channel from the packaged map when capability.list omits scope."""
+    for row in cached_v2_target_map():
+        if row.kind != "property":
+            continue
+        if property_id in (
+            row.target_id,
+            row.fallback_target_id,
+            row.write_target_id,
+        ) and row.scope in ("device", "channel"):
+            return row.scope
+    return None
+
+
 def applicable_capability_ids(
     device_ids: Iterable[str],
     channel_ids: Iterable[str],

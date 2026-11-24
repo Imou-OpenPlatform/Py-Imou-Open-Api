@@ -48,6 +48,73 @@ def _property_capability_set(*target_ids: str) -> CapabilitySet:
     )
 
 
+def test_storage_sensor_starts_without_a_fake_zero() -> None:
+    """A missing read must not look like 0% used."""
+    from pyimouapi.capability.setup import configure_imou_ha_device_from_capability
+
+    device = ImouHaDevice("NVR1", "Nvr", "Imou", "NVR", "1.0")
+    device.set_channel_id("0")
+    device.set_capability_ids({"storage.local.capacity"})
+    configure_imou_ha_device_from_capability(
+        device,
+        CapabilitySet(
+            properties={
+                "storage.local.capacity": PropertyCapability(
+                    "storage.local.capacity", "r", "array", scope="device"
+                )
+            },
+            services=frozenset(),
+            events=frozenset(),
+        ),
+    )
+    assert device.sensors["storage_used"][PARAM_STATE] is None
+
+
+@pytest.mark.asyncio
+async def test_storage_read_omits_channel_when_map_says_device(
+    ha_manager: ImouHaDeviceManager,
+) -> None:
+    """Gateway channels still read storage without a channel id."""
+    device = ImouHaDevice("NVR1", "Nvr", "Imou", "NVR", "1.0")
+    device.set_product_id("pid")
+    device.set_channel_id("1")
+    device.sensors["storage_used"] = {
+        PARAM_V2_TARGET_ID: "storage.local.capacity",
+        PARAM_STATE: None,
+    }
+    # capability.list may mark this as channel; the packaged map is device.
+    device.set_capability_set(
+        CapabilitySet(
+            properties={
+                "storage.local.capacity": PropertyCapability(
+                    "storage.local.capacity", "r", "array", scope="channel"
+                )
+            },
+            services=frozenset(),
+            events=frozenset(),
+        )
+    )
+    with patch(
+        "pyimouapi.ha_device.async_property_get", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {
+            "storage.local.capacity": [
+                {
+                    "totalBytes": 31449055232,
+                    "usedBytes": 28806676480,
+                    "storageState": "1",
+                    "storageAbnormal": "1",
+                    "index": 0,
+                }
+            ]
+        }
+        await ha_manager._async_update_v2_property_entities(device)
+
+    mock_get.assert_awaited_once()
+    assert mock_get.await_args.kwargs["channel_id"] is None
+    assert device.sensors["storage_used"][PARAM_STATE] == 91
+
+
 def test_storage_capacity_list_becomes_a_used_percentage() -> None:
     """storage.local.capacity is a list of byte counts, not a percentage."""
     device = _switch_device()

@@ -52,6 +52,20 @@ NUMBER_TYPE = {
     PARAM_BATTERY,
 }
 
+
+def _initial_sensor_state(ha_key: str) -> Any:
+    """Placeholder before the first successful property read.
+
+    Storage must not start as ``\"0\"``: that string looks like a used
+    percentage of zero and hides a missing read.
+    """
+    if ha_key == PARAM_STORAGE_USED:
+        return None
+    if ha_key in NUMBER_TYPE:
+        return "0"
+    return "unknown"
+
+
 if TYPE_CHECKING:
     from ..ha_device import ImouHaDevice
 
@@ -178,7 +192,7 @@ def _add_property_without_detail(
         entities[binding.ha_key] = {
             PARAM_V2_TARGET_ID: target_id,
             PARAM_V2_SOURCE_TARGET_IDS: [target_id],
-            PARAM_STATE: "0" if binding.ha_key in NUMBER_TYPE else "unknown",
+            PARAM_STATE: _initial_sensor_state(binding.ha_key),
         }
 
 
@@ -197,7 +211,7 @@ def _add_property_sensor(
     entry: dict[str, Any] = {
         PARAM_V2_TARGET_ID: source_ids[0],
         PARAM_V2_SOURCE_TARGET_IDS: source_ids,
-        PARAM_STATE: "unknown" if binding.ha_key not in NUMBER_TYPE else "0",
+        PARAM_STATE: _initial_sensor_state(binding.ha_key),
     }
     if binding.output_field:
         entry[PARAM_V2_OUTPUT_FIELD] = binding.output_field
@@ -225,7 +239,7 @@ def _add_service_sensor(
     entry = {
         PARAM_V2_TARGET_ID: binding.target_id,
         PARAM_V2_OUTPUT_FIELD: binding.output_field,
-        PARAM_STATE: "unknown" if binding.ha_key not in NUMBER_TYPE else "0",
+        PARAM_STATE: _initial_sensor_state(binding.ha_key),
     }
     if binding.fallback_target_id and binding.fallback_target_id in capability_ids:
         entry[PARAM_V2_FALLBACK_TARGET_ID] = binding.fallback_target_id

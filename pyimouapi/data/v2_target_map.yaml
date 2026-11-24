@@ -120,7 +120,7 @@ bindings:
     target_id: audio.volume.level
     kind: property
     ha_platform: select
-    scope: channel
+    scope: device
 
   - ha_key: alarm_control_panel
     target_id: detection.arming.mode

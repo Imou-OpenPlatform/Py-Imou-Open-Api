@@ -35,6 +35,7 @@ All notable changes to this project will be documented in this file.
 - Owner cameras (`source` **bind**) use cloud HLS (`bindDeviceLive`). Shared cameras use `getStreamUrl` RTSP. Real-time FLV is not preferred (overseas regions often reject it).
 - When the device list says AI Insight is on, status polls call `queryDeviceAiInsight` and map `strategyStatus` onto active / paused / inactive for the AI Insight sensor.
 - Transport timeouts, HTTP errors, and OpenAPI error codes are logged at warning with the endpoint. `TimeoutError` is named in the exception text (its own ``str()`` is empty).
+- Local storage and device volume are read and written as device-scope properties. A channel id on those calls was leaving **Storage used** stuck at a fake `0`. The sensor no longer starts as `"0"` before the first successful read.
 
 ### [1.4.4]
 
@@ -275,6 +276,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 - 自有设备（`source` 为 **bind**）使用云端 HLS（`bindDeviceLive`）。分享设备走 `getStreamUrl` RTSP。不再优先实时 FLV（海外区域经常不支持）。
 - 设备列表显示智见已开通时，状态轮询会调用 `queryDeviceAiInsight`，按 `strategyStatus` 把 AI 智见传感器写成已开通 / 暂停中 / 未开通。
 - 请求超时、HTTP 错误和开放平台错误码会以 warning 打出接口路径。`TimeoutError` 会写进异常文案（它自己的 ``str()`` 是空的）。
+- 本地存储和设备音量按设备级读写。以前带上通道号时，**存储使用率**会一直停在假的 `0`。传感器在首次读成功前也不再默认成 `"0"`。
 
 ### [1.4.4]
 
