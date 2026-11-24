@@ -39,6 +39,7 @@ All notable changes to this project will be documented in this file.
 - Property polling still runs when `device.capability.list` lists a property id only under **services**, which PaaS cameras such as TP7i sometimes do.
 - `device.property.get` calls that return **DV1026** or **DV1049** for one channel-scoped batch no longer discard values already read for other scopes (for example **Storage used** on TP7i).
 - **Battery** reads `power.battery.info` when `elecPercent` is present but `category` is omitted (UA7L AOV).
+- Unsupported `device.property.get` results (**DV1026** / **DV1049**) are remembered per device row so later polls skip those property ids. Batch failures split in half instead of one call per property when quota matters.
 
 ### [1.4.4]
 
@@ -283,6 +284,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 - 当 `device.capability.list` 把属性 id 只写在 **services** 里时仍会继续 `property` 轮询（部分 PaaS 摄像头如 TP7i 会这样）。
 - 通道级 `property.get` 返回 **DV1026** / **DV1049** 时不再丢掉已成功读到的其他作用域（例如 TP7i 的存储使用率）。
 - **电池**：`power.battery.info` 无 `category` 时仍解析 `elecPercent`（UA7L AOV）。
+- **DV1026** / **DV1049** 的属性会记入本机拒绝列表，后续轮询不再请求；批失败时二分拆批，减少逐个重试的 OpenAPI 次数。
 
 ### [1.4.4]
 

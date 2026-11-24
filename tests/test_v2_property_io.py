@@ -172,6 +172,116 @@ async def test_property_poll_applies_when_channel_batch_returns_dv1026(
 
 
 @pytest.mark.asyncio
+async def test_property_read_denylist_skips_unsupported_ids_on_later_polls(
+    ha_manager: ImouHaDeviceManager,
+) -> None:
+    device = ImouHaDevice("TP7", "Cam", "lechange", "TP7i", "1.0")
+    device.set_channel_id("0")
+    device.sensors["storage_used"] = {
+        PARAM_V2_TARGET_ID: "storage.local.capacity",
+        PARAM_STATE: None,
+    }
+    device.switches["linkage_siren"] = {
+        PARAM_V2_TARGET_ID: "detection.siren.linkage",
+        PARAM_STATE: False,
+    }
+    device.set_capability_set(
+        CapabilitySet(
+            properties={
+                "storage.local.capacity": PropertyCapability(
+                    "storage.local.capacity", "r", "array", scope="device"
+                ),
+                "detection.siren.linkage": PropertyCapability(
+                    "detection.siren.linkage", "rw", "bool", scope="channel"
+                ),
+            },
+            services=frozenset(),
+            events=frozenset(),
+        )
+    )
+
+    async def _fake_get(*_args, **kwargs):
+        props = kwargs["properties"]
+        if "storage.local.capacity" in props:
+            return {
+                "storage.local.capacity": [
+                    {
+                        "totalBytes": 10,
+                        "usedBytes": 9,
+                        "storageState": "1",
+                        "storageAbnormal": "1",
+                        "index": 0,
+                    }
+                ]
+            }
+        raise ImouException("unsupported", api_code="DV1026")
+
+    with patch(
+        "pyimouapi.ha_device.async_property_get", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.side_effect = _fake_get
+        await ha_manager._async_update_v2_property_entities(device)
+        first_count = mock_get.await_count
+        await ha_manager._async_update_v2_property_entities(device)
+        second_count = mock_get.await_count
+
+    assert device.sensors["storage_used"][PARAM_STATE] == 90
+    assert device.property_read_denied("channel", "detection.siren.linkage")
+    assert second_count > first_count
+    for call in mock_get.await_args_list[first_count:]:
+        assert "detection.siren.linkage" not in call.kwargs["properties"]
+
+
+@pytest.mark.asyncio
+async def test_property_get_splits_batches_on_dv1026(
+    ha_manager: ImouHaDeviceManager,
+) -> None:
+    """One bad property in a batch should not force one HTTP call per id."""
+    device = _switch_device()
+    device.switches["motion_detect"] = {
+        PARAM_V2_TARGET_ID: "detection.motion.enabled",
+        PARAM_STATE: False,
+    }
+    device.switches["ab_alarm_sound"] = {
+        PARAM_V2_TARGET_ID: "detection.sound.enabled",
+        PARAM_STATE: False,
+    }
+    device.switches["linkage_siren"] = {
+        PARAM_V2_TARGET_ID: "detection.siren.linkage",
+        PARAM_STATE: False,
+    }
+    device.set_capability_set(
+        _property_capability_set(
+            "detection.motion.enabled",
+            "detection.sound.enabled",
+            "detection.siren.linkage",
+        )
+    )
+    call_counter = 0
+
+    async def _fake_get(*_args, **kwargs):
+        nonlocal call_counter
+        call_counter += 1
+        props = list(kwargs["properties"])
+        if "detection.siren.linkage" in props and len(props) > 1:
+            raise ImouException("unsupported", api_code="DV1026")
+        if props == ["detection.siren.linkage"]:
+            raise ImouException("unsupported", api_code="DV1026")
+        return dict.fromkeys(props, 1)
+
+    with patch(
+        "pyimouapi.ha_device.async_property_get", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.side_effect = _fake_get
+        await ha_manager._async_update_v2_property_entities(device)
+
+    assert device.switches["motion_detect"][PARAM_STATE] is True
+    assert device.switches["ab_alarm_sound"][PARAM_STATE] is True
+    assert call_counter <= 5
+    assert device.property_read_denied("channel", "detection.siren.linkage")
+
+
+@pytest.mark.asyncio
 async def test_property_entities_still_polled_when_capability_lists_them_as_services(
     ha_manager: ImouHaDeviceManager,
 ) -> None:

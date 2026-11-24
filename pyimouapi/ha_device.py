@@ -304,6 +304,24 @@ class ImouHaDevice:
         self._ai_insight_cloud_label: str = "inactive"
         self._play_token_v2: str | None = None
         self._source = ""
+        self._property_read_denylist: set[str] = set()
+
+    def _property_read_deny_key(self, scope: str, property_id: str) -> str:
+        return f"{scope}:{property_id}"
+
+    def property_read_denied(self, scope: str, property_id: str) -> bool:
+        return (
+            self._property_read_deny_key(scope, property_id)
+            in self._property_read_denylist
+        )
+
+    def deny_property_read(self, scope: str, property_id: str) -> None:
+        self._property_read_denylist.add(
+            self._property_read_deny_key(scope, property_id)
+        )
+
+    def clear_property_read_denylist(self) -> None:
+        self._property_read_denylist.clear()
 
     @property
     def device_id(self) -> str:
@@ -514,6 +532,7 @@ class ImouHaDevice:
 
     def set_capability_set(self, capability_set: CapabilitySet) -> None:
         self._capability_set = capability_set
+        self.clear_property_read_denylist()
 
     @property
     def capability_set(self) -> CapabilitySet | None:
@@ -614,6 +633,7 @@ class ImouHaDevice:
         self._capability_ids = other.capability_ids
         self._device_capability_ids = other.device_capability_ids
         self._bulb_v2 = other.bulb_v2
+        self.clear_property_read_denylist()
         return removed
 
     def __str__(self) -> str:
@@ -1131,6 +1151,49 @@ class ImouHaDeviceManager:
                 properties=payload,
             )
 
+    _PROPERTY_GET_UNSUPPORTED = frozenset({"DV1026", "DV1049"})
+
+    async def _async_property_get_resilient(
+        self,
+        device: ImouHaDevice,
+        *,
+        scope: str,
+        channel_id: str | None,
+        property_ids: list[str],
+    ) -> dict[str, Any]:
+        """Read a scope-local id list, splitting on DV1026/DV1049 to save quota."""
+        if not property_ids:
+            return {}
+        try:
+            return await async_property_get(
+                self.delegate.api_client,
+                device_id=device.device_id,
+                channel_id=channel_id,
+                product_id=device.product_id,
+                properties=property_ids,
+            )
+        except ImouException as exc:
+            if exc.api_code not in self._PROPERTY_GET_UNSUPPORTED:
+                raise
+            if len(property_ids) == 1:
+                device.deny_property_read(scope, property_ids[0])
+                return {}
+            mid = len(property_ids) // 2
+            left = await self._async_property_get_resilient(
+                device,
+                scope=scope,
+                channel_id=channel_id,
+                property_ids=property_ids[:mid],
+            )
+            right = await self._async_property_get_resilient(
+                device,
+                scope=scope,
+                channel_id=channel_id,
+                property_ids=property_ids[mid:],
+            )
+            left.update(right)
+            return left
+
     async def _async_read_scoped_properties(
         self, device: ImouHaDevice, property_ids: list[str]
     ) -> dict[str, Any]:
@@ -1138,38 +1201,20 @@ class ImouHaDeviceManager:
         groups: dict[str, list[str]] = {}
         for property_id in property_ids:
             scope = self._property_scope(device, property_id)
+            if device.property_read_denied(scope, property_id):
+                continue
             groups.setdefault(scope, []).append(property_id)
         merged: dict[str, Any] = {}
         for scope, ids in groups.items():
             channel_id = None if scope == "device" else device.channel_id
-            try:
-                merged.update(
-                    await async_property_get(
-                        self.delegate.api_client,
-                        device_id=device.device_id,
-                        channel_id=channel_id,
-                        product_id=device.product_id,
-                        properties=ids,
-                    )
+            merged.update(
+                await self._async_property_get_resilient(
+                    device,
+                    scope=scope,
+                    channel_id=channel_id,
+                    property_ids=ids,
                 )
-            except ImouException as exc:
-                if exc.api_code not in ("DV1026", "DV1049"):
-                    raise
-                for property_id in ids:
-                    try:
-                        merged.update(
-                            await async_property_get(
-                                self.delegate.api_client,
-                                device_id=device.device_id,
-                                channel_id=channel_id,
-                                product_id=device.product_id,
-                                properties=[property_id],
-                            )
-                        )
-                    except ImouException as single_exc:
-                        if single_exc.api_code in ("DV1026", "DV1049"):
-                            continue
-                        raise
+            )
         return merged
 
     async def _async_update_v2_property_entities(self, device: ImouHaDevice) -> bool:
@@ -1196,6 +1241,9 @@ class ImouHaDeviceManager:
                         and target_id in capability.services
                     ):
                         continue
+                scope = self._property_scope(device, target_id)
+                if device.property_read_denied(scope, target_id):
+                    continue
                 seen.add(target_id)
                 property_ids.append(target_id)
         if not property_ids:
