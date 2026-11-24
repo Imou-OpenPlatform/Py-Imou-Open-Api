@@ -100,29 +100,6 @@ _CLOUD_PLAN_CONCURRENCY = 10
 _CLOUD_PLAN_NO_PACKAGE = frozenset({"ST1002", "ST1004"})
 
 
-def _safe_stream_host(url: str) -> str:
-    """Return only a validated hostname and port for debug logging."""
-    if not isinstance(url, str) or any(
-        not character.isprintable() or character.isspace() for character in url
-    ):
-        return "***"
-    try:
-        parsed = urlparse(url)
-        hostname = parsed.hostname or ""
-        port = parsed.port
-    except ValueError:
-        return "***"
-    if (
-        parsed.scheme not in {"http", "https", "rtsp", "rtmp"}
-        or not hostname
-        or port == 0
-        or any(character in hostname for character in "/\\@?#%")
-    ):
-        return "***"
-    host = f"[{hostname}]" if ":" in hostname else hostname
-    return f"{host}:{port}" if port is not None else host
-
-
 def _state_values_equal(current: Any, new: Any) -> bool:
     """Compare normalized HA state without treating bool as an integer."""
     if isinstance(current, bool) or isinstance(new, bool):
@@ -1589,7 +1566,7 @@ class ImouHaDeviceManager:
             raise RequestFailedException(
                 f"device {device.device_id} answered getStreamUrl without a url"
             )
-        _LOGGER.debug("get_device_stream host=%s", _safe_stream_host(url))
+        _LOGGER.debug("get_device_stream host=%s", urlparse(url).netloc)
         return url
 
     @staticmethod
@@ -1598,26 +1575,24 @@ class ImouHaDeviceManager:
 
     @staticmethod
     def _pick_hls_url(data: dict[str, Any], resolution: str, protocol: str) -> str:
-        """Pick an exact stream id and, when supplied, an exact protocol."""
+        """Pick the HLS URL the way 1.3 did: protocol plus stream id."""
         streams = data.get(PARAM_STREAMS) if isinstance(data, dict) else None
         if not isinstance(streams, list) or not streams:
             raise RequestFailedException("live stream list is empty")
         wanted_id = 0 if resolution == PARAM_HD else 1
+        prefix = f"{protocol}:"
         for stream in streams:
             if not isinstance(stream, dict):
                 continue
             hls = stream.get(PARAM_HLS)
-            if not isinstance(hls, str) or not hls:
+            if not isinstance(hls, str) or not hls.startswith(prefix):
                 continue
-            if stream.get(PARAM_STREAM_ID) != wanted_id:
-                continue
-            if protocol and not hls.startswith(f"{protocol}:"):
-                continue
-            return hls
-        raise RequestFailedException(
-            f"live stream not found for resolution {resolution}"
-            f" and protocol {protocol or 'any'}"
-        )
+            if stream.get(PARAM_STREAM_ID) == wanted_id:
+                return hls
+        first = streams[0].get(PARAM_HLS) if isinstance(streams[0], dict) else None
+        if not isinstance(first, str) or not first:
+            raise RequestFailedException("live stream list is empty")
+        return first
 
     async def _async_get_bind_live(
         self, device: ImouHaDevice, resolution: str, protocol: str
@@ -1640,7 +1615,7 @@ class ImouHaDeviceManager:
                     device.device_id, device.channel_id
                 )
         url = self._pick_hls_url(data, resolution, protocol)
-        _LOGGER.debug("get_device_stream host=%s", _safe_stream_host(url))
+        _LOGGER.debug("get_device_stream host=%s", urlparse(url).netloc)
         return url
 
     async def async_get_device_image(

@@ -1,6 +1,5 @@
 """Owner cameras use cloud HLS; shared cameras keep getStreamUrl."""
 
-import logging
 from unittest.mock import AsyncMock
 
 import pytest
@@ -48,109 +47,6 @@ async def test_bind_uses_cloud_hls(ha_manager) -> None:
     assert url == "http://cdn.example/hd.m3u8"
     ha_manager.delegate.async_get_stream_url.assert_awaited_once_with("IPC1", "0")
     ha_manager.delegate.async_create_device_realtime_flv.assert_not_awaited()
-
-
-@pytest.mark.parametrize(
-    ("resolution", "protocol", "expected"),
-    [
-        ("HD", "http", "http://cdn.example/hd.m3u8"),
-        ("HD", "https", "https://cdn.example/hd.m3u8"),
-        ("SD", "http", "http://cdn.example/sd.m3u8"),
-        ("SD", "https", "https://cdn.example/sd.m3u8"),
-        ("HD", "", "https://cdn.example/hd.m3u8"),
-        ("SD", "", "https://cdn.example/sd.m3u8"),
-    ],
-)
-def test_pick_hls_url_matches_resolution_and_protocol(
-    resolution: str, protocol: str, expected: str
-) -> None:
-    data = {
-        "streams": [
-            {"streamId": 0, "hls": "https://cdn.example/hd.m3u8"},
-            {"streamId": 1, "hls": "https://cdn.example/sd.m3u8"},
-            {"streamId": 0, "hls": "http://cdn.example/hd.m3u8"},
-            {"streamId": 1, "hls": "http://cdn.example/sd.m3u8"},
-        ]
-    }
-
-    assert ImouHaDeviceManager._pick_hls_url(data, resolution, protocol) == expected
-
-
-@pytest.mark.parametrize(
-    ("resolution", "protocol"),
-    [("HD", "https"), ("SD", "https"), ("HD", "rtmp")],
-)
-def test_pick_hls_url_does_not_fall_back_on_protocol_mismatch(
-    resolution: str, protocol: str
-) -> None:
-    with pytest.raises(RequestFailedException, match="live stream not found"):
-        ImouHaDeviceManager._pick_hls_url(_streams(), resolution, protocol)
-
-
-@pytest.mark.parametrize(("resolution", "stream_id"), [("HD", 1), ("SD", 0)])
-def test_pick_hls_url_does_not_fall_back_on_resolution_mismatch(
-    resolution: str, stream_id: int
-) -> None:
-    data = {"streams": [{"streamId": stream_id, "hls": "http://cdn.example/a.m3u8"}]}
-
-    with pytest.raises(RequestFailedException, match="live stream not found"):
-        ImouHaDeviceManager._pick_hls_url(data, resolution, "")
-
-
-@pytest.mark.asyncio
-async def test_bind_protocol_defaults_to_any_matching_stream(ha_manager) -> None:
-    device = _camera("bind")
-    ha_manager.delegate.async_get_stream_url = AsyncMock(return_value=_streams())
-
-    assert await ha_manager.async_get_device_stream(device, "HD") == (
-        "http://cdn.example/hd.m3u8"
-    )
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("source", "url", "safe_host"),
-    [
-        (
-            "bind",
-            "https://user:password@cdn.example:8443/hd/path-secret"
-            "?token=query-secret#fragment-secret",
-            "cdn.example:8443",
-        ),
-        (
-            "share",
-            "rtsp://user:password@cdn.example:554/path-secret"
-            "?token=query-secret#fragment-secret",
-            "cdn.example:554",
-        ),
-    ],
-)
-async def test_stream_debug_log_keeps_only_safe_host(
-    ha_manager,
-    caplog: pytest.LogCaptureFixture,
-    source: str,
-    url: str,
-    safe_host: str,
-) -> None:
-    device = _camera(source)
-    if source == "bind":
-        ha_manager.delegate.async_get_stream_url = AsyncMock(
-            return_value={"streams": [{"streamId": 0, "hls": url}]}
-        )
-    else:
-        ha_manager.delegate.async_get_rtsp_stream_url = AsyncMock(
-            return_value={"url": url}
-        )
-
-    with caplog.at_level(logging.DEBUG, logger="pyimouapi"):
-        result = await ha_manager.async_get_device_stream(
-            device, "HD", "https" if source == "bind" else ""
-        )
-
-    assert result == url
-    assert safe_host in caplog.text
-    for secret in ("user:password", "path-secret", "query-secret", "fragment-secret"):
-        assert secret not in caplog.text
 
 
 @pytest.mark.asyncio

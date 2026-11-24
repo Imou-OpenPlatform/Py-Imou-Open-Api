@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import ipaddress
 from typing import Any, Literal
-from urllib.parse import urlsplit
 
 from ..const import (
     API_ENDPOINT_CREATE_DEVICE_FLV_LIVE,
@@ -19,57 +17,13 @@ PLAYBACK_TYPE_PLAYBACK = "playback"
 PLAYBACK_TYPE_REALTIME = "realTime"
 
 
-def _valid_hostname(hostname: str) -> bool:
-    """Return whether a parsed URL hostname is syntactically valid."""
-    if not hostname or len(hostname) > 253 or "%" in hostname:
-        return False
-    try:
-        ipaddress.ip_address(hostname)
-    except ValueError:
-        try:
-            ascii_hostname = hostname.encode("idna").decode("ascii").lower()
-        except UnicodeError:
-            return False
-        candidate = ascii_hostname.rstrip(".")
-        if not candidate or len(candidate) > 253:
-            return False
-        labels = candidate.split(".")
-        if len(labels) > 1 and all(label.isdigit() for label in labels):
-            return False
-        return all(
-            label
-            and len(label) <= 63
-            and not label.startswith("-")
-            and not label.endswith("-")
-            and all(character.isalnum() or character == "-" for character in label)
-            for label in labels
-        )
-    return True
-
-
 def is_flv_playback_url(url: str) -> bool:
-    """Return whether the URL is a valid HTTP(S) FLV playback address."""
-    if not isinstance(url, str):
-        return False
-    if any(not character.isprintable() for character in url):
-        return False
+    """Return whether the URL looks like an Imou FLV playback address."""
     candidate = url.strip()
-    if any(character.isspace() for character in candidate):
+    if not candidate.startswith(("http://", "https://")):
         return False
-    try:
-        parsed = urlsplit(candidate)
-        hostname = parsed.hostname or ""
-        port = parsed.port
-    except ValueError:
-        return False
-    if parsed.scheme not in {"http", "https"} or not _valid_hostname(hostname):
-        return False
-    if parsed.username is not None or parsed.password is not None or port == 0:
-        return False
-    authority = parsed.netloc.rsplit("@", 1)[-1]
-    if authority.endswith(":"):
-        return False
-    return parsed.path.lower().endswith(".flv")
+    lowered = candidate.lower()
+    return lowered.endswith(".flv") or ".flv?" in lowered
 
 
 def parse_record_flv_urls(
