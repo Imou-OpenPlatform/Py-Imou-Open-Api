@@ -36,6 +36,9 @@ All notable changes to this project will be documented in this file.
 - When the device list says AI Insight is on, status polls call `queryDeviceAiInsight` and map `strategyStatus` onto active / paused / inactive for the AI Insight sensor.
 - Transport timeouts, HTTP errors, and OpenAPI error codes are logged at warning with the endpoint. `TimeoutError` is named in the exception text (its own ``str()`` is empty).
 - Local storage and device volume are read and written as device-scope properties. A channel id on those calls was leaving **Storage used** stuck at a fake `0`. The sensor no longer starts as `"0"` before the first successful read.
+- Property polling still runs when `device.capability.list` lists a property id only under **services**, which PaaS cameras such as TP7i sometimes do.
+- `device.property.get` calls that return **DV1026** or **DV1049** for one channel-scoped batch no longer discard values already read for other scopes (for example **Storage used** on TP7i).
+- **Battery** reads `power.battery.info` when `elecPercent` is present but `category` is omitted (UA7L AOV).
 
 ### [1.4.4]
 
@@ -277,6 +280,9 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 - 设备列表显示智见已开通时，状态轮询会调用 `queryDeviceAiInsight`，按 `strategyStatus` 把 AI 智见传感器写成已开通 / 暂停中 / 未开通。
 - 请求超时、HTTP 错误和开放平台错误码会以 warning 打出接口路径。`TimeoutError` 会写进异常文案（它自己的 ``str()`` 是空的）。
 - 本地存储和设备音量按设备级读写。以前带上通道号时，**存储使用率**会一直停在假的 `0`。传感器在首次读成功前也不再默认成 `"0"`。
+- 当 `device.capability.list` 把属性 id 只写在 **services** 里时仍会继续 `property` 轮询（部分 PaaS 摄像头如 TP7i 会这样）。
+- 通道级 `property.get` 返回 **DV1026** / **DV1049** 时不再丢掉已成功读到的其他作用域（例如 TP7i 的存储使用率）。
+- **电池**：`power.battery.info` 无 `category` 时仍解析 `elecPercent`（UA7L AOV）。
 
 ### [1.4.4]
 

@@ -16,6 +16,7 @@ from pyimouapi.const import (
     STATE_VARIANT_NUMERIC,
 )
 from pyimouapi.device import ImouDeviceManager
+from pyimouapi.exceptions import ImouException
 from pyimouapi.ha_device import ImouHaDevice, ImouHaDeviceManager
 from pyimouapi.openapi import ImouOpenApiClient
 
@@ -113,6 +114,116 @@ async def test_storage_read_omits_channel_when_map_says_device(
     mock_get.assert_awaited_once()
     assert mock_get.await_args.kwargs["channel_id"] is None
     assert device.sensors["storage_used"][PARAM_STATE] == 91
+
+
+@pytest.mark.asyncio
+async def test_property_poll_applies_when_channel_batch_returns_dv1026(
+    ha_manager: ImouHaDeviceManager,
+) -> None:
+    """Unsupported linkage reads must not discard a successful device-scope batch."""
+    device = ImouHaDevice("TP7", "Cam", "lechange", "TP7i", "1.0")
+    device.set_channel_id("0")
+    device.sensors["storage_used"] = {
+        PARAM_V2_TARGET_ID: "storage.local.capacity",
+        PARAM_STATE: None,
+    }
+    device.switches["linkage_siren"] = {
+        PARAM_V2_TARGET_ID: "detection.siren.linkage",
+        PARAM_STATE: False,
+    }
+    device.set_capability_set(
+        CapabilitySet(
+            properties={
+                "storage.local.capacity": PropertyCapability(
+                    "storage.local.capacity", "r", "array", scope="device"
+                ),
+                "detection.siren.linkage": PropertyCapability(
+                    "detection.siren.linkage", "rw", "bool", scope="channel"
+                ),
+            },
+            services=frozenset(),
+            events=frozenset(),
+        )
+    )
+
+    async def _fake_get(*_args, **kwargs):
+        props = kwargs["properties"]
+        if "storage.local.capacity" in props:
+            return {
+                "storage.local.capacity": [
+                    {
+                        "totalBytes": 31449055232,
+                        "usedBytes": 29046341632,
+                        "storageState": "1",
+                        "storageAbnormal": "1",
+                        "index": 0,
+                    }
+                ]
+            }
+        raise ImouException("unsupported", api_code="DV1026")
+
+    with patch(
+        "pyimouapi.ha_device.async_property_get", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.side_effect = _fake_get
+        await ha_manager._async_update_v2_property_entities(device)
+
+    assert device.sensors["storage_used"][PARAM_STATE] == 92
+
+
+@pytest.mark.asyncio
+async def test_property_entities_still_polled_when_capability_lists_them_as_services(
+    ha_manager: ImouHaDeviceManager,
+) -> None:
+    """PaaS rows may list ids under services only; property.get still works."""
+    device = ImouHaDevice("TP7", "Cam", "lechange", "TP7i", "1.0")
+    device.sensors["storage_used"] = {
+        PARAM_V2_TARGET_ID: "storage.local.capacity",
+        PARAM_STATE: None,
+    }
+    device.switches["play_sound"] = {
+        PARAM_V2_TARGET_ID: "audio.prompt.enabled",
+        PARAM_STATE: False,
+    }
+    device.switches["light"] = {
+        PARAM_V2_TARGET_ID: "light.indicator.enabled",
+        PARAM_STATE: False,
+    }
+    device.set_capability_set(
+        CapabilitySet(
+            properties={},
+            services=frozenset(
+                {
+                    "storage.local.capacity",
+                    "audio.prompt.enabled",
+                    "light.indicator.enabled",
+                }
+            ),
+            events=frozenset(),
+        )
+    )
+    with patch(
+        "pyimouapi.ha_device.async_property_get", new_callable=AsyncMock
+    ) as mock_get:
+        mock_get.return_value = {
+            "audio.prompt.enabled": 1,
+            "light.indicator.enabled": 1,
+            "storage.local.capacity": [
+                {
+                    "totalBytes": 31449055232,
+                    "usedBytes": 28889776128,
+                    "storageState": "1",
+                    "storageAbnormal": "1",
+                    "index": 0,
+                }
+            ],
+        }
+        await ha_manager._async_update_v2_property_entities(device)
+
+    assert mock_get.await_count >= 1
+    assert device.sensors["storage_used"][PARAM_STATE] == 91
+    assert device.switches["play_sound"][PARAM_STATE] is True
+    assert device.switches["light"][PARAM_STATE] is True
 
 
 def test_storage_capacity_list_becomes_a_used_percentage() -> None:

@@ -136,15 +136,25 @@ def _battery_level_from_v2_info(data: Any) -> int | None:
         category = item.get("category")
         battery_type = item.get("type")
         level = _normalized_battery_level(item.get("elecPercent"))
+        if level is None:
+            continue
+        if isinstance(category, bool) or not isinstance(category, int):
+            # UA7L and similar AOV rows omit category but still report elecPercent.
+            if isinstance(battery_type, int) and not isinstance(battery_type, bool):
+                if battery_type == 0:
+                    return level
+                if first_active_level is None:
+                    first_active_level = level
+            elif first_active_level is None:
+                first_active_level = level
+            continue
         if (
-            isinstance(category, bool)
-            or not isinstance(category, int)
-            or category != 1
+            category != 1
             or isinstance(battery_type, bool)
             or not isinstance(battery_type, int)
-            or battery_type < 0
-            or level is None
         ):
+            continue
+        if battery_type < 0:
             continue
         if battery_type == 0:
             return level
@@ -1132,15 +1142,34 @@ class ImouHaDeviceManager:
         merged: dict[str, Any] = {}
         for scope, ids in groups.items():
             channel_id = None if scope == "device" else device.channel_id
-            merged.update(
-                await async_property_get(
-                    self.delegate.api_client,
-                    device_id=device.device_id,
-                    channel_id=channel_id,
-                    product_id=device.product_id,
-                    properties=ids,
+            try:
+                merged.update(
+                    await async_property_get(
+                        self.delegate.api_client,
+                        device_id=device.device_id,
+                        channel_id=channel_id,
+                        product_id=device.product_id,
+                        properties=ids,
+                    )
                 )
-            )
+            except ImouException as exc:
+                if exc.api_code not in ("DV1026", "DV1049"):
+                    raise
+                for property_id in ids:
+                    try:
+                        merged.update(
+                            await async_property_get(
+                                self.delegate.api_client,
+                                device_id=device.device_id,
+                                channel_id=channel_id,
+                                product_id=device.product_id,
+                                properties=[property_id],
+                            )
+                        )
+                    except ImouException as single_exc:
+                        if single_exc.api_code in ("DV1026", "DV1049"):
+                            continue
+                        raise
         return merged
 
     async def _async_update_v2_property_entities(self, device: ImouHaDevice) -> bool:
@@ -1151,7 +1180,7 @@ class ImouHaDeviceManager:
         property_ids: list[str] = []
         seen: set[str] = set()
         capability = device.capability_set
-        for _, _, meta in entities:
+        for kind, _, meta in entities:
             raw_ids = meta.get(PARAM_V2_SOURCE_TARGET_IDS, [meta[PARAM_V2_TARGET_ID]])
             for raw_id in raw_ids:
                 target_id = str(raw_id)
@@ -1161,7 +1190,11 @@ class ImouHaDeviceManager:
                     prop = capability.properties.get(target_id)
                     if prop is not None and not prop.readable:
                         continue
-                    if prop is None and target_id in capability.services:
+                    if (
+                        kind == "select"
+                        and prop is None
+                        and target_id in capability.services
+                    ):
                         continue
                 seen.add(target_id)
                 property_ids.append(target_id)

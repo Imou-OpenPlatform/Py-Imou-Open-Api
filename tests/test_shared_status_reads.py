@@ -287,6 +287,22 @@ def test_battery_scalar_push_falls_back_from_invalid_value(scalar: object) -> No
 
 
 @pytest.mark.asyncio
+async def test_battery_info_accepts_rows_without_category() -> None:
+    """UA7L AOV sometimes omits category while reporting elecPercent."""
+    device = _battery_device("power.battery.info")
+    manager = ImouHaDeviceManager(MagicMock())
+    values = {"power.battery.info": [{"elecPercent": 83}]}
+
+    with patch(
+        "pyimouapi.ha_device.async_property_get",
+        AsyncMock(return_value=values),
+    ):
+        await manager._async_update_v2_property_entities(device)
+
+    assert device.sensors[PARAM_BATTERY][PARAM_STATE] == 83
+
+
+@pytest.mark.asyncio
 async def test_battery_info_prefers_type_zero_then_first_active() -> None:
     device = _battery_device("power.battery.info")
     manager = ImouHaDeviceManager(MagicMock())
