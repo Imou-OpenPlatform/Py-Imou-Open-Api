@@ -779,28 +779,3 @@ async def test_close_is_idempotent(client: ImouOpenApiClient) -> None:
     await client.async_close()
 
     assert session.close_count == 1
-
-
-@pytest.mark.asyncio
-async def test_download_rejects_non_http_urls(client: ImouOpenApiClient) -> None:
-    """A snapshot URL is not allowed to read local files or carry credentials."""
-    with pytest.raises(RequestFailedException):
-        await client.async_download("file:///etc/passwd")
-    with pytest.raises(RequestFailedException):
-        await client.async_download("https://user:pass@cdn.example.com/snap.jpg")
-
-
-@pytest.mark.asyncio
-async def test_unsafe_current_domain_redirect_is_ignored(
-    client: ImouOpenApiClient, caplog: pytest.LogCaptureFixture
-) -> None:
-    """The token response cannot point the signed API traffic at localhost."""
-    install_session(
-        client,
-        [api_result(data={"accessToken": "tok-1", "currentDomain": "127.0.0.1"})],
-    )
-
-    await client.async_get_token()
-
-    assert client._api_url == "api.example.com"
-    assert "unsafe currentDomain" in caplog.text

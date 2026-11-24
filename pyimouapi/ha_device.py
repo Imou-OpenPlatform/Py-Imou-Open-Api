@@ -1414,7 +1414,7 @@ class ImouHaDeviceManager:
                     )
                     continue
                 self._apply_online_value(
-                    device, channel.get(PARAM_CHANNEL_STATUS) or device_status
+                    device, channel.get(PARAM_CHANNEL_STATUS, device_status)
                 )
                 self._apply_subscription_status(device, channel, item)
             except (KeyError, TypeError, ValueError) as err:

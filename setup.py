@@ -1,11 +1,11 @@
 from pathlib import Path
 
-from setuptools import setup
+from setuptools import find_packages, setup
 
 setup(
     name="pyimouapi",
     version="2.0.0",
-    packages=["pyimouapi"],
+    packages=find_packages(),
     package_data={"pyimouapi": ["py.typed", "data/*.yaml"]},
     zip_safe=False,
     python_requires=">=3.11",

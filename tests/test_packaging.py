@@ -2,7 +2,6 @@
 
 import importlib
 import re
-import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -10,7 +9,6 @@ import zipfile
 from pathlib import Path
 
 import pyimouapi
-import pytest
 
 ROOT = Path(__file__).parent.parent
 
@@ -49,8 +47,6 @@ def test_push_dispatch_allowlist_is_packaged() -> None:
 
 def test_push_dispatch_allowlist_in_wheel_and_sdist() -> None:
     """Built artifacts must ship the allowlist module, not only the source tree."""
-    if shutil.which("uv") is None:
-        pytest.skip("uv is required to build distributions")
     module_suffix = "pyimouapi/push_dispatch_allowlist.py"
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp)
