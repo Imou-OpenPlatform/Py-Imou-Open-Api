@@ -23,6 +23,7 @@ from .const import (
     API_ENDPOINT_LIST_PRODUCT_DETAIL,
     API_ENDPOINT_QUERY_CLOUD_RECORD_BITMAP,
     API_ENDPOINT_QUERY_CLOUD_RECORDS,
+    API_ENDPOINT_QUERY_DEVICE_AI_INSIGHT,
     API_ENDPOINT_SEARCH_AI_ALARM_MESSAGE,
     API_ENDPOINT_SET_DEVICE_SNAP,
     API_V2_DEVICE_DETAIL_LIST,
@@ -601,6 +602,16 @@ class ImouDeviceManager:
         """Current cloud plan for one channel (getDeviceCloud)."""
         data = await self._imou_api_client.async_request_api(
             API_ENDPOINT_GET_DEVICE_CLOUD,
+            {PARAM_DEVICE_ID: device_id, PARAM_CHANNEL_ID: channel_id},
+        )
+        return data if isinstance(data, dict) else {}
+
+    async def async_query_device_ai_insight(
+        self, device_id: str, channel_id: str
+    ) -> dict[str, Any]:
+        """Current AI Insight plan for one channel (queryDeviceAiInsight)."""
+        data = await self._imou_api_client.async_request_api(
+            API_ENDPOINT_QUERY_DEVICE_AI_INSIGHT,
             {PARAM_DEVICE_ID: device_id, PARAM_CHANNEL_ID: channel_id},
         )
         return data if isinstance(data, dict) else {}

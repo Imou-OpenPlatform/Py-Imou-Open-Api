@@ -63,6 +63,28 @@ def ai_insight_label_from_status(value: str | None) -> str:
     return subscription_status_label(value)
 
 
+def ai_insight_label_from_strategy_status(status: int | None) -> str:
+    """Map queryDeviceAiInsight ``strategyStatus`` onto the AI Insight sensor."""
+    if status == 1:
+        return "active"
+    if status == 2:
+        return "paused"
+    return "inactive"
+
+
+def parse_ai_insight_strategy_status(data: Any) -> int | None:
+    """Read ``strategyStatus`` from queryDeviceAiInsight ``data``."""
+    if not isinstance(data, dict):
+        return None
+    status_raw = data.get("strategyStatus")
+    if status_raw is None or str(status_raw).strip() == "":
+        return None
+    try:
+        return int(status_raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def parse_device_cloud_data(data: Any) -> DeviceCloudService:
     """Parse getDeviceCloud ``data`` without raising."""
     if not isinstance(data, dict):

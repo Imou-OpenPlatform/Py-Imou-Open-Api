@@ -20,6 +20,7 @@ API_ENDPOINT_SET_MESSAGE_CALLBACK = "/openapi/setMessageCallback"
 API_ENDPOINT_GET_MESSAGE_CALLBACK = "/openapi/getMessageCallback"
 API_ENDPOINT_GET_PLAY_TOKEN_KEY = "/openapi/getPlayTokenKey"
 API_ENDPOINT_GET_DEVICE_CLOUD = "/openapi/getDeviceCloud"
+API_ENDPOINT_QUERY_DEVICE_AI_INSIGHT = "/openapi/queryDeviceAiInsight"
 
 # Open API v2 — standard capabilities
 API_V2_DEVICE_CAPABILITY_LIST = "/openapi/v2/device.capability.list"
