@@ -68,7 +68,7 @@ async def test_rtsp_request_sends_product_id_for_iot_devices() -> None:
 
 @pytest.mark.asyncio
 async def test_live_stream_uses_get_stream_url_only() -> None:
-    """Live view fetches getStreamUrl; it does not look up or create HLS."""
+    """A camera that is not an owner binding keeps getStreamUrl."""
     delegate = MagicMock()
     delegate.async_get_stream_url = AsyncMock()
     delegate.async_create_stream_url = AsyncMock()

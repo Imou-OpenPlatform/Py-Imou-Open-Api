@@ -195,6 +195,7 @@ class ImouDevice:
         self._is_multi = False
         self._is_ipc = False
         self._access_type = "PaaS"
+        self._source = ""
 
     @property
     def device_id(self) -> str:
@@ -257,6 +258,14 @@ class ImouDevice:
     @property
     def access_type(self) -> str:
         return self._access_type
+
+    @property
+    def source(self) -> str:
+        """Device detail ``source``, such as ``bind`` or ``share``."""
+        return self._source
+
+    def set_source(self, source: str) -> None:
+        self._source = source
 
     def set_product_id(self, product_id: str) -> None:
         self._product_id = product_id
@@ -414,6 +423,10 @@ class ImouDeviceManager:
                 imou_device.set_is_multi(device[PARAM_MULTI_FLAG])
             if PARAM_ACCESS_TYPE in device:
                 imou_device.set_access_type(device[PARAM_ACCESS_TYPE])
+            raw_source = device.get("source")
+            imou_device.set_source(
+                raw_source.strip() if isinstance(raw_source, str) else ""
+            )
             if PARAM_CHANNEL_LIST in device:
                 channel_list = device[PARAM_CHANNEL_LIST] or []
                 if not isinstance(channel_list, list):

@@ -196,3 +196,21 @@ async def test_fetch_ability_refs_set_only_queries_named_devices() -> None:
     assert result[0].device_ability_refs == "unknown"
     assert result[1].device_ability_refs == "1,2,3"
     assert result[2].device_ability_refs == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_device_list_keeps_source() -> None:
+    """Live selection needs bind versus share from the device list."""
+    owned = make_device("owned")
+    owned["source"] = " bind "
+    shared = make_device("shared")
+    shared["source"] = "share"
+    blank = make_device("blank")
+    blank["source"] = None
+    manager, _tracker = make_manager(
+        {1: {PARAM_COUNT: 3, PARAM_DEVICE_LIST: [owned, shared, blank]}}
+    )
+
+    result = await manager.async_get_devices(fetch_ability_refs=False)
+
+    assert [device.source for device in result] == ["bind", "share", ""]

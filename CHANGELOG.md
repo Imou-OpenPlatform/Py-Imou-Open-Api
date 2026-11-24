@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 
 #### Changed
 
+- Owner cameras (`source` is `bind`) use the cloud HLS address again. `live_protocol` selects `http` or `https`. Shared cameras, and cameras whose list entry has no `source`, still use a short-lived RTSP URL from `getStreamUrl`.
 - Ship with Home Assistant Core Imou integration when pinned to pyimouapi 1.4.5.
 
 ### [1.4.4]
@@ -223,6 +224,17 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 ## 中文
 
 本项目的重要变更均记录于此。
+
+### [1.4.5]
+
+#### 修复
+
+- 快照下载会读完整个 JPEG。一次 `read()` 可能只拿到第一块，Home Assistant 摄像头预览就只剩画面上半部分。
+
+#### 变更
+
+- 自有设备（列表里的 `source` 为 `bind`）重新使用云端 HLS 地址。`live_protocol` 用来选择 `http` 或 `https`。分享设备，以及列表里没有 `source` 的设备，仍使用 `getStreamUrl` 返回的短时效 RTSP 地址。
+- 与钉在 pyimouapi 1.4.5 的 Home Assistant Core Imou 集成一起发布。
 
 ### [1.4.4]
 
