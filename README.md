@@ -15,7 +15,9 @@ Async Python client for the **Imou Open Platform** cloud APIs. Built on **aiohtt
 | `pyimouapi.collection_point` | Parsing helpers for PaaS / IoT collection point name lists |
 | `pyimouapi.push` | Open Platform event-push helpers: normalize payload fields, alarm vs status `msgType`, IoT envelope check, event-ref lookup, picture URLs (`thumbUrl` first, then `picUrlArray` / `picUrlArr` / `picUrl`) |
 | `pyimouapi.pic_decode` | `LCOpenPicDecoder` — decrypts alarm pictures **you have already downloaded**, through the official LCOpenSDK native libraries (linux x86-64). Also TCM detection and encrypt-key resolution. No Open Platform call, token, or CA bundle is involved |
-| `pyimouapi.ha_device` | `ImouHaDeviceManager`, `ImouHaDevice`, … — aggregated “device model” helpers for automation stacks (including `alarm_control_panel` for IoT ref `15200`, feature switches, and `select.collection_point` when the device exposes `CollectionPoint` or IoT refs `21500`/`22000`) |
+| `pyimouapi.capability` | V2 capability list / property / service clients and `configure_imou_ha_device_from_capability` for entity registration |
+| `pyimouapi.select_option` | Friendly keys for `device_volume`, `night_vision_mode`, and `wide_dynamic` (night-vision `starlight` ↔ raw `"5"`; five-level volume stays `"1"`–`"5"`) |
+| `pyimouapi.ha_device` | `ImouHaDeviceManager`, `ImouHaDevice`, … — aggregated “device model” helpers for automation stacks (capability-backed selects, switches, `select.collection_point`, …) |
 | `pyimouapi.exceptions` | `ImouException` and typed errors (connect, request, invalid credentials, …) |
 
 The top-level `pyimouapi` package re-exports common symbols. Import submodules directly when needed, for example `from pyimouapi.ha_device import ImouHaDeviceManager`.

@@ -26,6 +26,7 @@ All notable changes to this project will be documented in this file.
 #### Changed
 
 - A collection-point read the account is not allowed to make (`OP1009`) is logged at debug and keeps the previous options.
+- `select_option` maps night-vision raw `"5"` to friendly `starlight` (and back on write). Five-level `audio.volume.level` (`"1"`–`"5"`) stays numeric; the mute / low / medium / high scale is unchanged.
 - Ships with Imou Life 2.0.0.
 
 #### Fixed
@@ -271,6 +272,7 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 #### 变更
 
 - 账号无权读取收藏点（`OP1009`）时改为 debug 日志，并保留已有选项，不再每次刷新都打 warning。
+- `select_option` 将夜视 raw `"5"` 映射为友好键 `starlight`（写回时再转成 `"5"`）。五档 `audio.volume.level`（`"1"`～`"5"`）保持数字选项；静音 / 低 / 中 / 高 那套不变。
 - 与 Imou Life 2.0.0 一起发布。
 
 #### 修复
