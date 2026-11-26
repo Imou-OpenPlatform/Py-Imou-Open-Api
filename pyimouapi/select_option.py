@@ -50,6 +50,7 @@ _NIGHT_VISION_RAW_TO_FRIENDLY = {
     "2": "infrared",
     "3": "off",
     "4": "custom",
+    "5": "starlight",
 }
 _NIGHT_VISION_FRIENDLY_TO_RAW = {
     "intelligent": "0",
@@ -57,6 +58,7 @@ _NIGHT_VISION_FRIENDLY_TO_RAW = {
     "infrared": "2",
     "off": "3",
     "custom": "4",
+    "starlight": "5",
     "lowlight": "lowlight",
     "smartlowlight": "smartlowlight",
 }
@@ -67,6 +69,7 @@ for _k in (
     "infrared",
     "off",
     "custom",
+    "starlight",
     "lowlight",
     "smartlowlight",
 ):
