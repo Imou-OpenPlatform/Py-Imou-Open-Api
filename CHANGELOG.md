@@ -17,11 +17,12 @@ All notable changes to this project will be documented in this file.
 
 - Package `pyimouapi.capability` — `CapabilitySet`, `applicable_capability_ids`, `async_capability_list`, `async_property_get/set`, `async_service_invoke`, `configure_imou_ha_device_from_capability`.
 - `pyimouapi/data/v2_target_map.yaml` — authoritative `ha_key` → V2 `target_id` bindings for Imou Life.
-- Push helpers: V2 `eventId` and `device.property.report` normalization, capability event gating helpers, and AI tag / copywriting extraction.
-- V2 color bulb, outlet countdown, collection point, PTZ, conditional restart (`device.reboot.execute`, shown when `system.maintenance.rebootInvoke` is listed), and composite outlet metrics via capability services.
-- Cloud and local recording helpers (`cloud_record`, `local_record`, `playback.hls`, `playback.flv`) and `createDeviceRecordHls` wrapper.
-- AI Insight helpers (`insight.cloud`, `insight.search`, `insight.statistics` including identified events, risk windows, and two-hour timing buckets), `getDeviceCloud` polling on active cloud-storage channels, and `insight_features_active` on `ImouHaDevice`.
+- Push helpers: V2 `eventId` and `device.property.report` normalization, capability event gating helpers, push-dispatch classification, and AI tag / copywriting extraction.
+- V2 color bulb (`bulb_light`), outlet countdown / overcharge / metrics, collection point, PTZ, conditional restart (`device.reboot.execute` when listed), and product-type discovery helpers.
+- Cloud and local recording helpers (`cloud_record`, `local_record`, `playback.hls`, `playback.flv`) with pagination, time-bound listing, and `createDeviceRecordHls` wrapper.
+- AI Insight helpers (`insight.cloud`, `insight.search`, `insight.statistics` including identified events, risk windows, and two-hour timing buckets), `getDeviceCloud` / `queryDeviceAiInsight` polling, paused cloud-plan mapping, and `insight_features_active` on `ImouHaDevice`.
 - `detectDeviceSnap` (`deviceSnapDetect`) client and result parsing.
+- `select_option` / `alarm_mode` friendly-key mapping for selects and the alarm panel.
 
 #### Changed
 
@@ -31,14 +32,14 @@ All notable changes to this project will be documented in this file.
 
 #### Fixed
 
-- Snapshot downloads read the whole picture. A single buffered read was returning a truncated JPEG, so the camera preview and the downloaded still showed only the top of the frame.
-- A channel whose step move is rejected with DV2116 or DV1026 uses ptz.aim.relative for that press and later presses until the process restarts.
+- Snapshot downloads read the whole picture (truncated JPEG buffers no longer cut the frame).
+- A channel whose step move is rejected with DV2116 or DV1026 uses `ptz.aim.relative` for that press and later presses until the process restarts.
 - Owner cameras (`source` **bind**) use cloud HLS (`bindDeviceLive`). Shared cameras use `getStreamUrl` RTSP. Real-time FLV is not preferred (overseas regions often reject it).
 - When the device list says AI Insight is on, status polls call `queryDeviceAiInsight` and map `strategyStatus` onto active / paused / inactive for the AI Insight sensor.
 - Transport timeouts, HTTP errors, and OpenAPI error codes are logged at warning with the endpoint. `TimeoutError` is named in the exception text (its own ``str()`` is empty).
-- Local storage and device volume are read and written as device-scope properties. A channel id on those calls was leaving **Storage used** stuck at a fake `0`. The sensor no longer starts as `"0"` before the first successful read.
-- Property polling still runs when `device.capability.list` lists a property id only under **services**, which PaaS cameras such as TP7i sometimes do.
-- `device.property.get` calls that return **DV1026** or **DV1049** for one channel-scoped batch no longer discard values already read for other scopes (for example **Storage used** on TP7i).
+- Local storage and device volume are read and written as device-scope properties (a channel id was leaving storage stuck at a fake `0`).
+- Property polling still runs when `device.capability.list` lists a property id only under **services** (PaaS cameras such as TP7i).
+- `device.property.get` calls that return **DV1026** or **DV1049** for one channel-scoped batch no longer discard values already read for other scopes.
 - **Battery** reads `power.battery.info` when `elecPercent` is present but `category` is omitted (UA7L AOV).
 - Unsupported `device.property.get` results (**DV1026** / **DV1049**) are remembered per device row so later polls skip those property ids. Batch failures split in half instead of one call per property when quota matters.
 
@@ -265,9 +266,12 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 - `pyimouapi.capability` — `CapabilitySet`、`applicable_capability_ids`、能力列表与属性/服务客户端、基于映射表的实体注册。
 - `v2_target_map.yaml` — Imou Life 已支持功能的 V2 绑定表。
-- 推送：V2 `eventId` 与 `device.property.report` 归一化、能力事件门控辅助函数、AI 标签与文案字段抽取。
-- 彩灯、插座倒计时、收藏点、云台、按能力注册的重启及插座计量等 V2 读写路径。
-- 云/本地录像与 HLS/FLV 播放封装；智见云存、搜索、简报（含识别事件、风险时段与分时段统计）解析；`detectDeviceSnap`（`deviceSnapDetect`）。
+- 推送：V2 `eventId` 与 `device.property.report` 归一化、能力事件门控、推送分类、AI 标签与文案字段抽取。
+- 彩灯（`bulb_light`）、插座倒计时 / 过充 / 计量、收藏点、云台、按能力注册的重启，以及产品类型发现。
+- 云/本地录像（分页与时间窗）与 HLS/FLV 播放封装、`createDeviceRecordHls`。
+- 智见：`insight.cloud` / `search` / `statistics`（识别事件、风险时段、分时段统计），`getDeviceCloud` / `queryDeviceAiInsight`，云套餐暂停映射，`insight_features_active`。
+- `detectDeviceSnap`（`deviceSnapDetect`）客户端与结果解析。
+- `select_option` / `alarm_mode` 友好键映射。
 
 #### 变更
 
@@ -277,16 +281,16 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 
 #### 修复
 
-- 抓图下载会读完整张图片。以前只拿到已经缓冲的第一段，JPEG 被截断，预览和下载的静止画面只剩上半部分。
-- 云台 step 被 DV2116 或 DV1026 拒绝、且该通道有 ptz.aim.relative 时，这一下和之后的转动改调 relative，直到进程重启。
-- 自有设备（`source` 为 **bind**）使用云端 HLS（`bindDeviceLive`）。分享设备走 `getStreamUrl` RTSP。不再优先实时 FLV（海外区域经常不支持）。
-- 设备列表显示智见已开通时，状态轮询会调用 `queryDeviceAiInsight`，按 `strategyStatus` 把 AI 智见传感器写成已开通 / 暂停中 / 未开通。
-- 请求超时、HTTP 错误和开放平台错误码会以 warning 打出接口路径。`TimeoutError` 会写进异常文案（它自己的 ``str()`` 是空的）。
-- 本地存储和设备音量按设备级读写。以前带上通道号时，**存储使用率**会一直停在假的 `0`。传感器在首次读成功前也不再默认成 `"0"`。
-- 当 `device.capability.list` 把属性 id 只写在 **services** 里时仍会继续 `property` 轮询（部分 PaaS 摄像头如 TP7i 会这样）。
-- 通道级 `property.get` 返回 **DV1026** / **DV1049** 时不再丢掉已成功读到的其他作用域（例如 TP7i 的存储使用率）。
+- 抓图下载会读完整张图片，避免 JPEG 被截断。
+- 云台 step 被 DV2116 或 DV1026 拒绝时改调 `ptz.aim.relative`，直到进程重启。
+- 自有设备（`source` 为 **bind**）使用云端 HLS（`bindDeviceLive`）。分享设备走 `getStreamUrl` RTSP。不再优先实时 FLV。
+- 设备列表显示智见已开通时，状态轮询调用 `queryDeviceAiInsight`，按 `strategyStatus` 写成已开通 / 暂停中 / 未开通。
+- 请求超时、HTTP 错误和开放平台错误码会以 warning 打出接口路径；`TimeoutError` 会写进异常文案。
+- 本地存储和设备音量按设备级读写（带通道号时存储会卡在假的 `0`）。
+- 当 `device.capability.list` 把属性 id 只写在 **services** 里时仍会继续 `property` 轮询（如 TP7i）。
+- 通道级 `property.get` 返回 **DV1026** / **DV1049** 时不再丢掉已成功读到的其他作用域。
 - **电池**：`power.battery.info` 无 `category` 时仍解析 `elecPercent`（UA7L AOV）。
-- **DV1026** / **DV1049** 的属性会记入本机拒绝列表，后续轮询不再请求；批失败时二分拆批，减少逐个重试的 OpenAPI 次数。
+- **DV1026** / **DV1049** 记入拒绝列表并二分拆批，减少无效 OpenAPI 次数。
 
 ### [1.4.4]
 
