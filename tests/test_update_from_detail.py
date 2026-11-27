@@ -91,6 +91,43 @@ async def test_update_devices_status_skips_detail_for_listed_ids() -> None:
 
 
 @pytest.mark.asyncio
+async def test_skip_iot_properties_still_polls_service_sensors() -> None:
+    """Property push skip leaves service-backed sensors on the poll path."""
+    device = _v2_relay_device()
+    device.sensors["power"] = {
+        PARAM_V2_TARGET_ID: "power.outlet.read",
+        PARAM_V2_OUTPUT_FIELD: "power",
+        PARAM_STATE: None,
+    }
+
+    delegate = MagicMock()
+    delegate.api_client = MagicMock()
+    delegate.async_list_device_details = AsyncMock(
+        return_value=[{"deviceId": "dev1", "deviceStatus": "online", "channelList": []}]
+    )
+    manager = ImouHaDeviceManager(delegate)
+
+    with (
+        patch(
+            "pyimouapi.ha_device.async_property_get",
+            AsyncMock(),
+        ) as prop_get,
+        patch(
+            "pyimouapi.ha_device.async_service_invoke",
+            AsyncMock(return_value={"outputData": {"power": 12.5}}),
+        ) as service_invoke,
+    ):
+        fetched = await manager.async_update_devices_status(
+            [device], skip_iot_property_ids={device.device_id}
+        )
+
+    assert fetched == set()
+    prop_get.assert_not_awaited()
+    service_invoke.assert_awaited()
+    assert device.sensors["power"][PARAM_STATE] == 12.5
+
+
+@pytest.mark.asyncio
 async def test_listed_skip_still_reads_a_device_without_product_id() -> None:
     """A device list row without productId keeps its entity poll."""
     device = _v2_relay_device()

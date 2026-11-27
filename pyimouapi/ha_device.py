@@ -1292,6 +1292,10 @@ class ImouHaDeviceManager:
         ``{device_id}_{parent_device_id}_{parent_product_id}``. Reuse this
         return set rather than building ids from push fields.
 
+        For IoT devices in that set, property reads (including color-bulb
+        properties) are skipped so ``device.property.report`` can own those
+        values. Service-backed sensors still poll; services have no push.
+
         When the detail list fails, the failure is raised so the caller can
         mark the poll failed. A single-device ``async_update_device_status``
         still logs ordinary read failures and returns.
@@ -1378,11 +1382,16 @@ class ImouHaDeviceManager:
         snapshot_complete = len(v2_devices) == len(all_v2_devices)
         for device in v2_devices:
             physical_id = self._resolve_device_id(device)
-            if physical_id in skip_iot_property_ids and device_is_iot(device):
-                continue
-            snapshot_complete &= await self._async_update_v2_property_entities(device)
+            skip_properties = physical_id in skip_iot_property_ids and device_is_iot(
+                device
+            )
+            if not skip_properties:
+                snapshot_complete &= await self._async_update_v2_property_entities(
+                    device
+                )
+                snapshot_complete &= await self._async_update_v2_bulb_state(device)
+            # Services never push; keep polling even when property push owns state.
             snapshot_complete &= await self._async_update_v2_service_entities(device)
-            snapshot_complete &= await self._async_update_v2_bulb_state(device)
         if (
             v2_devices
             and snapshot_complete
