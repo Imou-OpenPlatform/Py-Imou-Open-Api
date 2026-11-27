@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pyimouapi.bulb_light import empty_bulb_state
 from pyimouapi.capability.catalog import CapabilitySet, PropertyCapability
 from pyimouapi.const import (
     PARAM_STATE,
@@ -125,6 +126,45 @@ async def test_skip_iot_properties_still_polls_service_sensors() -> None:
     prop_get.assert_not_awaited()
     service_invoke.assert_awaited()
     assert device.sensors["power"][PARAM_STATE] == 12.5
+
+
+@pytest.mark.asyncio
+async def test_skip_iot_properties_also_skips_bulb_property_reads() -> None:
+    """Color-bulb state is property aggregation, so skip covers it too."""
+    device = _online_device()
+    device.set_capability_set(
+        CapabilitySet(
+            properties={
+                "control.outlet.enabled": PropertyCapability(
+                    property_id="control.outlet.enabled",
+                    access_mode="rw",
+                    data_type="int",
+                )
+            },
+            services=frozenset(),
+            events=frozenset(),
+        )
+    )
+    device.bulb_light = empty_bulb_state()
+    device.set_bulb_v2(True)
+
+    delegate = MagicMock()
+    delegate.api_client = MagicMock()
+    delegate.async_list_device_details = AsyncMock(
+        return_value=[{"deviceId": "dev1", "deviceStatus": "online", "channelList": []}]
+    )
+    manager = ImouHaDeviceManager(delegate)
+
+    with patch(
+        "pyimouapi.ha_device.async_property_get",
+        AsyncMock(),
+    ) as prop_get:
+        fetched = await manager.async_update_devices_status(
+            [device], skip_iot_property_ids={device.device_id}
+        )
+
+    assert fetched == set()
+    prop_get.assert_not_awaited()
 
 
 @pytest.mark.asyncio
