@@ -11,6 +11,8 @@ from pyimouapi.const import (
     API_ENDPOINT_ACCESS_TOKEN,
     ERROR_CODE_INVALID_APP,
     ERROR_CODE_INVALID_SIGN,
+    ERROR_CODE_NO_PERMISSION,
+    ERROR_CODE_OPEN_API_QUOTA_EXCEEDED,
     ERROR_CODE_SUCCESS,
     ERROR_CODE_TOKEN_OVERDUE,
 )
@@ -19,9 +21,23 @@ from pyimouapi.exceptions import (
     InvalidAppIdOrSecretException,
     RequestFailedException,
 )
-from pyimouapi.openapi import CONNECTION_LIMIT, ImouOpenApiClient
+from pyimouapi.openapi import CONNECTION_LIMIT, DOWNLOAD_MAX_BYTES, ImouOpenApiClient
 
 ENDPOINT = "/openapi/deviceBaseList"
+
+
+def test_exception_metadata_keeps_legacy_constructor_compatible() -> None:
+    """Structured fields are optional for callers constructing old exceptions."""
+    legacy = RequestFailedException("legacy")
+    structured = RequestFailedException(
+        "denied", status_code=403, api_code=ERROR_CODE_NO_PERMISSION
+    )
+
+    assert str(legacy) == "legacy"
+    assert legacy.status_code is None
+    assert legacy.api_code is None
+    assert structured.status_code == 403
+    assert structured.api_code == ERROR_CODE_NO_PERMISSION
 
 
 def api_result(
@@ -91,13 +107,40 @@ class FakeResponse:
         return response
 
 
+class _ChunkedBody:
+    """Body that arrives in several reads, like aiohttp's StreamReader."""
+
+    def __init__(self, chunks: list[bytes]) -> None:
+        """Initialize with the chunks a single read(n) would split across."""
+        self._chunks = list(chunks)
+
+    async def read(self, n: int = -1) -> bytes:
+        """Return one buffered chunk, matching StreamReader.read(n) for n > 0."""
+        if not self._chunks:
+            return b""
+        if n < 0:
+            data = b"".join(self._chunks)
+            self._chunks.clear()
+            return data
+        return self._chunks.pop(0)
+
+    async def readany(self) -> bytes:
+        """Return the next chunk, or empty once the body is finished."""
+        if not self._chunks:
+            return b""
+        return self._chunks.pop(0)
+
+
 class FakeBinaryResponse:
     """Minimal aiohttp response stand-in for binary downloads."""
 
-    def __init__(self, status: int, payload: bytes) -> None:
+    def __init__(
+        self, status: int, payload: bytes, *, content: _ChunkedBody | None = None
+    ) -> None:
         """Initialize the response."""
         self.status = status
         self._payload = payload
+        self.content = content
         self.released = False
 
     async def __aenter__(self) -> "FakeBinaryResponse":
@@ -123,6 +166,7 @@ class FakeSession:
         delay: float = 0,
         download_status: int = 200,
         download_payload: bytes = b"jpeg-bytes",
+        download_content: _ChunkedBody | None = None,
         text_error: Exception | None = None,
     ) -> None:
         """Initialize with a queue of responses or exceptions to raise."""
@@ -130,6 +174,7 @@ class FakeSession:
         self._delay = delay
         self._download_status = download_status
         self._download_payload = download_payload
+        self._download_content = download_content
         self._text_error = text_error
         self.closed = False
         self.requests: list[tuple[str, dict[str, Any]]] = []
@@ -142,7 +187,9 @@ class FakeSession:
         """Return the configured binary payload as a response context manager."""
         self.downloads.append(url)
         self.last_download = FakeBinaryResponse(
-            self._download_status, self._download_payload
+            self._download_status,
+            self._download_payload,
+            content=self._download_content,
         )
         return self.last_download
 
@@ -293,8 +340,11 @@ async def test_invalid_credentials_raise(client: ImouOpenApiClient, code: str) -
     """Signature / app errors surface as InvalidAppIdOrSecretException."""
     install_session(client, [api_result(code=code, msg="bad app")])
 
-    with pytest.raises(InvalidAppIdOrSecretException):
+    with pytest.raises(InvalidAppIdOrSecretException) as caught:
         await client.async_get_token()
+
+    assert caught.value.api_code == code
+    assert caught.value.status_code == 200
 
 
 @pytest.mark.asyncio
@@ -304,19 +354,87 @@ async def test_other_error_code_raises_request_failed(
     """Unmapped business error codes surface as RequestFailedException."""
     install_session(client, [token_result(), api_result(code="DV1007", msg="offline")])
 
-    with pytest.raises(RequestFailedException, match="DV1007"):
+    with pytest.raises(RequestFailedException, match="DV1007") as caught:
         await client.async_request_api(ENDPOINT, {})
+
+    assert caught.value.api_code == "DV1007"
+    assert caught.value.status_code == 200
+
+
+@pytest.mark.parametrize(
+    "code", [ERROR_CODE_NO_PERMISSION, ERROR_CODE_OPEN_API_QUOTA_EXCEEDED]
+)
+@pytest.mark.asyncio
+async def test_named_account_error_codes_are_structured(
+    client: ImouOpenApiClient, code: str
+) -> None:
+    """Permission and quota errors expose their documented API code."""
+    install_session(client, [api_result(code=code, msg="denied")])
+
+    with pytest.raises(RequestFailedException) as caught:
+        await client.async_get_token()
+
+    assert caught.value.api_code == code
+    assert caught.value.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_repeated_expired_token_exposes_structured_code(
+    client: ImouOpenApiClient,
+) -> None:
+    """A token still rejected after refresh identifies the stable auth error."""
+    install_session(
+        client,
+        [
+            token_result("tok-1"),
+            api_result(code=ERROR_CODE_TOKEN_OVERDUE, msg="expired"),
+            token_result("tok-2"),
+            api_result(code=ERROR_CODE_TOKEN_OVERDUE, msg="expired"),
+        ],
+    )
+
+    with pytest.raises(RequestFailedException) as caught:
+        await client.async_request_api(ENDPOINT, {})
+
+    assert caught.value.api_code == ERROR_CODE_TOKEN_OVERDUE
+    assert caught.value.status_code == 200
 
 
 @pytest.mark.asyncio
 async def test_transport_error_raises_connect_failed(
     client: ImouOpenApiClient,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Transport failures surface as ConnectFailedException."""
+    """Transport failures surface as ConnectFailedException and are logged."""
     install_session(client, [OSError("no route to host")])
 
-    with pytest.raises(ConnectFailedException):
+    with (
+        caplog.at_level(logging.WARNING, logger="pyimouapi"),
+        pytest.raises(ConnectFailedException, match="OSError"),
+    ):
         await client.async_get_token()
+
+    assert "OpenAPI request failed" in caplog.text
+    assert "/openapi/accessToken" in caplog.text
+    assert "OSError" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_timeout_names_timeout_error_in_message_and_log(
+    client: ImouOpenApiClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """TimeoutError has an empty str(); the type name must still appear."""
+    install_session(client, [TimeoutError()])
+
+    with (
+        caplog.at_level(logging.WARNING, logger="pyimouapi"),
+        pytest.raises(ConnectFailedException, match="TimeoutError") as caught,
+    ):
+        await client.async_get_token()
+
+    assert caught.value.message == "connect failed,TimeoutError"
+    assert "TimeoutError" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -354,12 +472,46 @@ async def test_download_uses_the_shared_session(client: ImouOpenApiClient) -> No
 
 
 @pytest.mark.asyncio
+async def test_download_reads_every_chunk(client: ImouOpenApiClient) -> None:
+    """A snapshot split across reads is kept whole, not cut after the first chunk."""
+    install_session(
+        client,
+        [],
+        download_content=_ChunkedBody([b"jpeg-", b"bytes", b"-rest"]),
+    )
+
+    assert await client.async_download("https://cdn.example.com/snap.jpg") == (
+        b"jpeg-bytes-rest"
+    )
+
+
+@pytest.mark.asyncio
+async def test_download_rejects_a_body_over_the_size_cap(
+    client: ImouOpenApiClient,
+) -> None:
+    """The size cap still applies when the body arrives in more than one read."""
+    install_session(
+        client,
+        [],
+        download_content=_ChunkedBody(
+            [b"a" * DOWNLOAD_MAX_BYTES, b"b"],
+        ),
+    )
+
+    with pytest.raises(RequestFailedException, match="size limit"):
+        await client.async_download("https://cdn.example.com/huge.jpg")
+
+
+@pytest.mark.asyncio
 async def test_download_raises_on_error_status(client: ImouOpenApiClient) -> None:
     """A non-200 download surfaces as RequestFailedException."""
     install_session(client, [], download_status=404)
 
-    with pytest.raises(RequestFailedException, match="404"):
+    with pytest.raises(RequestFailedException, match="404") as caught:
         await client.async_download("https://cdn.example.com/missing.jpg")
+
+    assert caught.value.status_code == 404
+    assert caught.value.api_code is None
 
 
 @pytest.mark.asyncio
@@ -407,8 +559,11 @@ async def test_a_gateway_error_reads_as_not_getting_through(
     """
     install_session(client, [FakeResponse.raw(502, "<html>Bad Gateway</html>")])
 
-    with pytest.raises(ConnectFailedException, match="502"):
+    with pytest.raises(ConnectFailedException, match="502") as caught:
         await client.async_get_token()
+
+    assert caught.value.status_code == 502
+    assert caught.value.api_code is None
 
 
 @pytest.mark.asyncio
@@ -416,8 +571,11 @@ async def test_a_refused_request_names_its_status(client: ImouOpenApiClient) -> 
     """A 4xx is this request being turned away, not a connection problem."""
     install_session(client, [FakeResponse.raw(403, "<html>Forbidden</html>")])
 
-    with pytest.raises(RequestFailedException, match="403"):
+    with pytest.raises(RequestFailedException, match="403") as caught:
         await client.async_get_token()
+
+    assert caught.value.status_code == 403
+    assert caught.value.api_code is None
 
 
 @pytest.mark.asyncio

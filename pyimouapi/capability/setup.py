@@ -1,0 +1,356 @@
+"""Register :class:`ImouHaDevice` entities from ``device.capability.list`` ∩ map."""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Set as AbstractSet
+from typing import TYPE_CHECKING, Any
+
+from ..alarm_mode import ALARM_MODES
+from ..bulb_light import empty_bulb_state
+from ..const import (
+    PARAM_BATTERY,
+    PARAM_COLLECTION_POINT_PROMPT,
+    PARAM_CURRENT_OPTION,
+    PARAM_DEVICE_VOLUME,
+    PARAM_HUMIDITY_CURRENT,
+    PARAM_OPTIONS,
+    PARAM_STATE,
+    PARAM_STORAGE_USED,
+    PARAM_SUPPORTED,
+    PARAM_TEMPERATURE_CURRENT,
+    PARAM_V2_FALLBACK_TARGET_ID,
+    PARAM_V2_LIST_SERVICE_ID,
+    PARAM_V2_OUTPUT_FIELD,
+    PARAM_V2_RAW_BY_OPTION,
+    PARAM_V2_SOURCE_TARGET_IDS,
+    PARAM_V2_STRUCT_FIELD,
+    PARAM_V2_TARGET_ID,
+    PARAM_V2_WRITE_TARGET_ID,
+    PARAM_VALUE_TYPE,
+)
+from ..property_on import property_is_on
+from ..select_option import (
+    MAPPED_SELECT_TYPES,
+    enum_desc_to_option_key,
+    normalize_options,
+    to_friendly,
+    volume_enum_uses_names,
+)
+from .binding import (
+    TargetBinding,
+    binding_resolved_service_id,
+    binding_supported,
+    cached_v2_target_map,
+)
+from .catalog import CapabilitySet, PropertyCapability
+
+NUMBER_TYPE = {
+    PARAM_STORAGE_USED,
+    PARAM_TEMPERATURE_CURRENT,
+    PARAM_HUMIDITY_CURRENT,
+    PARAM_BATTERY,
+}
+
+
+def _initial_sensor_state(ha_key: str) -> Any:
+    """Placeholder before the first successful property read.
+
+    Storage must not start as ``\"0\"``: that string looks like a used
+    percentage of zero and hides a missing read.
+    """
+    if ha_key == PARAM_STORAGE_USED:
+        return None
+    if ha_key in NUMBER_TYPE:
+        return "0"
+    return "unknown"
+
+
+if TYPE_CHECKING:
+    from ..ha_device import ImouHaDevice
+
+_LOGGER = logging.getLogger(__name__)
+
+_PLATFORM_ATTR = {
+    "switch": "switches",
+    "select": "selects",
+    "sensor": "sensors",
+    "binary_sensor": "binary_sensors",
+    "button": "buttons",
+    "text": "texts",
+    "number": "texts",
+}
+
+
+def _select_options(prop: PropertyCapability) -> tuple[list[Any], Any, str]:
+    if prop.enum_options:
+        values = [opt.value for opt in prop.enum_options]
+        default = prop.default_data if prop.default_data is not None else values[0]
+        value_type = "int" if isinstance(default, int) else "str"
+        return values, default, value_type
+    if (
+        prop.data_type == "int"
+        and prop.range_min is not None
+        and prop.range_max is not None
+    ):
+        values = list(range(int(prop.range_min), int(prop.range_max) + 1))
+        default = prop.default_data if prop.default_data is not None else values[0]
+        return values, default, "int"
+    return [], prop.default_data or "", "str"
+
+
+def _entity_bucket(
+    ha_device: ImouHaDevice, binding: TargetBinding
+) -> dict[str, Any] | None:
+    platform = binding.ha_platform
+    if platform == "alarm_control_panel":
+        return None
+    if platform == "light" and binding.ha_key == "bulb":
+        return None
+    if platform == "light":
+        platform = "switch"
+    attr = _PLATFORM_ATTR.get(platform)
+    if not attr:
+        return None
+    return getattr(ha_device, attr)
+
+
+def _add_property_switch(
+    entities: dict[str, Any], binding: TargetBinding, prop: PropertyCapability
+) -> None:
+    default_on = property_is_on(prop.default_data)
+    entities[binding.ha_key] = {
+        PARAM_STATE: default_on if default_on is not None else False,
+        PARAM_V2_TARGET_ID: prop.property_id,
+    }
+
+
+def _add_property_select(
+    entities: dict[str, Any], binding: TargetBinding, prop: PropertyCapability
+) -> None:
+    options, current, value_type = _select_options(prop)
+    raw_by_option: dict[str, Any] = {}
+    use_names = binding.ha_key in MAPPED_SELECT_TYPES and (
+        binding.ha_key != PARAM_DEVICE_VOLUME
+        or volume_enum_uses_names(prop.enum_options)
+    )
+    if prop.enum_options:
+
+        def _option_key(opt_desc: str, opt_value: Any) -> str:
+            if use_names:
+                return to_friendly(binding.ha_key, opt_value)
+            return enum_desc_to_option_key(opt_desc, opt_value)
+
+        friendly_options: list[str] = []
+        for opt in prop.enum_options:
+            key = _option_key(opt.desc, opt.value)
+            friendly_options.append(key)
+            raw_by_option[key] = opt.value
+        options = friendly_options
+        current = next(
+            (
+                _option_key(opt.desc, opt.value)
+                for opt in prop.enum_options
+                if opt.value == current
+            ),
+            _option_key("", current),
+        )
+    elif use_names:
+        options = normalize_options(binding.ha_key, [str(item) for item in options])
+        current = to_friendly(binding.ha_key, current)
+    elif binding.ha_key == PARAM_DEVICE_VOLUME:
+        options = [str(item) for item in options]
+        current = str(current)
+    entities[binding.ha_key] = {
+        PARAM_V2_TARGET_ID: binding.target_id,
+        PARAM_OPTIONS: options,
+        PARAM_CURRENT_OPTION: current,
+        PARAM_VALUE_TYPE: value_type,
+        **({PARAM_V2_RAW_BY_OPTION: raw_by_option} if raw_by_option else {}),
+    }
+
+
+def _add_property_without_detail(
+    entities: dict[str, Any], binding: TargetBinding
+) -> None:
+    target_id = binding.target_id or binding.fallback_target_id
+    if binding.ha_platform in ("switch", "light", "binary_sensor"):
+        entities[binding.ha_key] = {
+            PARAM_STATE: False,
+            PARAM_V2_TARGET_ID: target_id,
+        }
+        return
+    if binding.ha_platform == "select":
+        entities[binding.ha_key] = {
+            PARAM_V2_TARGET_ID: target_id,
+            PARAM_OPTIONS: [],
+            PARAM_CURRENT_OPTION: "",
+            PARAM_VALUE_TYPE: "str",
+        }
+        return
+    if binding.ha_platform == "sensor":
+        entities[binding.ha_key] = {
+            PARAM_V2_TARGET_ID: target_id,
+            PARAM_V2_SOURCE_TARGET_IDS: [target_id],
+            PARAM_STATE: _initial_sensor_state(binding.ha_key),
+        }
+
+
+def _add_property_sensor(
+    entities: dict[str, Any],
+    binding: TargetBinding,
+    capability_ids: AbstractSet[str],
+) -> None:
+    source_ids = [
+        target_id
+        for target_id in (binding.target_id, binding.fallback_target_id)
+        if target_id and target_id in capability_ids
+    ]
+    if not source_ids:
+        return
+    entry: dict[str, Any] = {
+        PARAM_V2_TARGET_ID: source_ids[0],
+        PARAM_V2_SOURCE_TARGET_IDS: source_ids,
+        PARAM_STATE: _initial_sensor_state(binding.ha_key),
+    }
+    if binding.output_field:
+        entry[PARAM_V2_OUTPUT_FIELD] = binding.output_field
+    if binding.struct_field:
+        entry[PARAM_V2_STRUCT_FIELD] = binding.struct_field
+    entities[binding.ha_key] = entry
+
+
+def _add_service_button(
+    entities: dict[str, Any],
+    binding: TargetBinding,
+    capability_ids: AbstractSet[str],
+) -> None:
+    service_id = binding_resolved_service_id(binding, set(capability_ids))
+    if not service_id:
+        return
+    entities[binding.ha_key] = {PARAM_V2_TARGET_ID: service_id}
+
+
+def _add_service_sensor(
+    entities: dict[str, Any],
+    binding: TargetBinding,
+    capability_ids: AbstractSet[str],
+) -> None:
+    entry = {
+        PARAM_V2_TARGET_ID: binding.target_id,
+        PARAM_V2_OUTPUT_FIELD: binding.output_field,
+        PARAM_STATE: _initial_sensor_state(binding.ha_key),
+    }
+    if binding.fallback_target_id and binding.fallback_target_id in capability_ids:
+        entry[PARAM_V2_FALLBACK_TARGET_ID] = binding.fallback_target_id
+    entities[binding.ha_key] = entry
+
+
+def _configure_binding(
+    ha_device: ImouHaDevice,
+    binding: TargetBinding,
+    capability: CapabilitySet,
+    capability_ids: AbstractSet[str],
+) -> None:
+    prop = capability.properties.get(
+        binding.target_id or ""
+    ) or capability.properties.get(binding.fallback_target_id or "")
+    platform = binding.ha_platform
+
+    if binding.kind == "composite" and binding.ha_key == "bulb":
+        ha_device.bulb_light = empty_bulb_state()
+        ha_device.set_bulb_v2(True)
+        ha_device.switches.pop("switch", None)
+        return
+
+    if platform == "alarm_control_panel" and binding.target_id:
+        panel: dict[str, Any] = {
+            PARAM_V2_TARGET_ID: binding.target_id,
+            PARAM_STATE: None,
+            PARAM_SUPPORTED: list(ALARM_MODES),
+            PARAM_VALUE_TYPE: "int",
+        }
+        ha_device.alarm_control_panel = panel
+        return
+
+    bucket = _entity_bucket(ha_device, binding)
+    if bucket is None:
+        _LOGGER.debug(
+            "Skipping v2 entity %s on platform %s (not wired yet)",
+            binding.ha_key,
+            platform,
+        )
+        return
+    if binding.ha_key in bucket:
+        return
+
+    if binding.kind == "named_api" and platform == "button" and binding.target_id:
+        bucket[binding.ha_key] = {PARAM_V2_TARGET_ID: binding.target_id}
+        return
+
+    if binding.kind == "service" and platform == "number":
+        read_id = binding.target_id
+        write_id = binding.write_target_id or binding.target_id
+        if not read_id or not write_id:
+            return
+        bucket[binding.ha_key] = {
+            PARAM_V2_TARGET_ID: read_id,
+            PARAM_V2_WRITE_TARGET_ID: write_id,
+            PARAM_STATE: "0",
+        }
+        return
+
+    if binding.kind == "service" and platform == "select" and binding.target_id:
+        list_services = [s for s in binding.extra_services if s.endswith(".list")]
+        entry: dict[str, Any] = {
+            PARAM_V2_TARGET_ID: binding.target_id,
+            PARAM_OPTIONS: [PARAM_COLLECTION_POINT_PROMPT],
+            PARAM_CURRENT_OPTION: PARAM_COLLECTION_POINT_PROMPT,
+        }
+        if list_services:
+            entry[PARAM_V2_LIST_SERVICE_ID] = list_services[0]
+        bucket[binding.ha_key] = entry
+        return
+
+    if binding.kind == "property":
+        if prop is None:
+            _add_property_without_detail(bucket, binding)
+            return
+        if platform in ("switch", "light"):
+            _add_property_switch(bucket, binding, prop)
+        elif platform == "select":
+            _add_property_select(bucket, binding, prop)
+        elif platform == "sensor":
+            _add_property_sensor(bucket, binding, capability_ids)
+        elif platform == "binary_sensor":
+            default_on = property_is_on(prop.default_data)
+            bucket[binding.ha_key] = {
+                PARAM_V2_TARGET_ID: binding.target_id,
+                PARAM_STATE: default_on if default_on is not None else False,
+            }
+        return
+
+    if binding.kind == "service":
+        if platform == "button":
+            _add_service_button(bucket, binding, capability_ids)
+        elif platform == "sensor":
+            _add_service_sensor(bucket, binding, capability_ids)
+
+
+def configure_imou_ha_device_from_capability(
+    ha_device: ImouHaDevice,
+    capability: CapabilitySet,
+    *,
+    bindings: tuple[TargetBinding, ...] | None = None,
+) -> None:
+    """Populate entity dicts whose targets appear in the page capability ids."""
+    rows = bindings if bindings is not None else cached_v2_target_map()
+    capability_ids = ha_device.capability_ids or frozenset()
+    for binding in rows:
+        if not binding_supported(
+            binding,
+            capability_ids,
+            device_type=ha_device.product_device_type,
+        ):
+            continue
+        _configure_binding(ha_device, binding, capability, capability_ids)

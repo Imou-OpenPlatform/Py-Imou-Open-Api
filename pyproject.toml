@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyimouapi"
-version = "1.4.4"
+version = "2.0.0"
 description = "A package for imou open api"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -12,7 +12,8 @@ license = { text = "MIT" }
 authors = [{ name = "Imou-OpenPlatform", email = "cloud_openteam_service@imou.com" }]
 dependencies = [
   "aiohttp>=3.11.9,<4.0",
-  "simpleeval>=1.0.3",
+  "cryptography>=42.0",
+  "pyyaml>=6.0",
 ]
 
 [project.urls]
@@ -23,7 +24,7 @@ where = ["."]
 include = ["pyimouapi*"]
 
 [tool.setuptools.package-data]
-pyimouapi = ["py.typed"]
+pyimouapi = ["py.typed", "data/*.yaml"]
 
 [dependency-groups]
 dev = [
@@ -70,7 +71,6 @@ quote-style = "double"
 # py.typed tells downstreams to trust these annotations, so they are checked.
 python_version = "3.11"
 files = ["pyimouapi"]
-# simpleeval ships no stubs.
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

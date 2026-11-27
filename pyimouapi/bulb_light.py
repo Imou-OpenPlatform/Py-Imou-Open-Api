@@ -6,16 +6,18 @@ light itself, not a separate switch.
 
 from __future__ import annotations
 
+from collections.abc import Set as AbstractSet
+from math import isfinite
 from typing import Any
 
-REF_SWITCH = "11900"
-REF_MODE = "131800"
-REF_BRIGHTNESS = "131900"
-REF_COLOR_TEMP = "132000"
-REF_HUE = "132100"
-REF_SATURATION = "132200"
-REF_VALUE = "132300"
-REF_SCENE = "132400"
+BULB_PROP_SWITCH = "control.outlet.enabled"
+BULB_PROP_MODE = "light.white.mode"
+BULB_PROP_BRIGHTNESS = "light.white.level"
+BULB_PROP_COLOR_TEMP = "light.white.colorTemperature"
+BULB_PROP_HUE = "light.white.hue"
+BULB_PROP_SATURATION = "light.white.saturation"
+BULB_PROP_VALUE = "light.white.colorLevel"
+BULB_PROP_SCENE = "light.white.scene"
 
 MODE_WHITE = 0
 MODE_COLOR = 1
@@ -24,16 +26,24 @@ MODE_SCENE = 2
 MIN_KELVIN = 2700
 MAX_KELVIN = 6500
 
-BULB_PROPERTY_REFS = (
-    REF_SWITCH,
-    REF_MODE,
-    REF_BRIGHTNESS,
-    REF_COLOR_TEMP,
-    REF_HUE,
-    REF_SATURATION,
-    REF_VALUE,
-    REF_SCENE,
+BULB_V2_PROPERTY_IDS = (
+    BULB_PROP_SWITCH,
+    BULB_PROP_MODE,
+    BULB_PROP_BRIGHTNESS,
+    BULB_PROP_COLOR_TEMP,
+    BULB_PROP_HUE,
+    BULB_PROP_SATURATION,
+    BULB_PROP_VALUE,
+    BULB_PROP_SCENE,
 )
+
+
+def bulb_v2_property_ids_for_device(
+    supported_property_ids: AbstractSet[str],
+) -> tuple[str, ...]:
+    """Property ids to read for a v2 bulb, limited to what capability.list reported."""
+    return tuple(pid for pid in BULB_V2_PROPERTY_IDS if pid in supported_property_ids)
+
 
 # Effect name shown on the light, and the scene enum the bulb stores.
 BULB_SCENES: tuple[tuple[str, int], ...] = (
@@ -52,7 +62,7 @@ _SCENE_BY_NAME = dict(BULB_SCENES)
 _NAME_BY_SCENE = {value: name for name, value in BULB_SCENES}
 
 
-def empty_bulb_state() -> dict[str, int | bool]:
+def empty_bulb_state() -> dict[str, Any]:
     """Defaults match the thing model until the first property read."""
     return {
         "on": False,
@@ -90,10 +100,12 @@ def brightness_to_percent(brightness: int) -> int:
 
 def _as_int(raw: Any) -> int | None:
     if isinstance(raw, bool):
-        return int(raw)
+        return None
     if isinstance(raw, int):
         return raw
     if isinstance(raw, float):
+        if not isfinite(raw):
+            return None
         return int(raw)
     if isinstance(raw, str):
         text = raw.strip()
@@ -102,36 +114,51 @@ def _as_int(raw: Any) -> int | None:
     return None
 
 
-def apply_bulb_properties(state: dict[str, Any], values: dict[str, Any]) -> None:
-    """Fold a ref→value map into bulb state. Unknown or empty values are skipped."""
-    if REF_SWITCH in values:
-        raw = values[REF_SWITCH]
+def apply_bulb_v2_properties(state: dict[str, Any], values: dict[str, Any]) -> bool:
+    """Apply accepted property ids and report whether any were assigned."""
+    return apply_bulb_properties(state, values)
+
+
+def apply_bulb_properties(state: dict[str, Any], values: dict[str, Any]) -> bool:
+    """Apply accepted property ids and report whether normalized state changed."""
+    changed = False
+    if BULB_PROP_SWITCH in values:
+        raw = values[BULB_PROP_SWITCH]
         if isinstance(raw, bool):
-            state["on"] = raw
+            if state.get("on") is not raw:
+                state["on"] = raw
+                changed = True
         else:
             parsed = _as_int(raw)
             if parsed is not None:
-                state["on"] = parsed == 1
-    for key, ref in (
-        ("mode", REF_MODE),
-        ("brightness", REF_BRIGHTNESS),
-        ("color_temp", REF_COLOR_TEMP),
-        ("hue", REF_HUE),
-        ("saturation", REF_SATURATION),
-        ("value", REF_VALUE),
-        ("scene", REF_SCENE),
+                is_on = parsed == 1
+                if state.get("on") is not is_on:
+                    state["on"] = is_on
+                    changed = True
+    for key, property_id in (
+        ("mode", BULB_PROP_MODE),
+        ("brightness", BULB_PROP_BRIGHTNESS),
+        ("color_temp", BULB_PROP_COLOR_TEMP),
+        ("hue", BULB_PROP_HUE),
+        ("saturation", BULB_PROP_SATURATION),
+        ("value", BULB_PROP_VALUE),
+        ("scene", BULB_PROP_SCENE),
     ):
-        if ref not in values:
+        if property_id not in values:
             continue
-        parsed = _as_int(values[ref])
+        parsed = _as_int(values[property_id])
         if parsed is None:
             continue
-        state[key] = _clamp_read(key, parsed)
+        normalized = _clamp_read(key, parsed)
+        if state.get(key) != normalized:
+            state[key] = normalized
+            changed = True
+    return changed
 
 
 def properties_for_turn_off() -> dict[str, int]:
     """Turn the bulb off."""
-    return {REF_SWITCH: 0}
+    return {BULB_PROP_SWITCH: 0}
 
 
 def properties_for_turn_on(
@@ -149,42 +176,44 @@ def properties_for_turn_on(
     caller passed, so moving color temperature does not copy the color
     brightness, and moving the color does not copy the white brightness.
     """
-    payload: dict[str, int] = {REF_SWITCH: 1}
+    payload: dict[str, int] = {BULB_PROP_SWITCH: 1}
     if effect is not None:
         scene = _SCENE_BY_NAME.get(effect)
         if scene is None:
             raise ValueError(f"unknown bulb effect: {effect}")
-        payload[REF_MODE] = MODE_SCENE
-        payload[REF_SCENE] = scene
+        payload[BULB_PROP_MODE] = MODE_SCENE
+        payload[BULB_PROP_SCENE] = scene
         return payload
     if hs_color is not None:
         hue, saturation = hs_color
-        payload[REF_MODE] = MODE_COLOR
-        payload[REF_HUE] = max(0, min(360, round(hue)))
-        payload[REF_SATURATION] = max(0, min(100, round(saturation)))
+        payload[BULB_PROP_MODE] = MODE_COLOR
+        payload[BULB_PROP_HUE] = max(0, min(360, round(hue)))
+        payload[BULB_PROP_SATURATION] = max(0, min(100, round(saturation)))
         if brightness is not None:
-            payload[REF_VALUE] = max(1, min(100, brightness_to_percent(brightness)))
+            payload[BULB_PROP_VALUE] = max(
+                1, min(100, brightness_to_percent(brightness))
+            )
         return payload
     if color_temp_kelvin is not None:
-        payload[REF_MODE] = MODE_WHITE
-        payload[REF_COLOR_TEMP] = max(
+        payload[BULB_PROP_MODE] = MODE_WHITE
+        payload[BULB_PROP_COLOR_TEMP] = max(
             MIN_KELVIN, min(MAX_KELVIN, int(color_temp_kelvin))
         )
         if brightness is not None:
-            payload[REF_BRIGHTNESS] = max(
+            payload[BULB_PROP_BRIGHTNESS] = max(
                 1, min(100, brightness_to_percent(brightness))
             )
         return payload
     if brightness is not None:
         level = brightness_to_percent(brightness)
         if int(state["mode"]) == MODE_COLOR:
-            payload[REF_VALUE] = level
+            payload[BULB_PROP_VALUE] = level
         else:
             # A scene (or any non-white mode) does not use the white slider.
             # Brightness alone moves the bulb back to white so the lamp matches.
             if int(state["mode"]) != MODE_WHITE:
-                payload[REF_MODE] = MODE_WHITE
-            payload[REF_BRIGHTNESS] = level
+                payload[BULB_PROP_MODE] = MODE_WHITE
+            payload[BULB_PROP_BRIGHTNESS] = level
     return payload
 
 

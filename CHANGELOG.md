@@ -4,6 +4,46 @@
 
 All notable changes to this project will be documented in this file.
 
+### [2.0.0]
+
+#### Breaking
+
+- **Entity registration** uses `device.detail.page` **`device.capabilityIds`** and **`channel.capabilityIds`** (with IPC channel `0` inheriting device-level ids, matching v1 placement) intersected with packaged `v2_target_map.yaml`. **`device.capability.list`** is fetched per selected device/channel only to enrich enum options, ranges, access modes, and request scopes. Legacy ability-ref and ability-name entity tables are removed.
+- **`ImouHaDeviceManager.async_get_devices`** accepts `configure_device_ids` / `skip_device_ids` so unselected devices skip `device.capability.list`.
+- All device control and polling paths use Open API V2 (**`device.detail.list`**, **`device.property.get/set`**, **`device.service.invoke`**, and **`device.reboot.execute`** when `system.maintenance.rebootInvoke` is in `capabilityIds`). Multi-property reads and writes split different capability scopes into separate requests.
+- **`wide_dynamic`** maps to `image.wdr.mode` and is exposed as a **select** (not a bool switch); plug overcharge protection **`overcharge_switch`** is exposed as a **switch** (`control.outlet.overchargeProtection`) instead of a wattage number.
+
+#### Added
+
+- Package `pyimouapi.capability` — `CapabilitySet`, `applicable_capability_ids`, `async_capability_list`, `async_property_get/set`, `async_service_invoke`, `configure_imou_ha_device_from_capability`.
+- `pyimouapi/data/v2_target_map.yaml` — authoritative `ha_key` → V2 `target_id` bindings for Imou Life.
+- Push helpers: V2 `eventId` and `device.property.report` normalization, capability event gating helpers, push-dispatch classification, and AI tag / copywriting extraction.
+- V2 color bulb (`bulb_light`), outlet countdown / overcharge / metrics, collection point, PTZ, conditional restart (`device.reboot.execute` when listed), and product-type discovery helpers.
+- Cloud and local recording helpers (`cloud_record`, `local_record`, `playback.hls`, `playback.flv`) with pagination, time-bound listing, and `createDeviceRecordHls` wrapper.
+- AI Insight helpers (`insight.cloud`, `insight.search`, `insight.statistics` including identified events, risk windows, and two-hour timing buckets), `getDeviceCloud` / `queryDeviceAiInsight` polling, paused cloud-plan mapping, and `insight_features_active` on `ImouHaDevice`.
+- `detectDeviceSnap` (`deviceSnapDetect`) client and result parsing.
+- `select_option` / `alarm_mode` friendly-key mapping for selects and the alarm panel.
+
+#### Changed
+
+- A collection-point read the account is not allowed to make (`OP1009`) is logged at debug and keeps the previous options.
+- `select_option` maps night-vision raw `"5"` to friendly `starlight` (and back on write). Five-level `audio.volume.level` (`"1"`–`"5"`) stays numeric; the mute / low / medium / high scale is unchanged.
+- Ships with Imou Life 2.0.0.
+
+#### Fixed
+
+- Snapshot downloads read the whole picture (truncated JPEG buffers no longer cut the frame).
+- A channel whose step move is rejected with DV2116 or DV1026 uses `ptz.aim.relative` for that press and later presses until the process restarts.
+- Owner cameras (`source` **bind**) use cloud HLS (`bindDeviceLive`). Shared cameras use `getStreamUrl` RTSP. Real-time FLV is not preferred (overseas regions often reject it).
+- When the device list says AI Insight is on, status polls call `queryDeviceAiInsight` and map `strategyStatus` onto active / paused / inactive for the AI Insight sensor.
+- Transport timeouts, HTTP errors, and OpenAPI error codes are logged at warning with the endpoint. `TimeoutError` is named in the exception text (its own ``str()`` is empty).
+- Local storage and device volume are read and written as device-scope properties (a channel id was leaving storage stuck at a fake `0`).
+- Property polling still runs when `device.capability.list` lists a property id only under **services** (PaaS cameras such as TP7i).
+- `device.property.get` calls that return **DV1026** or **DV1049** for one channel-scoped batch no longer discard values already read for other scopes.
+- **Battery** reads `power.battery.info` when `elecPercent` is present but `category` is omitted (UA7L AOV).
+- Unsupported `device.property.get` results (**DV1026** / **DV1049**) are remembered per device row so later polls skip those property ids. Batch failures split in half instead of one call per property when quota matters.
+- `skip_iot_property_ids` skips only IoT **property** reads (including color-bulb properties). Service-backed sensors keep polling; services have no push.
+
 ### [1.4.4]
 
 #### Added
@@ -213,6 +253,46 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 ## 中文
 
 本项目的重要变更均记录于此。
+
+### [2.0.0]
+
+#### 破坏性变更
+
+- **实体注册**统一按 `device.detail.page` 的 **`device.capabilityIds`** 与 **`channel.capabilityIds`**（IPC 的 `0` 通道合并设备级标识，与 v1 挂载一致）匹配包内 `v2_target_map.yaml`。**`device.capability.list`** 仅对已选设备/通道请求，用于补充枚举选项、范围、读写方式与作用域。旧物模型 ability refs 与 PaaS 能力名注册表已移除。
+- **`ImouHaDeviceManager.async_get_devices`** 支持 `configure_device_ids` / `skip_device_ids`，未勾选设备不请求 `device.capability.list`。
+- 所有控制与状态轮询统一走开放平台 V2（**`device.detail.list`**、**`device.property.get/set`**、**`device.service.invoke`**，以及 `capabilityIds` 含 `system.maintenance.rebootInvoke` 时调用 **`device.reboot.execute`**）。多属性读写按作用域拆分为独立请求。
+- **`wide_dynamic`** 对应 `image.wdr.mode`，注册为 **select**（不再是 bool 开关）；插座过充保护 **`overcharge_switch`** 改为 **switch**（`control.outlet.overchargeProtection`），不再是功率数值。
+
+#### 新增
+
+- `pyimouapi.capability` — `CapabilitySet`、`applicable_capability_ids`、能力列表与属性/服务客户端、基于映射表的实体注册。
+- `v2_target_map.yaml` — Imou Life 已支持功能的 V2 绑定表。
+- 推送：V2 `eventId` 与 `device.property.report` 归一化、能力事件门控、推送分类、AI 标签与文案字段抽取。
+- 彩灯（`bulb_light`）、插座倒计时 / 过充 / 计量、收藏点、云台、按能力注册的重启，以及产品类型发现。
+- 云/本地录像（分页与时间窗）与 HLS/FLV 播放封装、`createDeviceRecordHls`。
+- 智见：`insight.cloud` / `search` / `statistics`（识别事件、风险时段、分时段统计），`getDeviceCloud` / `queryDeviceAiInsight`，云套餐暂停映射，`insight_features_active`。
+- `detectDeviceSnap`（`deviceSnapDetect`）客户端与结果解析。
+- `select_option` / `alarm_mode` 友好键映射。
+
+#### 变更
+
+- 账号无权读取收藏点（`OP1009`）时改为 debug 日志，并保留已有选项，不再每次刷新都打 warning。
+- `select_option` 将夜视 raw `"5"` 映射为友好键 `starlight`（写回时再转成 `"5"`）。五档 `audio.volume.level`（`"1"`～`"5"`）保持数字选项；静音 / 低 / 中 / 高 那套不变。
+- 与 Imou Life 2.0.0 一起发布。
+
+#### 修复
+
+- 抓图下载会读完整张图片，避免 JPEG 被截断。
+- 云台 step 被 DV2116 或 DV1026 拒绝时改调 `ptz.aim.relative`，直到进程重启。
+- 自有设备（`source` 为 **bind**）使用云端 HLS（`bindDeviceLive`）。分享设备走 `getStreamUrl` RTSP。不再优先实时 FLV。
+- 设备列表显示智见已开通时，状态轮询调用 `queryDeviceAiInsight`，按 `strategyStatus` 写成已开通 / 暂停中 / 未开通。
+- 请求超时、HTTP 错误和开放平台错误码会以 warning 打出接口路径；`TimeoutError` 会写进异常文案。
+- 本地存储和设备音量按设备级读写（带通道号时存储会卡在假的 `0`）。
+- 当 `device.capability.list` 把属性 id 只写在 **services** 里时仍会继续 `property` 轮询（如 TP7i）。
+- 通道级 `property.get` 返回 **DV1026** / **DV1049** 时不再丢掉已成功读到的其他作用域。
+- **电池**：`power.battery.info` 无 `category` 时仍解析 `elecPercent`（UA7L AOV）。
+- **DV1026** / **DV1049** 记入拒绝列表并二分拆批，减少无效 OpenAPI 次数。
+- `skip_iot_property_ids` 只跳过 IoT 的 **property** 读取（含彩灯属性）。靠 service 的传感器继续轮询；service 没有推送。
 
 ### [1.4.4]
 

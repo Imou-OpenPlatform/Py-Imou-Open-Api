@@ -40,14 +40,16 @@ INTEGER_NUMERIC_SENSOR_TYPES = frozenset(
 
 ENUM_SENSOR_TYPES = frozenset({PARAM_STATUS})
 
-STORAGE_ERROR_CODES = frozenset({"e1", "e2"})
-
 
 def normalize_sensor_state(sensor_type: str, raw: Any) -> tuple[Any, str]:
     """Return normalized (state, state_variant) for a sensor update."""
     if sensor_type == PARAM_STORAGE_USED:
-        if isinstance(raw, str) and raw in STORAGE_ERROR_CODES:
-            return raw, STATE_VARIANT_ENUM
+        # A card status is text. A size is still a percentage.
+        if isinstance(raw, str):
+            try:
+                float(raw)
+            except ValueError:
+                return raw, STATE_VARIANT_ENUM
         return _coerce_number(
             raw, integer=True, sensor_type=sensor_type
         ), STATE_VARIANT_NUMERIC

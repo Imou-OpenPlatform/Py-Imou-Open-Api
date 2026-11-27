@@ -1,15 +1,18 @@
-"""Tests for ImouDeviceManager.async_get_devices ability-ref fetching."""
+"""Tests for ImouDeviceManager.async_get_devices listing and channel fields."""
 
-import asyncio
-import logging
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pyimouapi.const import (
     API_ENDPOINT_LIST_DEVICE_DETAILS,
-    PARAM_ABILITY_REFS,
+    API_ENDPOINT_LIST_PRODUCT_DETAIL,
+    PARAM_AI_INSIGHT_STATUS,
     PARAM_BRAND,
+    PARAM_CHANNEL_ID,
+    PARAM_CHANNEL_LIST,
+    PARAM_CHANNEL_NUM,
     PARAM_COUNT,
+    PARAM_CS_STATUS,
     PARAM_DEVICE_ID,
     PARAM_DEVICE_LIST,
     PARAM_DEVICE_MODEL,
@@ -17,6 +20,7 @@ from pyimouapi.const import (
     PARAM_DEVICE_STATUS,
     PARAM_PAGE,
     PARAM_PRODUCT_ID,
+    PARAM_PRODUCT_IDS,
 )
 from pyimouapi.device import ImouDeviceManager
 
@@ -35,96 +39,23 @@ def make_device(device_id: str, product_id: str | None = None) -> dict:
     return entry
 
 
-class DetailTracker:
-    """Stands in for async_get_iot_device_detail_info and records concurrency."""
-
-    def __init__(self) -> None:
-        """Initialize counters."""
-        self.calls: list[tuple[str, str]] = []
-        self.in_flight = 0
-        self.max_in_flight = 0
-
-    async def __call__(self, device_id: str, product_id: str) -> dict:
-        """Record the call and yield so overlapping callers are observable."""
-        self.calls.append((device_id, product_id))
-        self.in_flight += 1
-        self.max_in_flight = max(self.max_in_flight, self.in_flight)
-        await asyncio.sleep(0)
-        self.in_flight -= 1
-        return {PARAM_ABILITY_REFS: "1,2,3"}
-
-
-def make_manager(pages: dict[int, dict]) -> tuple[ImouDeviceManager, DetailTracker]:
+def make_manager(pages: dict[int, dict]) -> ImouDeviceManager:
     """Build a manager whose device list returns the given pages."""
 
     async def request(endpoint: str, params: dict) -> dict:
+        if endpoint == API_ENDPOINT_LIST_PRODUCT_DETAIL:
+            return {
+                "item": [
+                    {"productId": product_id, "deviceType": "IPC"}
+                    for product_id in params[PARAM_PRODUCT_IDS]
+                ]
+            }
         assert endpoint == API_ENDPOINT_LIST_DEVICE_DETAILS
         return pages[params[PARAM_PAGE]]
 
     client = MagicMock()
     client.async_request_api = AsyncMock(side_effect=request)
-    manager = ImouDeviceManager(client)
-    tracker = DetailTracker()
-    manager.async_get_iot_device_detail_info = tracker
-    return manager, tracker
-
-
-@pytest.mark.asyncio
-async def test_iot_detail_requests_run_concurrently() -> None:
-    """Listing N iot devices must not cost N serial detail round trips."""
-    devices = [make_device(f"dev{i}", f"prod{i}") for i in range(4)]
-    manager, tracker = make_manager({1: {PARAM_COUNT: 4, PARAM_DEVICE_LIST: devices}})
-
-    result = await manager.async_get_devices()
-
-    assert len(result) == 4
-    assert len(tracker.calls) == 4
-    assert tracker.max_in_flight == 4
-    assert all(device.device_ability_refs == "1,2,3" for device in result)
-
-
-@pytest.mark.asyncio
-async def test_non_iot_devices_skip_detail_requests() -> None:
-    """Devices without a productId must not trigger a detail call."""
-    devices = [make_device("dev0"), make_device("dev1", "prod1")]
-    manager, tracker = make_manager({1: {PARAM_COUNT: 2, PARAM_DEVICE_LIST: devices}})
-
-    result = await manager.async_get_devices()
-
-    assert len(result) == 2
-    assert tracker.calls == [("dev1", "prod1")]
-
-
-@pytest.mark.asyncio
-async def test_one_failing_detail_does_not_cost_the_whole_account(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """An accessory that will not answer must not hide every other device.
-
-    The detail call fails for an accessory that is offline, rate limited, or
-    answering 5xx. Raising here left Home Assistant with no devices at all for
-    as long as that one device stayed unhappy.
-    """
-    devices = [make_device(f"dev{i}", f"prod{i}") for i in range(3)]
-    manager, _ = make_manager({1: {PARAM_COUNT: 3, PARAM_DEVICE_LIST: devices}})
-
-    async def detail(device_id: str, product_id: str) -> dict:
-        if device_id == "dev1":
-            raise RuntimeError("detail boom")
-        return {PARAM_ABILITY_REFS: "1,2,3"}
-
-    manager.async_get_iot_device_detail_info = detail
-
-    with caplog.at_level(logging.WARNING):
-        result = await manager.async_get_devices()
-
-    assert [device.device_id for device in result] == ["dev0", "dev1", "dev2"]
-    assert result[0].device_ability_refs == "1,2,3"
-    assert result[2].device_ability_refs == "1,2,3"
-    # The one that failed keeps its placeholder and is retried next listing.
-    assert result[1].device_ability_refs == "unknown"
-    assert "dev1" in caplog.text
-    assert "detail boom" in caplog.text
+    return ImouDeviceManager(client)
 
 
 @pytest.mark.asyncio
@@ -137,9 +68,8 @@ async def test_pagination_stops_on_a_short_page_whatever_count_means() -> None:
     is based on what actually came back.
     """
     page1 = [make_device(f"dev{i}", f"prod{i}") for i in range(10)]
-    manager, _ = make_manager(
+    manager = make_manager(
         {
-            # count repeats the account total on every page, as a total would.
             1: {PARAM_COUNT: 10, PARAM_DEVICE_LIST: page1},
             2: {PARAM_COUNT: 10, PARAM_DEVICE_LIST: []},
         }
@@ -151,11 +81,10 @@ async def test_pagination_stops_on_a_short_page_whatever_count_means() -> None:
 
 
 @pytest.mark.asyncio
-async def test_pagination_fetches_details_for_every_page() -> None:
-    """Ability refs are resolved for devices found on later pages too."""
+async def test_pagination_keeps_devices_from_later_pages() -> None:
     page1 = [make_device(f"dev{i}", f"prod{i}") for i in range(10)]
     page2 = [make_device("dev10", "prod10")]
-    manager, tracker = make_manager(
+    manager = make_manager(
         {
             1: {PARAM_COUNT: 10, PARAM_DEVICE_LIST: page1},
             2: {PARAM_COUNT: 1, PARAM_DEVICE_LIST: page2},
@@ -164,35 +93,97 @@ async def test_pagination_fetches_details_for_every_page() -> None:
 
     result = await manager.async_get_devices()
 
-    assert len(result) == 11
-    assert len(tracker.calls) == 11
-    # Pages are sequential, so concurrency is bounded by the largest page.
-    assert tracker.max_in_flight == 10
+    assert [device.device_id for device in result] == [
+        *(f"dev{i}" for i in range(10)),
+        "dev10",
+    ]
 
 
 @pytest.mark.asyncio
-async def test_fetch_ability_refs_false_skips_detail_calls() -> None:
-    """Discovery can list devices without spending a detail call per IoT device."""
-    devices = [make_device(f"dev{i}", f"prod{i}") for i in range(3)]
-    manager, tracker = make_manager({1: {PARAM_COUNT: 3, PARAM_DEVICE_LIST: devices}})
+async def test_channel_list_tolerates_missing_name_and_status() -> None:
+    """Some device details omit channelName / channelStatus on a channel."""
+    entry = make_device("cam1")
+    entry[PARAM_CHANNEL_NUM] = 1
+    entry[PARAM_CHANNEL_LIST] = [{PARAM_CHANNEL_ID: 0, "csstatus": "using"}]
+    manager = make_manager({1: {PARAM_COUNT: 1, PARAM_DEVICE_LIST: [entry]}})
 
-    result = await manager.async_get_devices(fetch_ability_refs=False)
+    result = await manager.async_get_devices()
 
-    assert len(result) == 3
-    assert tracker.calls == []
-    assert all(device.device_ability_refs == "unknown" for device in result)
+    assert len(result) == 1
+    assert len(result[0].channels) == 1
+    channel = result[0].channels[0]
+    assert channel.channel_id == "0"
+    assert channel.channel_name == ""
+    assert channel.channel_status == ""
+    assert channel.cs_status == "using"
 
 
 @pytest.mark.asyncio
-async def test_fetch_ability_refs_set_only_queries_named_devices() -> None:
-    """Only the device ids in the set spend a detail call."""
-    devices = [make_device(f"dev{i}", f"prod{i}") for i in range(3)]
-    manager, tracker = make_manager({1: {PARAM_COUNT: 3, PARAM_DEVICE_LIST: devices}})
+async def test_channel_cs_status_uses_documented_field() -> None:
+    """device.detail.page reports cloud storage as channelList[].csStatus."""
+    entry = make_device("cam1")
+    entry[PARAM_CHANNEL_LIST] = [
+        {
+            PARAM_CHANNEL_ID: "0",
+            PARAM_CS_STATUS: "expired",
+            PARAM_AI_INSIGHT_STATUS: "on",
+        }
+    ]
+    manager = make_manager({1: {PARAM_COUNT: 1, PARAM_DEVICE_LIST: [entry]}})
 
-    result = await manager.async_get_devices(fetch_ability_refs={"dev1"})
+    result = await manager.async_get_devices()
 
-    assert len(result) == 3
-    assert tracker.calls == [("dev1", "prod1")]
-    assert result[0].device_ability_refs == "unknown"
-    assert result[1].device_ability_refs == "1,2,3"
-    assert result[2].device_ability_refs == "unknown"
+    assert result[0].channels[0].cs_status == "expired"
+    assert result[0].channels[0].ai_insight_status == "on"
+
+
+@pytest.mark.asyncio
+async def test_channel_inherits_device_ai_insight_status() -> None:
+    """A device-level aiInsightStatus applies when the channel omits it."""
+    entry = make_device("8K11FAAPAZ9DAA1")
+    entry["aiInsightStatus"] = "using"
+    entry[PARAM_CHANNEL_LIST] = [{PARAM_CHANNEL_ID: "0"}]
+    manager = make_manager({1: {PARAM_COUNT: 1, PARAM_DEVICE_LIST: [entry]}})
+
+    result = await manager.async_get_devices()
+
+    assert result[0].channels[0].ai_insight_status == "using"
+
+
+@pytest.mark.asyncio
+async def test_access_type_keeps_paas_when_the_field_is_not_text() -> None:
+    """A missing or null accessType stays PaaS. A real value is kept."""
+    iot = make_device("iot-1")
+    iot["accessType"] = " IoT "
+    blank = make_device("blank-1")
+    blank["accessType"] = None
+    manager = make_manager({1: {PARAM_COUNT: 2, PARAM_DEVICE_LIST: [iot, blank]}})
+
+    result = await manager.async_get_devices()
+
+    assert result[0].access_type == "IoT"
+    assert result[1].access_type == "PaaS"
+
+
+@pytest.mark.asyncio
+async def test_detail_page_keeps_device_and_channel_capability_ids() -> None:
+    entry = make_device("CAM1", "PID1")
+    entry["capabilityIds"] = ["device.reboot.execute", "storage.local.capacity"]
+    entry[PARAM_CHANNEL_LIST] = [
+        {
+            PARAM_CHANNEL_ID: 0,
+            "channelName": "Main",
+            "channelStatus": "online",
+            "capabilityIds": ["detection.motion.enabled", 1, ""],
+        }
+    ]
+    entry[PARAM_CHANNEL_NUM] = 1
+    manager = make_manager({1: {PARAM_DEVICE_LIST: [entry]}})
+
+    devices = await manager.async_get_devices()
+
+    assert devices[0].capability_ids == (
+        "device.reboot.execute",
+        "storage.local.capacity",
+    )
+    assert devices[0].channels[0].capability_ids == ("detection.motion.enabled",)

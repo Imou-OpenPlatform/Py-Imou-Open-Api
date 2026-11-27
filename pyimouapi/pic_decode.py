@@ -163,16 +163,17 @@ class LCOpenPicDecoder:
     ) -> list[tuple[bytes, bytes, bytes]]:
         """Return (aes_key, device_id, password) triples to try, in order.
 
-        TCM pictures are keyed by serial plus device password. Others use an
-        AES key the SDK derives from the serial; the extra candidates cover a
-        serial that was passed where a password belongs.
+        A device password is tried first. If the SDK rejects it, the serial
+        key is tried next. With no password, only the serial key is tried.
         """
-        if use_tcm:
-            return [(b"", device_id.encode(), encrypt_key.encode())]
-        candidates = [(serial_aes_key(device_id).encode(), b"", b"")]
+        # A recovered device password is tried first. A rejection falls through
+        # to the serial-derived key, which is also the only candidate when no
+        # password was recovered.
+        del use_tcm
+        serial = (serial_aes_key(device_id).encode(), b"", b"")
         if encrypt_key and encrypt_key != device_id:
-            candidates.append((b"", device_id.encode(), encrypt_key.encode()))
-        return candidates
+            return [(b"", device_id.encode(), encrypt_key.encode()), serial]
+        return [serial]
 
     def decrypt_bytes(
         self,

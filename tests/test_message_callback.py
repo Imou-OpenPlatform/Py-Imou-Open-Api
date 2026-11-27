@@ -3,8 +3,12 @@
 from unittest.mock import AsyncMock
 
 import pytest
-from pyimouapi.const import API_ENDPOINT_SET_MESSAGE_CALLBACK
-from pyimouapi.openapi import ImouOpenApiClient
+from pyimouapi.const import (
+    API_ENDPOINT_GET_MESSAGE_CALLBACK,
+    API_ENDPOINT_GET_PLAY_TOKEN_KEY,
+    API_ENDPOINT_SET_MESSAGE_CALLBACK,
+)
+from pyimouapi.openapi import REDACTED, ImouOpenApiClient, _redacted_response
 
 
 @pytest.fixture
@@ -42,6 +46,61 @@ async def test_set_message_callback_off(client: ImouOpenApiClient) -> None:
             "basePush": "2",
         },
     )
+
+
+@pytest.mark.asyncio
+async def test_get_message_callback(client: ImouOpenApiClient) -> None:
+    client.async_request_api = AsyncMock(
+        return_value={
+            "status": "on",
+            "callbackUrl": "https://example.com/webhook",
+            "callbackFlag": "alarm,deviceStatus,capabilityEvent",
+        }
+    )
+    data = await client.async_get_message_callback()
+    assert data["callbackFlag"] == "alarm,deviceStatus,capabilityEvent"
+    client.async_request_api.assert_awaited_once_with(
+        API_ENDPOINT_GET_MESSAGE_CALLBACK,
+        {},
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_play_token_key(client: ImouOpenApiClient) -> None:
+    client.async_request_api = AsyncMock(
+        return_value={"playTokenKey": "ab" * 16, "playTokenKeyV2": "cd" * 32}
+    )
+    assert await client.async_get_play_token_key("SN1") == "cd" * 32
+    client.async_request_api.assert_awaited_once_with(
+        API_ENDPOINT_GET_PLAY_TOKEN_KEY,
+        {"deviceId": "SN1"},
+    )
+
+
+def test_logged_response_masks_play_tokens_and_keeps_the_serial() -> None:
+    """Debug logs must not keep a play token or its key."""
+    body = {
+        "result": {
+            "data": {
+                "deviceList": [{"deviceId": "SN1", "playTokenV2": "secret-token"}],
+                "playTokenKey": "ab" * 16,
+                "playTokenKeyV2": "cd" * 32,
+            }
+        }
+    }
+    masked = _redacted_response(body)
+    device = masked["result"]["data"]["deviceList"][0]
+    assert device["deviceId"] == "SN1"
+    assert device["playTokenV2"] == REDACTED
+    assert masked["result"]["data"]["playTokenKey"] == REDACTED
+    assert masked["result"]["data"]["playTokenKeyV2"] == REDACTED
+    assert body["result"]["data"]["deviceList"][0]["playTokenV2"] == "secret-token"
+
+
+@pytest.mark.asyncio
+async def test_get_play_token_key_missing(client: ImouOpenApiClient) -> None:
+    client.async_request_api = AsyncMock(return_value={})
+    assert await client.async_get_play_token_key("SN1") is None
 
 
 @pytest.mark.asyncio

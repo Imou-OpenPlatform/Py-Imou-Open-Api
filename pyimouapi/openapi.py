@@ -15,6 +15,8 @@ import aiohttp
 
 from .const import (
     API_ENDPOINT_ACCESS_TOKEN,
+    API_ENDPOINT_GET_MESSAGE_CALLBACK,
+    API_ENDPOINT_GET_PLAY_TOKEN_KEY,
     API_ENDPOINT_SET_MESSAGE_CALLBACK,
     ERROR_CODE_INVALID_APP,
     ERROR_CODE_INVALID_SIGN,
@@ -25,6 +27,7 @@ from .const import (
     PARAM_CODE,
     PARAM_CURRENT_DOMAIN,
     PARAM_DATA,
+    PARAM_DEVICE_ID,
     PARAM_ID,
     PARAM_MSG,
     PARAM_NONCE,
@@ -49,6 +52,15 @@ CONNECTION_LIMIT = 10
 DOWNLOAD_MAX_BYTES = 8 * 1024 * 1024
 
 REDACTED = "***"
+_SECRET_RESPONSE_FIELDS = frozenset(
+    {
+        PARAM_ACCESS_TOKEN,
+        "playToken",
+        "playTokenV2",
+        "playTokenKey",
+        "playTokenKeyV2",
+    }
+)
 
 
 def _redacted_request(body: dict[str, Any]) -> dict[str, Any]:
@@ -69,18 +81,43 @@ def _redacted_request(body: dict[str, Any]) -> dict[str, Any]:
     return {**body, PARAM_SYSTEM: system, PARAM_PARAMS: params}
 
 
+def _redacted_value(value: Any) -> Any:
+    """Mask play tokens, play-token keys, and access tokens in a logged value."""
+    if isinstance(value, dict):
+        return {
+            key: REDACTED
+            if key in _SECRET_RESPONSE_FIELDS and isinstance(item, str) and item
+            else _redacted_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redacted_value(item) for item in value]
+    return value
+
+
 def _redacted_response(body: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy of a response body with any access token masked."""
-    result = body.get(PARAM_RESULT)
-    if not isinstance(result, dict):
-        return body
-    data = result.get(PARAM_DATA)
-    if not isinstance(data, dict) or PARAM_ACCESS_TOKEN not in data:
-        return body
-    return {
-        **body,
-        PARAM_RESULT: {**result, PARAM_DATA: {**data, PARAM_ACCESS_TOKEN: REDACTED}},
-    }
+    """Return a copy of a response body with secrets masked."""
+    return _redacted_value(body)
+
+
+def _exception_reason(exception: BaseException) -> str:
+    """Name a transport failure. TimeoutError has an empty ``str()``."""
+    text = str(exception).strip()
+    name = type(exception).__name__
+    if text:
+        return f"{name}: {text}"
+    return name
+
+
+def _download_log_host(url: str) -> str:
+    """Host only: snapshot URLs can carry signed paths."""
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+    if not host:
+        return REDACTED
+    if parsed.port:
+        return f"{host}:{parsed.port}"
+    return host
 
 
 class ImouOpenApiClient:
@@ -135,14 +172,32 @@ class ImouOpenApiClient:
                 url, timeout=aiohttp.ClientTimeout(total=timeout)
             ) as response:
                 if response.status != 200:
+                    _LOGGER.warning(
+                        "download failed host=%s status=%s",
+                        _download_log_host(url),
+                        response.status,
+                    )
                     raise RequestFailedException(
-                        f"request failed,status code {response.status}"
+                        f"request failed,status code {response.status}",
+                        status_code=response.status,
                     )
                 reader = getattr(response, "content", None)
-                if reader is not None and hasattr(reader, "read"):
-                    body = await reader.read(DOWNLOAD_MAX_BYTES + 1)
-                else:
-                    body = await response.read()
+                if reader is not None and hasattr(reader, "readany"):
+                    # StreamReader.read(n) returns only the bytes already
+                    # buffered, not the rest of the body. One call leaves a
+                    # snapshot JPEG cut off, and the picture shows the top only.
+                    chunks: list[bytes] = []
+                    total = 0
+                    while True:
+                        block = await reader.readany()
+                        if not block:
+                            break
+                        total += len(block)
+                        if total > DOWNLOAD_MAX_BYTES:
+                            raise RequestFailedException("download exceeded size limit")
+                        chunks.append(block)
+                    return b"".join(chunks)
+                body = await response.read()
                 if len(body) > DOWNLOAD_MAX_BYTES:
                     raise RequestFailedException("download exceeded size limit")
                 return body
@@ -151,7 +206,13 @@ class ImouOpenApiClient:
         except Exception as exception:
             # Reaching storage is its own network hop; report it the way a failed
             # API call is reported so callers have one family to catch.
-            raise ConnectFailedException(f"connect failed,{exception}") from exception
+            reason = _exception_reason(exception)
+            _LOGGER.warning(
+                "download failed host=%s reason=%s",
+                _download_log_host(url),
+                reason,
+            )
+            raise ConnectFailedException(f"connect failed,{reason}") from exception
 
     async def async_close(self) -> None:
         """Close the HTTP session this client created.
@@ -166,6 +227,11 @@ class ImouOpenApiClient:
             self._session = None
             if session is not None and not session.closed:
                 await session.close()
+
+    @property
+    def app_id(self) -> str:
+        """Open Platform application id used to sign requests."""
+        return self._app_id
 
     async def async_get_token(self) -> None:
         """Fetch and store accessToken."""
@@ -254,20 +320,40 @@ class ImouOpenApiClient:
                     status = response.status
                     text = await response.text()
         except Exception as exception:
-            raise ConnectFailedException(f"connect failed,{exception}") from exception
+            reason = _exception_reason(exception)
+            _LOGGER.warning(
+                "OpenAPI request failed endpoint=%s reason=%s",
+                endpoint,
+                reason,
+            )
+            raise ConnectFailedException(f"connect failed,{reason}") from exception
         # A 5xx is the far side being unable to serve, which reads to a user as
         # not getting through; a 4xx is this request being refused. Parsing the
         # body first used to report either as a connection failure, because an
         # error page is not JSON.
         if status >= 500:
-            raise ConnectFailedException(f"connect failed,status code {status}")
+            _LOGGER.warning(
+                "OpenAPI request failed endpoint=%s status=%s",
+                endpoint,
+                status,
+            )
+            raise ConnectFailedException(
+                f"connect failed,status code {status}", status_code=status
+            )
         if status != 200:
-            raise RequestFailedException(f"request failed,status code {status}")
+            _LOGGER.warning(
+                "OpenAPI request refused endpoint=%s status=%s",
+                endpoint,
+                status,
+            )
+            raise RequestFailedException(
+                f"request failed,status code {status}", status_code=status
+            )
         try:
             response_body = json.loads(text)
         except ValueError as exception:
             raise RequestFailedException(
-                f"malformed response,{exception}"
+                f"malformed response,{exception}", status_code=status
             ) from exception
         if _LOGGER.isEnabledFor(logging.DEBUG):
             _LOGGER.debug(
@@ -280,19 +366,38 @@ class ImouOpenApiClient:
             response_body.get(PARAM_RESULT) if isinstance(response_body, dict) else None
         )
         if not isinstance(result, dict) or PARAM_CODE not in result:
-            raise RequestFailedException("malformed response,missing result")
-        result_code = result[PARAM_CODE]
+            raise RequestFailedException(
+                "malformed response,missing result", status_code=status
+            )
+        result_code = str(result[PARAM_CODE])
         result_message = result.get(PARAM_MSG) or ""
         if result_code != ERROR_CODE_SUCCESS:
             msg = result_code + ":" + result_message
             if result_code in (ERROR_CODE_INVALID_SIGN, ERROR_CODE_INVALID_APP):
-                raise InvalidAppIdOrSecretException(msg)
+                _LOGGER.warning(
+                    "OpenAPI auth failed endpoint=%s code=%s",
+                    endpoint,
+                    result_code,
+                )
+                raise InvalidAppIdOrSecretException(
+                    msg, status_code=status, api_code=result_code
+                )
             if result_code == ERROR_CODE_TOKEN_OVERDUE and refresh_on_expiry:
+                _LOGGER.debug(
+                    "OpenAPI token expired endpoint=%s; refreshing",
+                    endpoint,
+                )
                 await self._async_ensure_token(stale_token=token_used)
                 return await self._async_request_api(
                     endpoint, params, refresh_on_expiry=False
                 )
-            raise RequestFailedException(msg)
+            _LOGGER.warning(
+                "OpenAPI request failed endpoint=%s code=%s msg=%s",
+                endpoint,
+                result_code,
+                result_message,
+            )
+            raise RequestFailedException(msg, status_code=status, api_code=result_code)
         response_data = result.get(PARAM_DATA, {})
         if response_data is None:
             response_data = {}
@@ -322,6 +427,27 @@ class ImouOpenApiClient:
             else:
                 params["callbackFlag"] = ",".join(callback_flag)
         return await self.async_request_api(API_ENDPOINT_SET_MESSAGE_CALLBACK, params)
+
+    async def async_get_message_callback(self) -> dict[str, Any]:
+        """Return the developer account message callback settings."""
+        data = await self.async_request_api(API_ENDPOINT_GET_MESSAGE_CALLBACK, {})
+        return data if isinstance(data, dict) else {}
+
+    async def async_get_play_token_key(self, device_id: str) -> str | None:
+        """Return the play-token key for one device, or None when the cloud omits it."""
+        data = await self.async_request_api(
+            API_ENDPOINT_GET_PLAY_TOKEN_KEY,
+            {PARAM_DEVICE_ID: device_id},
+        )
+        if not isinstance(data, dict):
+            return None
+        # playTokenV2 opens with the 32-byte playTokenKeyV2. playTokenKey is
+        # a shorter key and does not decrypt that token.
+        for field in ("playTokenKeyV2", "playTokenKey"):
+            raw = data.get(field)
+            if isinstance(raw, str) and raw.strip():
+                return raw.strip()
+        return None
 
     @property
     def access_token(self) -> str | None:

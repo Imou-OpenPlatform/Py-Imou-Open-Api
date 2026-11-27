@@ -1,4 +1,4 @@
-"""Friendly keys for IoT alarm mode (ref 15200)."""
+"""Friendly keys for the arming mode property."""
 
 from __future__ import annotations
 

@@ -42,8 +42,7 @@ def is_dormant_retryable_error(exc: BaseException) -> bool:
     """Return True when the platform error may clear after a short wait."""
     if not isinstance(exc, RequestFailedException):
         return False
-    message = exc.message
-    return any(code in message for code in DORMANT_WRITE_RETRY_ERROR_CODES)
+    return exc.api_code in DORMANT_WRITE_RETRY_ERROR_CODES
 
 
 async def async_dormant_write_retry(
