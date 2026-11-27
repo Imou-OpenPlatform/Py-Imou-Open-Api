@@ -1,4 +1,4 @@
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 from .device import ImouChannel, ImouDevice, ImouDeviceManager
 from .exceptions import (
