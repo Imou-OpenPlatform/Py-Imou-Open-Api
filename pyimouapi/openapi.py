@@ -50,6 +50,9 @@ _LOGGER: logging.Logger = logging.getLogger(__package__)
 
 CONNECTION_LIMIT = 10
 DOWNLOAD_MAX_BYTES = 8 * 1024 * 1024
+# Open Platform traffic dashboards key off this; set on every request so a
+# Home Assistant shared session (which we do not own) still reports correctly.
+CLIENT_TYPE_HEADER = {"Client-Type": "HomeAssistant"}
 
 REDACTED = "***"
 _SECRET_RESPONSE_FIELDS = frozenset(
@@ -146,7 +149,7 @@ class ImouOpenApiClient:
             if not self._owns_session:
                 raise ConnectFailedException("http session is closed")
             self._session = aiohttp.ClientSession(
-                headers={"Client-Type": "HomeAssistant"},
+                headers=CLIENT_TYPE_HEADER,
                 # Requests are issued in batches per poll; cap them so a large
                 # account cannot open a connection per device at once. The cap
                 # is per host, not total: snapshots come from storage rather
@@ -169,7 +172,9 @@ class ImouOpenApiClient:
             # Released via the context manager: an error status returns early, and
             # the pool is capped, so a held connection would stall later calls.
             async with session.get(
-                url, timeout=aiohttp.ClientTimeout(total=timeout)
+                url,
+                headers=CLIENT_TYPE_HEADER,
+                timeout=aiohttp.ClientTimeout(total=timeout),
             ) as response:
                 if response.status != 200:
                     _LOGGER.warning(
@@ -295,7 +300,7 @@ class ImouOpenApiClient:
             f"time:{timestamp},nonce:{nonce},appSecret:{self._app_secret}".encode()
         ).hexdigest()
         request_id = str(uuid.uuid4())
-        headers = {"Content-Type": "application/json"}
+        headers = {**CLIENT_TYPE_HEADER, "Content-Type": "application/json"}
         body = {
             PARAM_SYSTEM: {
                 PARAM_VER: "1.0",

@@ -3,7 +3,7 @@
 Async Python client for the **Imou Open Platform** cloud APIs. Built on **aiohttp**, it handles authentication and requests, and exposes device helpers plus higher-level types for integrations (for example Home Assistant **Imou Life 2.0**).
 
 - **Repository:** [Imou-OpenPlatform/Py-Imou-Open-Api](https://github.com/Imou-OpenPlatform/Py-Imou-Open-Api)
-- **Version:** Same as `pyproject.toml` / PyPI (`pyimouapi.__version__`) — **2.0.0** on the `dev` / release line that ships with Imou Life 2.0
+- **Version:** Same as `pyproject.toml` / PyPI (`pyimouapi.__version__`) — **2.0.1** on the `dev` / release line that ships with Imou Life 2.0
 - **Python:** `>= 3.11`
 
 ## What 2.0 does

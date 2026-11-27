@@ -4,6 +4,12 @@
 
 All notable changes to this project will be documented in this file.
 
+### [2.0.1]
+
+#### Fixed
+
+- Every OpenAPI POST and snapshot download sends `Client-Type: HomeAssistant`, including when Home Assistant injects its shared `aiohttp` session. Owned-session defaults alone were not enough for traffic dashboards filtered by that header.
+
 ### [2.0.0]
 
 #### Breaking
@@ -253,6 +259,12 @@ Supersedes the unreleased 1.3.4.1. Nothing was removed from the public API, so t
 ## 中文
 
 本项目的重要变更均记录于此。
+
+### [2.0.1]
+
+#### 修复
+
+- 每次 OpenAPI POST 与抓图下载都会带上 `Client-Type: HomeAssistant`，包括 Home Assistant 注入共享 `aiohttp` session 的情况。仅靠自建 session 的默认头时，按该头筛选的流量看板会漏记。
 
 ### [2.0.0]
 

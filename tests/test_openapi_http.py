@@ -21,7 +21,12 @@ from pyimouapi.exceptions import (
     InvalidAppIdOrSecretException,
     RequestFailedException,
 )
-from pyimouapi.openapi import CONNECTION_LIMIT, DOWNLOAD_MAX_BYTES, ImouOpenApiClient
+from pyimouapi.openapi import (
+    CLIENT_TYPE_HEADER,
+    CONNECTION_LIMIT,
+    DOWNLOAD_MAX_BYTES,
+    ImouOpenApiClient,
+)
 
 ENDPOINT = "/openapi/deviceBaseList"
 
@@ -178,14 +183,23 @@ class FakeSession:
         self._text_error = text_error
         self.closed = False
         self.requests: list[tuple[str, dict[str, Any]]] = []
+        self.request_headers: list[dict[str, str]] = []
         self.issued: list[FakeResponse] = []
         self.downloads: list[str] = []
+        self.download_headers: list[dict[str, str]] = []
         self.last_download: FakeBinaryResponse | None = None
         self.close_count = 0
 
-    def get(self, url: str, *, timeout: Any = None) -> FakeBinaryResponse:
+    def get(
+        self,
+        url: str,
+        *,
+        timeout: Any = None,
+        headers: dict[str, str] | None = None,
+    ) -> FakeBinaryResponse:
         """Return the configured binary payload as a response context manager."""
         self.downloads.append(url)
+        self.download_headers.append(dict(headers or {}))
         self.last_download = FakeBinaryResponse(
             self._download_status,
             self._download_payload,
@@ -198,6 +212,7 @@ class FakeSession:
     ) -> FakeResponse:
         """Return the next queued response as a request context manager."""
         self.requests.append((url, json))
+        self.request_headers.append(dict(headers))
         if not self._responses:
             raise AssertionError(f"unexpected request to {url}")
         result = self._responses.pop(0)
@@ -238,6 +253,28 @@ def install_session(
 def endpoints_called(session: FakeSession) -> list[str]:
     """Return the request path of every call, in order."""
     return [url.split("api.example.com", 1)[1] for url, _ in session.requests]
+
+
+@pytest.mark.asyncio
+async def test_shared_session_requests_send_client_type_header() -> None:
+    """An injected session still tags OpenAPI and download calls as HomeAssistant."""
+    session = FakeSession([token_result(), api_result(data={"ok": True})])
+    client = ImouOpenApiClient(
+        "app_id", "app_secret", "api.example.com", session=session
+    )
+
+    assert client._owns_session is False
+    assert await client.async_request_api(ENDPOINT, {}) == {"ok": True}
+    assert (
+        await client.async_download("https://cdn.example.com/snap.jpg") == b"jpeg-bytes"
+    )
+
+    assert session.request_headers
+    assert all(
+        headers.get("Client-Type") == CLIENT_TYPE_HEADER["Client-Type"]
+        for headers in session.request_headers
+    )
+    assert session.download_headers == [dict(CLIENT_TYPE_HEADER)]
 
 
 @pytest.mark.asyncio
