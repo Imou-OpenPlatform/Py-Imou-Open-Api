@@ -138,23 +138,27 @@ def _battery_level_from_v2_info(data: Any) -> int | None:
         level = _normalized_battery_level(item.get("elecPercent"))
         if level is None:
             continue
-        if isinstance(category, bool) or not isinstance(category, int):
+        if category is None:
             # UA7L and similar AOV rows omit category but still report elecPercent.
-            if isinstance(battery_type, int) and not isinstance(battery_type, bool):
+            # Bool or other non-int category values stay malformed and are skipped.
+            if isinstance(battery_type, bool):
+                continue
+            if isinstance(battery_type, int):
                 if battery_type == 0:
                     return level
-                if first_active_level is None:
+                if first_active_level is None and battery_type >= 0:
                     first_active_level = level
-            elif first_active_level is None:
+            elif battery_type is None and first_active_level is None:
                 first_active_level = level
             continue
         if (
-            category != 1
+            isinstance(category, bool)
+            or not isinstance(category, int)
+            or category != 1
             or isinstance(battery_type, bool)
             or not isinstance(battery_type, int)
+            or battery_type < 0
         ):
-            continue
-        if battery_type < 0:
             continue
         if battery_type == 0:
             return level
